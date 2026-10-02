@@ -8,7 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.course import CourseRoster
-from ..schemas.admin import RosterUploadResult
+from ..common.exceptions import NotFoundError
+from ..schemas.admin import RosterEntryPatch, RosterUploadResult
 
 logger = structlog.get_logger()
 
@@ -283,3 +284,36 @@ async def process_roster_rows(
         deactivated=deactivated,
         errors=errors,
     )
+
+
+async def list_roster(db: AsyncSession, course_id: int) -> list[CourseRoster]:
+    result = await db.execute(
+        select(CourseRoster)
+        .where(CourseRoster.course_id == course_id)
+        .order_by(CourseRoster.full_name)
+    )
+    return list(result.scalars().all())
+
+
+async def patch_roster_entry(
+    db: AsyncSession, course_id: int, roster_id: int, body: RosterEntryPatch
+) -> CourseRoster:
+    """Apply an inline edit/deactivate. The entry must belong to `course_id` (else 404)."""
+    result = await db.execute(
+        select(CourseRoster).where(
+            CourseRoster.id == roster_id,
+            CourseRoster.course_id == course_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise NotFoundError(f"Roster entry {roster_id} not found in course {course_id}")
+    if body.is_active is not None:
+        entry.is_active = body.is_active
+    if body.netid is not None:
+        entry.netid = body.netid.strip().lower()
+    if body.full_name is not None:
+        entry.full_name = body.full_name.strip()
+    if body.email is not None:
+        entry.email = str(body.email).lower()
+    return entry
