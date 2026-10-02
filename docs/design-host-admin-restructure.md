@@ -1320,5 +1320,5 @@ Also, not deviations but choices the spec left open:
   value, e.g. `ACTIVE`, is a 422).
 - The import service raises its own `BundleError`, and both routers map it to the same 422
   `detail` as before. `services/CLAUDE.md` forbids FastAPI imports in services.
-- §10 is `tests/integration/test_host_admin_restructure.py`: 28 cases, all passing along with the
+- §10 is `tests/integration/test_host_admin_restructure.py`: 56 cases (the §10 rows plus refactor, auth-boundary and malformed-bundle coverage), all passing along with the
   existing suite. A post-run DB check found no leaked T4 games, users or sessions.

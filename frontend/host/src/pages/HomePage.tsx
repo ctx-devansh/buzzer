@@ -20,6 +20,7 @@ export default function HomePage() {
   const courses = useShellCourses();
   const [games, setGames] = useState<Game[]>([]);
   const [gamesLoaded, setGamesLoaded] = useState(false);
+  const [gamesError, setGamesError] = useState('');
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [courseId, setCourseId] = useState<number | ''>('');
@@ -46,6 +47,7 @@ export default function HomePage() {
     setGameId('');
     setGames([]);
     setGamesLoaded(false);
+    setGamesError('');
     if (courseId === '') return;
     let cancelled = false;
     api.get<Game[]>(`/game/my-games?course_id=${courseId}`)
@@ -56,7 +58,7 @@ export default function HomePage() {
         if (g.length === 1) setGameId(g[0].id);
       })
       .catch(err => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load quizzes');
+        if (!cancelled) setGamesError(err instanceof Error ? err.message : 'Failed to load quizzes');
       });
     return () => { cancelled = true; };
   }, [courseId]);
@@ -176,6 +178,7 @@ export default function HomePage() {
             {gamesLoaded && games.length === 0 && (
               <p className="text-slate-400 text-sm mt-1">No quizzes for this course yet — create one in Games.</p>
             )}
+            {gamesError && <p className="text-red-400 text-sm mt-1">{gamesError}</p>}
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <Button

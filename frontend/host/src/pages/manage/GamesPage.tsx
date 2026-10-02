@@ -67,25 +67,30 @@ export default function GamesPage() {
   const [attachCourse, setAttachCourse] = useState<Record<number, number | ''>>({});
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  // Bumped per list request so a slow response for an earlier filter can't overwrite
+  // the list for the filter now selected.
+  const loadSeq = useRef(0);
   const navigate = useNavigate();
 
   async function load(courseId: number | '' = filterCourseId) {
+    const seq = ++loadSeq.current;
     setError('');
     try {
       // With a course this is gated, not merely filtered: a course the user cannot
       // host is a 403 (unreachable from the select, which only lists HOST courses).
       const path = courseId === '' ? '/host/games' : `/host/games?course_id=${courseId}`;
       const data = await api.get<Game[]>(path);
-      setGames(data);
+      if (seq === loadSeq.current) setGames(data);
     } catch (err) {
+      if (seq !== loadSeq.current) return;
       setGames([]);
       setError(err instanceof Error ? err.message : 'Failed to load games');
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }
 
-  useEffect(() => { void load(filterCourseId); }, [filterCourseId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(filterCourseId); }, [filterCourseId]);
 
   // The forms' course selects start from the filter when opened, then are independent:
   // changing the filter never overwrites or clears a course picked in an open form.
@@ -167,6 +172,8 @@ export default function GamesPage() {
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setImporting(false);
+      // Clear both together, or Import stays enabled with an empty-looking picker.
+      setImportFile(null);
       if (fileRef.current) fileRef.current.value = '';
     }
   }

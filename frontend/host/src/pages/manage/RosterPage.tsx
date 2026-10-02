@@ -121,6 +121,8 @@ export default function RosterPage() {
   // Roster list
   const [entries, setEntries] = useState<RosterEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  // Separate from `loading`: a failed initial load (e.g. 403) must not render the upload wizard.
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 
   // Inline edit
@@ -146,6 +148,7 @@ export default function RosterPage() {
     try {
       const data = await api.get<RosterEntry[]>(`/host/courses/${courseId}/roster`);
       setEntries(data);
+      setLoaded(true);
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 403
@@ -293,14 +296,27 @@ export default function RosterPage() {
   const active = entries.filter((e) => e.is_active);
   const inactive = entries.filter((e) => !e.is_active);
 
+  const backLink = (
+    <button
+      onClick={() => navigate('/courses')}
+      className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-6"
+    >
+      <ArrowLeft size={14} /> Back to Rosters
+    </button>
+  );
+
+  if (!loading && !loaded) {
+    return (
+      <div className="p-8 max-w-5xl mx-auto">
+        {backLink}
+        <p className="text-red-400 text-sm">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <button
-        onClick={() => navigate('/courses')}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-6"
-      >
-        <ArrowLeft size={14} /> Back to Rosters
-      </button>
+      {backLink}
 
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-slate-100">Course Roster</h2>
