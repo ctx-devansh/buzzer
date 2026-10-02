@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Download } from 'lucide-react';
-import { api } from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Card, CardContent, CardHeader } from '../components/ui/card';
+import { api } from '../../lib/api';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Card, CardContent, CardHeader } from '../../components/ui/card';
 
 type QuestionType = 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select';
 type GradingType = 'ACCURACY' | 'COMPLETENESS';
@@ -515,8 +515,8 @@ export default function QuestionEditorPage() {
   async function load() {
     try {
       const [g, qs] = await Promise.all([
-        api.get<Game>(`/admin/games/${gameId}`),
-        api.get<Question[]>(`/admin/games/${gameId}/questions`),
+        api.get<Game>(`/host/games/${gameId}`),
+        api.get<Question[]>(`/host/games/${gameId}/questions`),
       ]);
       setGame(g);
       setQuestions(qs);
@@ -533,7 +533,7 @@ export default function QuestionEditorPage() {
     setSaving(true);
     setError('');
     try {
-      await api.post(`/admin/games/${gameId}/questions`, payload);
+      await api.post(`/host/games/${gameId}/questions`, payload);
       setShowAddForm(false);
       await load();
     } catch (err) {
@@ -547,7 +547,7 @@ export default function QuestionEditorPage() {
     setSaving(true);
     setError('');
     try {
-      await api.put(`/admin/games/${gameId}/questions/${id}`, payload);
+      await api.put(`/host/games/${gameId}/questions/${id}`, payload);
       setEditingId(null);
       await load();
     } catch (err) {
@@ -560,7 +560,7 @@ export default function QuestionEditorPage() {
   async function deleteQuestion(id: number) {
     if (!confirm('Delete this question?')) return;
     try {
-      await api.delete(`/admin/games/${gameId}/questions/${id}`);
+      await api.delete(`/host/games/${gameId}/questions/${id}`);
       setQuestions((prev) => prev.filter((q) => q.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete question');
@@ -573,7 +573,7 @@ export default function QuestionEditorPage() {
     if (target < 0 || target >= newOrder.length) return;
     [newOrder[index], newOrder[target]] = [newOrder[target], newOrder[index]];
     try {
-      await api.post(`/admin/games/${gameId}/questions/reorder`, {
+      await api.post(`/host/games/${gameId}/questions/reorder`, {
         order: newOrder.map((q) => q.id),
       });
       setQuestions(newOrder);
@@ -586,7 +586,7 @@ export default function QuestionEditorPage() {
     setDownloading(true);
     setError('');
     try {
-      await api.download(`/admin/games/${gameId}/export`);
+      await api.download(`/host/games/${gameId}/export`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed');
     } finally {

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, List, Upload, Trash2, Pencil } from 'lucide-react';
-import { api } from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader } from '../components/ui/card';
-import { Input } from '../components/ui/input';
+import { api } from '../../lib/api';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
 
 interface Game {
   id: number;
@@ -34,7 +34,7 @@ export default function GamesPage() {
 
   async function load() {
     try {
-      const data = await api.get<Game[]>('/admin/games');
+      const data = await api.get<Game[]>('/host/games');
       setGames(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load games');
@@ -50,7 +50,7 @@ export default function GamesPage() {
     setSaving(true);
     setError('');
     try {
-      await api.post('/admin/games', {
+      await api.post('/host/games', {
         title,
         description,
         max_players: Number(maxPlayers),
@@ -78,7 +78,7 @@ export default function GamesPage() {
     setEditSaving(true);
     setError('');
     try {
-      await api.put(`/admin/games/${editingGame.id}`, {
+      await api.put(`/host/games/${editingGame.id}`, {
         title: editTitle,
         description: editDescription,
         max_players: Number(editMaxPlayers),
@@ -100,7 +100,7 @@ export default function GamesPage() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const result = await api.postForm<{ game_id: number }>('/admin/games/import', form);
+      const result = await api.postForm<{ game_id: number }>('/host/games/import', form);
       await load();
       navigate(`/games/${result.game_id}/questions`);
     } catch (err) {
@@ -114,7 +114,7 @@ export default function GamesPage() {
   async function deleteGame(id: number) {
     if (!confirm('Delete this game and all its sessions? This cannot be undone.')) return;
     try {
-      await api.delete(`/admin/games/${id}`);
+      await api.delete(`/host/games/${id}`);
       setGames((prev) => prev.filter((g) => g.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete game');

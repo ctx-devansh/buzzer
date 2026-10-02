@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Pencil } from 'lucide-react';
-import { api } from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader } from '../components/ui/card';
-import { Input } from '../components/ui/input';
+import { api } from '../../lib/api';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
 
 interface RosterEntry {
   id: number;
@@ -144,7 +144,7 @@ export default function RosterPage() {
 
   async function load() {
     try {
-      const data = await api.get<RosterEntry[]>(`/admin/courses/${courseId}/roster`);
+      const data = await api.get<RosterEntry[]>(`/host/courses/${courseId}/roster`);
       setEntries(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load roster');
@@ -222,7 +222,7 @@ export default function RosterPage() {
     setError('');
     try {
       const result = await api.post<UploadResult>(
-        `/admin/courses/${courseId}/roster/import`,
+        `/host/courses/${courseId}/roster/import`,
         { rows },
       );
       setUploadResult(result);
@@ -268,7 +268,7 @@ export default function RosterPage() {
     setError('');
     try {
       const updated = await api.patch<RosterEntry>(
-        `/admin/courses/${courseId}/roster/${entryId}`,
+        `/host/courses/${courseId}/roster/${entryId}`,
         editDraft,
       );
       setEntries((prev) => prev.map((e) => e.id === entryId ? updated : e));
