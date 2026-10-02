@@ -602,7 +602,7 @@ def test_host_roster_upload_patch_and_deactivate(t4_env: T4Env):
 
     r = env.api.post(f"{base}/import", tok, json={"rows": rows[:1]})
     assert r.status_code == 200, r.text
-    assert r.json()["deactivated"] >= 1
+    assert r.json()["deactivated"] == 1  # course A is new this session: only `drop` is absent
 
     entries = {e["netid"]: e for e in env.api.get(base, tok).json()}
     assert entries[keep]["is_active"] is True
@@ -713,3 +713,172 @@ def test_revoked_host_keeps_own_sessions(t4_env: T4Env, fn_cleanup: Cleanup):
     assert sid in {s["session_id"] for s in r.json()}
     # ...while game management is gone.
     assert env.api.get(f"/host/games/{env.game_a['id']}", host.token).status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Beyond §10: paths T4 refactored or added that the §10 table does not name
+# ---------------------------------------------------------------------------
+
+
+def _bundle(**game) -> dict:
+    return {
+        "format": "buzzer/game",
+        "version": 1,
+        "game": {"title": "T4 bundle", "description": "", "max_players": 10, **game},
+        "questions": [_MC_QUESTION, {**_MC_QUESTION, "prompt": "second"}],
+    }
+
+
+def _files(bundle: dict | str) -> dict:
+    body = bundle if isinstance(bundle, str) else json.dumps(bundle)
+    return {"file": ("g.json", body, "application/json")}
+
+
+def test_unauthenticated_and_guest_are_rejected_on_host_routes(
+    t4_env: T4Env, completed_sessions: CompletedSessions
+):
+    env = t4_env
+    r = httpx.get(f"{env.api.base_url}/api/host/games", timeout=_TIMEOUT)
+    assert r.status_code == 401
+    guest = completed_sessions.guest_token
+    assert env.api.get("/host/games", guest).status_code == 403
+    assert env.api.get("/host/sessions", guest).status_code == 403
+    assert env.api.post("/host/games", guest, json={"title": "x", "course_id": env.course_a}).status_code == 403
+
+
+def test_host_cannot_read_unattached_or_missing_game(t4_env: T4Env):
+    env = t4_env
+    tok = env.host_a.token
+    assert env.api.get(f"/host/games/{env.game_unattached['id']}", tok).status_code == 403
+    assert env.api.get(f"/host/games/{env.game_a_ungranted['id']}", tok).status_code == 403
+    # A missing game is a 403 for a host (ids not leaked), a 404 for ADMIN.
+    assert env.api.get("/host/games/99999999", tok).status_code == 403
+    assert env.api.get("/host/games/99999999", env.admin).status_code == 404
+    assert env.api.get(f"/host/games/{env.game_unattached['id']}", env.admin).status_code == 200
+
+
+def test_hosts_cannot_delete_games(t4_env: T4Env, host_a_game: dict):
+    env = t4_env
+    gid = host_a_game["id"]
+    # No DELETE on the host router at all, and the admin route stays admin-only.
+    assert env.api.delete(f"/host/games/{gid}", env.host_a.token).status_code == 405
+    assert env.api.delete(f"/admin/games/{gid}", env.host_a.token).status_code == 403
+    assert env.api.get(f"/host/games/{gid}", env.host_a.token).status_code == 200
+
+
+def test_other_host_cannot_see_host_created_game(t4_env: T4Env, host_a_game: dict):
+    env = t4_env
+    ids = {g["id"] for g in env.api.get("/host/games", env.host_b.token).json()}
+    assert host_a_game["id"] not in ids
+    assert env.api.get(f"/host/games/{host_a_game['id']}", env.host_b.token).status_code == 403
+
+
+def test_host_reorder_rejects_wrong_id_set(t4_env: T4Env, host_a_game: dict):
+    env = t4_env
+    base = f"/host/games/{host_a_game['id']}/questions"
+    qid = env.api.post(base, env.host_a.token, json=_MC_QUESTION).json()["id"]
+    r = env.api.post(f"{base}/reorder", env.host_a.token, json={"order": [qid, 99999999]})
+    assert r.status_code == 409
+
+
+def test_host_report_for_missing_session_is_404(t4_env: T4Env):
+    env = t4_env
+    assert env.api.get(f"/host/sessions/{uuid.uuid4()}/report", env.host_a.token).status_code == 404
+
+
+def test_export_then_import_into_a_different_course(t4_env: T4Env, fn_cleanup: Cleanup):
+    """§3.2: the bundle is course-free, so a game round-trips into another course."""
+    env = t4_env
+    r = env.api.get(f"/host/games/{env.game_a['id']}/export", env.admin)
+    assert r.status_code == 200
+    exported = r.json()
+    r = env.api.post(
+        "/host/games/import",
+        env.admin,
+        files=_files(exported),
+        data={"course_id": str(env.course_b)},
+    )
+    assert r.status_code == 201, r.text
+    gid = r.json()["game_id"]
+    fn_cleanup.games.append(gid)
+    game = env.api.get(f"/host/games/{gid}", env.admin).json()
+    assert game["course_id"] == env.course_b
+    assert game["title"] == env.game_a["title"]
+    src = env.api.get(f"/host/games/{env.game_a['id']}/questions", env.admin).json()
+    dst = env.api.get(f"/host/games/{gid}/questions", env.admin).json()
+    keys = ("type", "grading_type", "prompt", "config", "answer_data", "points_value")
+    assert [{k: q[k] for k in keys} for q in dst] == [{k: q[k] for k in keys} for q in src]
+
+
+@pytest.mark.parametrize(
+    "body,fragment",
+    [
+        ("not json", "Invalid JSON"),
+        ({**_bundle(), "format": "other"}, "Unrecognised file format"),
+        ({**_bundle(), "version": 2}, "Unsupported version"),
+        (_bundle(title=""), "Invalid game metadata"),
+        ({**_bundle(), "questions": [{**_MC_QUESTION, "config": {"options": ["one"]}}]}, "Question 1 invalid"),
+    ],
+    ids=["not-json", "format", "version", "metadata", "question"],
+)
+@pytest.mark.parametrize("route", ["host", "admin"])
+def test_bad_bundle_is_422_on_both_import_routes(t4_env: T4Env, fn_cleanup: Cleanup, route, body, fragment):
+    env = t4_env
+    if route == "host":
+        r = env.api.post("/host/games/import", env.host_a.token, files=_files(body), data={"course_id": str(env.course_a)})
+    else:
+        r = env.api.post("/admin/games/import", env.admin, files=_files(body))
+    if r.status_code == 201:
+        fn_cleanup.games.append(r.json()["game_id"])
+    assert r.status_code == 422
+    assert fragment in r.json()["detail"]
+
+
+def test_admin_import_lands_unattached_and_ungranted(t4_env: T4Env, fn_cleanup: Cleanup):
+    env = t4_env
+    r = env.api.post("/admin/games/import", env.admin, files=_files(_bundle(course_id=env.course_a)))
+    assert r.status_code == 201, r.text
+    gid = r.json()["game_id"]
+    fn_cleanup.games.append(gid)
+    game = env.api.get(f"/admin/games/{gid}", env.admin).json()
+    assert game["course_id"] is None  # the bundle's course_id is discarded, not honoured
+    assert gid not in _game_access(env.api, env.admin, _jwt_sub(env.admin))
+    assert len(env.api.get(f"/admin/games/{gid}/questions", env.admin).json()) == 2
+
+
+def test_admin_question_routes_still_work_after_extraction(t4_env: T4Env, fn_cleanup: Cleanup):
+    """The admin question routes now call services/authoring_service.py — regression-check them."""
+    env = t4_env
+    game = _admin_game(env.api, env.admin, fn_cleanup, "T4 admin authoring", None)
+    base = f"/admin/games/{game['id']}/questions"
+    ids = [
+        env.api.post(base, env.admin, json={**_MC_QUESTION, "prompt": f"Q{i}<script>x</script>"}).json()["id"]
+        for i in range(3)
+    ]
+    assert all("<script>" not in q["prompt"] for q in env.api.get(base, env.admin).json())
+    r = env.api.put(f"{base}/{ids[1]}", env.admin, json={"prompt": "edited"})
+    assert r.status_code == 200 and r.json()["prompt"] == "edited"
+    assert env.api.post(f"{base}/reorder", env.admin, json={"order": ids[::-1]}).status_code == 204
+    assert [q["id"] for q in env.api.get(base, env.admin).json()] == ids[::-1]
+    assert env.api.post(f"{base}/reorder", env.admin, json={"order": ids[:1]}).status_code == 409
+    assert env.api.delete(f"{base}/{ids[0]}", env.admin).status_code == 204
+    assert env.api.delete(f"{base}/{ids[0]}", env.admin).status_code == 404
+    r = env.api.get(f"/admin/games/{game['id']}/export", env.admin)
+    assert r.status_code == 200
+    assert [q["prompt"] for q in r.json()["questions"]] == ["Q2x", "edited"]  # bleach strips the tag, keeps its text
+
+
+def test_admin_roster_patch_still_scoped_to_course(t4_env: T4Env):
+    """admin.patch_roster_entry now calls roster_service — the course scoping must survive."""
+    env = t4_env
+    netid = f"t4adm{uuid.uuid4().hex[:6]}"
+    r = env.api.post(
+        f"/admin/courses/{env.course_b}/roster/import",
+        env.admin,
+        json={"rows": [{"netid": netid, "full_name": "Adm", "email": f"{netid}@example.com"}]},
+    )
+    assert r.status_code == 200, r.text
+    rid = next(e["id"] for e in env.api.get(f"/admin/courses/{env.course_b}/roster", env.admin).json() if e["netid"] == netid)
+    r = env.api.patch(f"/admin/courses/{env.course_b}/roster/{rid}", env.admin, json={"netid": "  MiXeD  "})
+    assert r.status_code == 200 and r.json()["netid"] == "mixed"
+    assert env.api.patch(f"/admin/courses/{env.course_a}/roster/{rid}", env.admin, json={"is_active": False}).status_code == 404
