@@ -197,14 +197,18 @@ async def import_game_bundle(
             f"Unsupported version {version!r}; server supports version {SUPPORTED_IMPORT_VERSION}"
         )
 
-    game_data = dict(bundle.get("game", {}) or {})
-    game_data.pop("course_id", None)
+    game_data = bundle.get("game", {})
+    if not isinstance(game_data, dict):
+        raise BundleError("Invalid game metadata: 'game' must be an object")
+    game_data = {k: v for k, v in game_data.items() if k != "course_id"}
     try:
         game_meta = GameCreate(**game_data)
     except Exception as exc:
         raise BundleError(f"Invalid game metadata: {exc}") from exc
 
     questions_raw = bundle.get("questions", [])
+    if not isinstance(questions_raw, list):
+        raise BundleError("Invalid questions: 'questions' must be a list")
     validated_questions: list[QuestionCreate] = []
     for i, q in enumerate(questions_raw):
         try:

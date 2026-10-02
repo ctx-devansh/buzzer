@@ -818,8 +818,12 @@ def test_export_then_import_into_a_different_course(t4_env: T4Env, fn_cleanup: C
         ({**_bundle(), "version": 2}, "Unsupported version"),
         (_bundle(title=""), "Invalid game metadata"),
         ({**_bundle(), "questions": [{**_MC_QUESTION, "config": {"options": ["one"]}}]}, "Question 1 invalid"),
+        ({**_bundle(), "game": "x"}, "'game' must be an object"),
+        ({**_bundle(), "game": [["title", "x"]]}, "'game' must be an object"),
+        ({**_bundle(), "questions": {"a": 1}}, "'questions' must be a list"),
+        ([1, 2], "Unrecognised file format"),
     ],
-    ids=["not-json", "format", "version", "metadata", "question"],
+    ids=["not-json", "format", "version", "metadata", "question", "game-str", "game-list", "questions-dict", "bundle-list"],
 )
 @pytest.mark.parametrize("route", ["host", "admin"])
 def test_bad_bundle_is_422_on_both_import_routes(t4_env: T4Env, fn_cleanup: Cleanup, route, body, fragment):
