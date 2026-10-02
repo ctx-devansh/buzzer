@@ -1295,3 +1295,30 @@ nobody writes §4.5 for.
 was not in any earlier status line: **§10's fixture scope and teardown**, because it decides how
 every row below it is written and it is expensive to retrofit. §3.3's closing paragraph and §4.6's
 four states are still the two easiest things here to get wrong.
+
+## 19. Implementation notes (2026-10-02)
+
+Implementation followed §3/§4 and the §8 commit groups. Four places where the code had to differ
+from the letter of the spec, each found while building against the running stack:
+
+| Spec said | Built | Why |
+|---|---|---|
+| `await db.refresh(game, ["course"])` on both create paths (§3.3) | `await db.refresh(game, ["created_at", "course"])` | The attribute-scoped form refreshes **only** the named attributes. `created_at` is a server default that MySQL's INSERT does not return, so a course-only refresh would leave it unloaded and `GameResponse.created_at` would lazy-load → the same `MissingGreenlet` §3.3 exists to avoid. The bare `refresh(game)` loaded it, which is why it never surfaced before. |
+| `db.expire(game, ["course"])` after the attach assignment (§3.2, §3.3) | `expire` **then** `await db.flush(); await db.refresh(game, ["course"])` | An expired attribute is reloaded on next access, and that access happens during Pydantic serialisation, outside the greenlet. Expire alone trades the stale `null` for a `MissingGreenlet` 500. The refresh reloads it inside the await. §10's attach row asserts the `course_name` in the 200's body and passes. |
+| HostShell reads the status with its own raw `fetch`; `api.ts` stays status-blind "until a second caller needs it" (§4.6) | `api.ts` throws `ApiError(message, status)`; HostShell and RosterPage both use it | RosterPage's "You don't have HOST access to this course" on a **403** (§4.5) *is* that second caller, so §4.6's own fallback applies. This also deletes the raw-fetch copy of the `/api` prefix, Bearer header and error parse. |
+| "`api.ts` throws `Error(detail)`", so pages show "the server's message" (§4.5, §11) | the host `api.ts` reads a string `detail`, else `message`, else `HTTP <status>` | `BuzzerError`s (every 403/404/409 from `assert_host_can_use_*`) serialise as `{"error", "message"}`, not `{"detail"}` (`common/exceptions.py`). With `detail` only, every access error §4.5 promises to show reads "HTTP 403". The admin `api.ts` is unchanged. |
+
+Also, not deviations but choices the spec left open:
+- **Shared visibility query.** `game_service.visible_games_query(user, course_id)` builds the
+  §3.3 SELECT once for both `/game/my-games` and `/host/games`, next to `assert_host_can_use_game`.
+  That turns §3.3's "one rule, three endpoints" into two functions instead of three copies.
+- `assert_host_can_use_game` returns the `Game`, so `create_room` can apply the role-blind
+  course-identity check (§3.1) without a second lookup. For a non-admin it returns a **403** for a
+  nonexistent game, matching `assert_host_can_use_course`'s no-existence-leak behaviour.
+- `HostGameCreate` (a `GameCreate` subclass) makes `course_id` **required** on `POST /host/games`.
+  `GET /host/sessions?status=` validates the value against the four enum members (an unknown
+  value, e.g. `ACTIVE`, is a 422).
+- The import service raises its own `BundleError`, and both routers map it to the same 422
+  `detail` as before. `services/CLAUDE.md` forbids FastAPI imports in services.
+- §10 is `tests/integration/test_host_admin_restructure.py`: 28 cases, all passing along with the
+  existing suite. A post-run DB check found no leaked T4 games, users or sessions.
