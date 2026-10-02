@@ -1,8 +1,13 @@
 # frontend/admin/src/components/
 
 **Purpose.** Presentational UI primitives for the Admin app, sized for a desktop dashboard
-(tighter padding than the player's touch UI). Everything lives in `ui/`. These are hand-written
+(tighter padding than the player's touch UI), plus one routing helper. These are hand-written
 shadcn-style components (Tailwind + `cn`) with no state or data fetching.
+
+**`ExternalRedirect.tsx`.** `<ExternalRedirect to={params => url} />`: calls `useParams()`,
+builds the URL and `window.location.replace`s to it in an effect, rendering `null`. Used in
+`../App.tsx` for the routes that moved to the host app, so `/games/:gameId/questions` and
+`/courses/:courseId/roster` bookmarks land on the same resource there.
 
 **Contents (`ui/`).**
 - `button.tsx` — `Button`: native `<button>` with `variant` (`default` indigo, `outline`,

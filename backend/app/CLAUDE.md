@@ -5,8 +5,9 @@ Players answer from their phones, in real time, per course/session. This directo
 backend app package — see the leaf directories' own `CLAUDE.md` for detail.
 
 **Contents (subdirectories — each has its own `CLAUDE.md`).**
-- `routers/` — REST endpoints (FastAPI `APIRouter`s): admin CRUD, auth, host/game resource
-  discovery + room lifecycle, health check. Thin — delegates business logic to `services/`.
+- `routers/` — REST endpoints (FastAPI `APIRouter`s): admin CRUD, host-scoped authoring /
+  rosters / session downloads (`/host/*`), auth, host/game resource discovery + room lifecycle,
+  health check. Thin — delegates business logic to `services/`.
 - `services/` — the business-logic layer shared by `routers/` and `websocket/`: auth/JWT, room
   and session lifecycle, answer scoring, CSV/HTML export, roster CSV parsing, Redis-backed
   ephemeral game state, first-admin bootstrap.
