@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Pencil } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -147,7 +147,11 @@ export default function RosterPage() {
       const data = await api.get<RosterEntry[]>(`/host/courses/${courseId}/roster`);
       setEntries(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load roster');
+      setError(
+        err instanceof ApiError && err.status === 403
+          ? "You don't have HOST access to this course"
+          : err instanceof Error ? err.message : 'Failed to load roster',
+      );
     } finally {
       setLoading(false);
     }
@@ -290,12 +294,12 @@ export default function RosterPage() {
   const inactive = entries.filter((e) => !e.is_active);
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-5xl mx-auto">
       <button
         onClick={() => navigate('/courses')}
         className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-6"
       >
-        <ArrowLeft size={14} /> Back to Courses
+        <ArrowLeft size={14} /> Back to Rosters
       </button>
 
       <div className="flex items-center justify-between mb-6">

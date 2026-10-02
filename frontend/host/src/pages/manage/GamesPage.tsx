@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, List, Upload, Trash2, Pencil } from 'lucide-react';
+import { Plus, List, Upload, Trash2, Pencil, Link2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { getRole } from '../../lib/auth';
+import { useShellCourses, type ShellCourse } from '../../components/HostShell';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -11,42 +13,98 @@ interface Game {
   title: string;
   description: string;
   max_players: number;
+  course_id: number | null;
+  course_name: string | null;
   created_at: string;
 }
 
+const selectClass =
+  'w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+
+function CourseSelect({ courses, value, onChange, placeholder }: {
+  courses: ShellCourse[];
+  value: number | '';
+  onChange: (v: number | '') => void;
+  placeholder: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : '')}
+      className={selectClass}
+    >
+      <option value="">{placeholder}</option>
+      {courses.map((c) => (
+        <option key={c.id} value={c.id}>{c.name} — {c.semester}</option>
+      ))}
+    </select>
+  );
+}
+
 export default function GamesPage() {
+  const courses = useShellCourses();
+  const isAdmin = getRole() === 'ADMIN';
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // '' = "All courses": the only request shape that returns unattached games to an ADMIN.
+  const [filterCourseId, setFilterCourseId] = useState<number | ''>('');
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('150');
+  const [formCourseId, setFormCourseId] = useState<number | ''>('');
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importCourseId, setImportCourseId] = useState<number | ''>('');
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editMaxPlayers, setEditMaxPlayers] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [attachCourse, setAttachCourse] = useState<Record<number, number | ''>>({});
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  async function load() {
+  async function load(courseId: number | '' = filterCourseId) {
+    setError('');
     try {
-      const data = await api.get<Game[]>('/host/games');
+      // With a course this is gated, not merely filtered: a course the user cannot
+      // host is a 403 (unreachable from the select, which only lists HOST courses).
+      const path = courseId === '' ? '/host/games' : `/host/games?course_id=${courseId}`;
+      const data = await api.get<Game[]>(path);
       setGames(data);
     } catch (err) {
+      setGames([]);
       setError(err instanceof Error ? err.message : 'Failed to load games');
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(filterCourseId); }, [filterCourseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The forms' course selects start from the filter when opened, then are independent:
+  // changing the filter never overwrites or clears a course picked in an open form.
+  function openCreate() {
+    if (!showForm) setFormCourseId(filterCourseId);
+    setShowForm(!showForm);
+  }
+
+  function openImport() {
+    if (!showImport) {
+      setImportCourseId(filterCourseId);
+      setImportFile(null);
+    }
+    setShowImport(!showImport);
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (formCourseId === '') return;
     setSaving(true);
     setError('');
     try {
@@ -54,8 +112,9 @@ export default function GamesPage() {
         title,
         description,
         max_players: Number(maxPlayers),
+        course_id: formCourseId,
       });
-      setTitle(''); setDescription(''); setMaxPlayers('150');
+      setTitle(''); setDescription(''); setMaxPlayers('150'); setFormCourseId('');
       setShowForm(false);
       await load();
     } catch (err) {
@@ -78,6 +137,7 @@ export default function GamesPage() {
     setEditSaving(true);
     setError('');
     try {
+      // HostGameUpdate: never carries course_id (a 422 if it did).
       await api.put(`/host/games/${editingGame.id}`, {
         title: editTitle,
         description: editDescription,
@@ -92,16 +152,16 @@ export default function GamesPage() {
     }
   }
 
-  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!importFile || importCourseId === '') return;
     setImporting(true);
     setError('');
     try {
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', importFile);
+      form.append('course_id', String(importCourseId));
       const result = await api.postForm<{ game_id: number }>('/host/games/import', form);
-      await load();
       navigate(`/games/${result.game_id}/questions`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
@@ -111,10 +171,23 @@ export default function GamesPage() {
     }
   }
 
+  async function attachGame(id: number) {
+    const courseId = attachCourse[id];
+    if (!courseId) return;
+    setRowErrors((prev) => ({ ...prev, [id]: '' }));
+    try {
+      // Admin-only route; re-render the row from the response body's course fields.
+      const updated = await api.put<Game>(`/admin/games/${id}`, { course_id: courseId });
+      setGames((prev) => prev.map((g) => (g.id === id ? updated : g)));
+    } catch (err) {
+      setRowErrors((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : 'Attach failed' }));
+    }
+  }
+
   async function deleteGame(id: number) {
     if (!confirm('Delete this game and all its sessions? This cannot be undone.')) return;
     try {
-      await api.delete(`/host/games/${id}`);
+      await api.delete(`/admin/games/${id}`);
       setGames((prev) => prev.filter((g) => g.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete game');
@@ -122,22 +195,61 @@ export default function GamesPage() {
   }
 
   return (
-    <div className="p-8 max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-8 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <h2 className="text-2xl font-bold text-slate-100">Games</h2>
         <div className="flex gap-2">
-          <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
-            <Upload size={14} className="mr-1" />
-            {importing ? 'Importing\u2026' : 'Import JSON'}
+          <Button variant="outline" size="sm" onClick={openImport}>
+            <Upload size={14} className="mr-1" /> Import JSON
           </Button>
-          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          <Button size="sm" onClick={openCreate}>
             <Plus size={16} className="mr-1" /> New Game
           </Button>
         </div>
       </div>
 
+      <div className="mb-6 max-w-xs">
+        <label className="block text-xs text-slate-400 mb-1">Course</label>
+        <select
+          value={filterCourseId}
+          onChange={(e) => setFilterCourseId(e.target.value ? Number(e.target.value) : '')}
+          className={selectClass}
+        >
+          <option value="">All courses</option>
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>{c.name} — {c.semester}</option>
+          ))}
+        </select>
+      </div>
+
       {error && <p className="text-red-400 mb-4 text-sm">{error}</p>}
+
+      {showImport && (
+        <Card className="mb-6">
+          <CardHeader><h3 className="text-lg font-semibold text-slate-100">Import Game JSON</h3></CardHeader>
+          <CardContent>
+            <form onSubmit={handleImport} className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Course (required)</label>
+                <CourseSelect courses={courses} value={importCourseId} onChange={setImportCourseId} placeholder="Select a course…" />
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".json"
+                onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                className="block text-sm text-slate-300"
+              />
+              <div className="flex gap-3">
+                <Button type="submit" disabled={importing || !importFile || importCourseId === ''}>
+                  {importing ? 'Importing…' : 'Import'}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setShowImport(false)}>Cancel</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {showForm && (
         <Card className="mb-6">
@@ -162,8 +274,12 @@ export default function GamesPage() {
                   max="500"
                 />
               </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Course (required)</label>
+                <CourseSelect courses={courses} value={formCourseId} onChange={setFormCourseId} placeholder="Select a course…" />
+              </div>
               <div className="flex gap-3">
-                <Button type="submit" disabled={saving}>{saving ? 'Creating\u2026' : 'Create'}</Button>
+                <Button type="submit" disabled={saving || formCourseId === ''}>{saving ? 'Creating…' : 'Create'}</Button>
                 <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
               </div>
             </form>
@@ -195,7 +311,7 @@ export default function GamesPage() {
                 />
               </div>
               <div className="flex gap-3">
-                <Button type="submit" disabled={editSaving}>{editSaving ? 'Saving\u2026' : 'Save'}</Button>
+                <Button type="submit" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'}</Button>
                 <Button type="button" variant="ghost" onClick={() => setEditingGame(null)}>Cancel</Button>
               </div>
             </form>
@@ -204,41 +320,71 @@ export default function GamesPage() {
       )}
 
       {loading ? (
-        <p className="text-slate-400">Loading\u2026</p>
+        <p className="text-slate-400">Loading…</p>
       ) : games.length === 0 ? (
         <p className="text-slate-400">No games yet.</p>
       ) : (
         <div className="space-y-3">
           {games.map((g) => (
-            <Card key={g.id} className="flex items-center justify-between px-6 py-4">
-              <div>
-                <p className="font-semibold text-slate-100">{g.title}</p>
-                {g.description && <p className="text-slate-400 text-sm mt-0.5 line-clamp-1">{g.description}</p>}
-                <p className="text-slate-500 text-xs mt-0.5">Max {g.max_players} players</p>
+            <Card key={g.id} className="px-6 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-100">{g.title}</p>
+                  {g.course_id === null ? (
+                    <p className="text-amber-400 text-sm mt-0.5">Unattached (admin only)</p>
+                  ) : (
+                    <p className="text-indigo-300 text-sm mt-0.5">{g.course_name}</p>
+                  )}
+                  {g.description && <p className="text-slate-400 text-sm mt-0.5 line-clamp-1">{g.description}</p>}
+                  <p className="text-slate-500 text-xs mt-0.5">Max {g.max_players} players</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => startEdit(g)}
+                  >
+                    <Pencil size={14} />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/games/${g.id}/questions`)}
+                  >
+                    <List size={14} className="mr-1" /> Questions
+                  </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void deleteGame(g.id)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => startEdit(g)}
-                >
-                  <Pencil size={14} />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/games/${g.id}/questions`)}
-                >
-                  <List size={14} className="mr-1" /> Questions
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => void deleteGame(g.id)}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </div>
+              {isAdmin && g.course_id === null && (
+                <div className="flex items-center gap-2 mt-3">
+                  <div className="flex-1 max-w-xs">
+                    <CourseSelect
+                      courses={courses}
+                      value={attachCourse[g.id] ?? ''}
+                      onChange={(v) => setAttachCourse((prev) => ({ ...prev, [g.id]: v }))}
+                      placeholder="Attach to course…"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!attachCourse[g.id]}
+                    onClick={() => void attachGame(g.id)}
+                  >
+                    <Link2 size={14} className="mr-1" /> Attach
+                  </Button>
+                </div>
+              )}
+              {rowErrors[g.id] && <p className="text-red-400 text-sm mt-2">{rowErrors[g.id]}</p>}
             </Card>
           ))}
         </div>

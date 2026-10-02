@@ -9,6 +9,8 @@ import GameOverPage from './pages/game/GameOverPage';
 import GamesPage from './pages/manage/GamesPage';
 import QuestionEditorPage from './pages/manage/QuestionEditorPage';
 import RosterPage from './pages/manage/RosterPage';
+import CoursesPage from './pages/manage/CoursesPage';
+import SessionsPage from './pages/manage/SessionsPage';
 import HostShell from './components/HostShell';
 import { getToken } from './lib/auth';
 
@@ -27,7 +29,9 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/games/:gameId/questions" element={<QuestionEditorPage />} />
+          <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:courseId/roster" element={<RosterPage />} />
+          <Route path="/sessions" element={<SessionsPage />} />
         </Route>
         <Route path="/game/:code" element={<RequireAuth><GameLayout /></RequireAuth>}>
           <Route path="lobby" element={<LobbyPage />} />

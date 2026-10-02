@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { Gamepad2, History, LogOut, Play, Shield, Users } from 'lucide-react';
-import { clearToken, getRole, getToken } from '../lib/auth';
+import { api, ApiError } from '../lib/api';
+import { clearToken, getRole } from '../lib/auth';
 import { ADMIN_APP_URL } from '../lib/links';
 import { Button } from './ui/button';
 
@@ -40,32 +41,18 @@ export default function HostShell() {
   const navigate = useNavigate();
   const isAdmin = getRole() === 'ADMIN';
 
-  // The one caller of /game/my-courses in the host app. A raw fetch rather than
-  // api.get because the shell must branch on the status (403 = guest account), and
-  // api.ts discards it. Keep this the only such copy.
+  // The one caller of /game/my-courses in the host app.
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const token = getToken();
-      const res = await fetch('/api/game/my-courses', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.status === 403) {
-        setState({ kind: 'forbidden' });
-        return;
-      }
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { detail?: unknown; message?: unknown };
-        const message =
-          typeof err.detail === 'string' ? err.detail
-          : typeof err.message === 'string' ? err.message
-          : `HTTP ${res.status}`;
-        setState({ kind: 'error', message });
-        return;
-      }
-      setState({ kind: 'ready', courses: (await res.json()) as ShellCourse[] });
+      setState({ kind: 'ready', courses: await api.get<ShellCourse[]>('/game/my-courses') });
     } catch (err) {
-      setState({ kind: 'error', message: err instanceof Error ? err.message : 'Failed to load your courses' });
+      // require_user's only ForbiddenError is the GUEST check, so 403 = guest account.
+      if (err instanceof ApiError && err.status === 403) {
+        setState({ kind: 'forbidden' });
+      } else {
+        setState({ kind: 'error', message: err instanceof Error ? err.message : 'Failed to load your courses' });
+      }
     }
   }, []);
 

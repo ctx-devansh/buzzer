@@ -2,12 +2,21 @@ import { getToken } from './auth';
 
 const BASE = '/api';
 
-/** Error message from a non-2xx response: FastAPI's `detail`, or a BuzzerError's `message`. */
-async function errorMessage(res: Response): Promise<string> {
+/** Thrown for any non-2xx response; `status` lets a caller branch on e.g. 403. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** Error from a non-2xx response. The message is FastAPI's `detail` or a BuzzerError's `message`. */
+async function toError(res: Response): Promise<ApiError> {
   const err = (await res.json().catch(() => ({}))) as { detail?: unknown; message?: unknown };
-  if (typeof err.detail === 'string') return err.detail;
-  if (typeof err.message === 'string') return err.message;
-  return `HTTP ${res.status}`;
+  const message =
+    typeof err.detail === 'string' ? err.detail
+    : typeof err.message === 'string' ? err.message
+    : `HTTP ${res.status}`;
+  return new ApiError(message, res.status);
 }
 
 async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
@@ -20,7 +29,7 @@ async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
       ...(opts.headers as Record<string, string> ?? {}),
     },
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw await toError(res);
   const text = await res.text();
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
@@ -34,7 +43,7 @@ async function downloadFetch(path: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
+  if (!res.ok) throw await toError(res);
   const disposition = res.headers.get('Content-Disposition') ?? '';
   const match = disposition.match(/filename="([^"]+)"/);
   const filename = match ? match[1] : 'download';
@@ -67,7 +76,7 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     }).then(async (res) => {
-      if (!res.ok) throw new Error(await errorMessage(res));
+      if (!res.ok) throw await toError(res);
       const text = await res.text();
       return (text ? JSON.parse(text) : {}) as T;
     });
