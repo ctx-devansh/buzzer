@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { clearToken } from '../lib/auth';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
 
@@ -68,7 +69,7 @@ export default function HomePage() {
   }
 
   function logout() {
-    localStorage.removeItem('token');
+    clearToken();
     navigate('/login');
   }
 

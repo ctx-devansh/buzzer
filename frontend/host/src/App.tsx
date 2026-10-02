@@ -6,9 +6,10 @@ import LobbyPage from './pages/game/LobbyPage';
 import QuestionPage from './pages/game/QuestionPage';
 import ResultsPage from './pages/game/ResultsPage';
 import GameOverPage from './pages/game/GameOverPage';
+import { getToken } from './lib/auth';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  if (!localStorage.getItem('token')) return <Navigate to="/login" replace />;
+  if (!getToken()) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 

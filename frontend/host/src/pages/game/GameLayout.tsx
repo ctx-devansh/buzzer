@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { getToken } from '../../lib/auth';
 import { QRCodeSVG } from 'qrcode.react';
 import { io, Socket } from 'socket.io-client';
 import type {
@@ -74,7 +75,7 @@ export default function GameLayout() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token || !code) {
       navigate('/home', { replace: true });
       return;
@@ -86,7 +87,7 @@ export default function GameLayout() {
 
     const sock = io({
       path: '/socket.io',
-      auth: (cb) => cb({ token: localStorage.getItem('token') ?? '' }),
+      auth: (cb) => cb({ token: getToken() ?? '' }),
       transports: ['websocket', 'polling'],
     });
     socketRef.current = sock;
