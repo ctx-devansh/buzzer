@@ -752,6 +752,60 @@ def test_session_row_identical_from_admin_and_host_routes(t4_env: T4Env, complet
     assert admin_row["player_count"] == 1
 
 
+@pytest.mark.parametrize("route", ["host", "admin"])
+def test_played_question_cannot_be_deleted(
+    t4_env: T4Env, completed_sessions: CompletedSessions, route: str
+):
+    """
+    A question with recorded scores is a 409 and stays put. Before the fix this was a
+    204 whose commit then failed in get_db (session_scores.question_id is NOT NULL),
+    so the client saw success and the question silently survived.
+    """
+    env = t4_env
+    # completed_sessions played game_a's (host_a) and game_b's (host_b) only question.
+    game, tok = (env.game_a, env.host_a.token) if route == "host" else (env.game_b, env.admin)
+    base = f"/{route}/games/{game['id']}/questions"
+    before = env.api.get(base, tok).json()
+    qid = before[0]["id"]
+
+    r = env.api.delete(f"{base}/{qid}", tok)
+    assert r.status_code == 409, r.text
+    assert "recorded answers" in r.text
+
+    assert [q["id"] for q in env.api.get(base, tok).json()] == [q["id"] for q in before]
+    # The scores, and the session's downloads, are untouched.
+    sid = completed_sessions.host_a_sid if route == "host" else completed_sessions.host_b_sid
+    assert env.api.get(f"/game/sessions/{sid}/export", env.admin).status_code == 200
+
+
+def test_unplayed_question_in_played_game_can_still_be_deleted(
+    t4_env: T4Env, completed_sessions: CompletedSessions
+):
+    """The 409 is per question, not per game: a question added after the session deletes normally."""
+    env = t4_env
+    base = f"/host/games/{env.game_a['id']}/questions"
+    r = env.api.post(base, env.host_a.token, json={**_MC_QUESTION, "prompt": "added later"})
+    assert r.status_code == 201, r.text
+    qid = r.json()["id"]
+    assert env.api.delete(f"{base}/{qid}", env.host_a.token).status_code == 204
+    assert qid not in {q["id"] for q in env.api.get(base, env.host_a.token).json()}
+
+
+def test_validation_error_detail_is_a_field_list(t4_env: T4Env, host_a_game: dict):
+    """
+    Contract for both apps' api.ts `validationMessage`: a 422's `detail` is a list of
+    {loc, msg}, with the field name last in `loc` — not a string. (An empty Max players
+    field is sent as 0, which used to surface in the UI as a bare "HTTP 422".)
+    """
+    env = t4_env
+    r = env.api.put(f"/host/games/{host_a_game['id']}", env.host_a.token, json={"max_players": 0})
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert isinstance(detail, list) and detail
+    assert detail[0]["loc"][-1] == "max_players"
+    assert isinstance(detail[0]["msg"], str) and detail[0]["msg"]
+
+
 def test_revoked_host_keeps_own_sessions(t4_env: T4Env, fn_cleanup: Cleanup):
     env = t4_env
     host = _make_user(env.api, env.admin, fn_cleanup, "revoked")

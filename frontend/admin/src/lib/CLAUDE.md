@@ -6,7 +6,8 @@ clients (it includes file upload and download) and the Tailwind class-merging he
 **Contents.**
 - `api.ts` — `api.get/post/put/patch/delete<T>(path, body?)` over `fetch`, prefixing `/api`,
   sending JSON, and attaching `Authorization: Bearer <localStorage.token>`. On non-2xx it throws
-  `Error` with FastAPI's string `detail`, else a `BuzzerError`'s `message`, else `HTTP <status>`.
+  `Error` with FastAPI's string `detail`, else a `BuzzerError`'s `message`, else a 422's
+  field-error list flattened by `validationMessage`, else `HTTP <status>`.
   A **401 on a request that sent a token** (outside `/auth/*`) clears the token and
   `location.replace`s to the admin `login` — `RequireAdmin` only checks that a token exists, so
   an expired or leftover one would otherwise strand every page on a 401. An empty body resolves to

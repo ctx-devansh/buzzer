@@ -1,12 +1,27 @@
 const BASE = '/api';
 
-/** Error from a non-2xx response. The message is FastAPI's `detail` or a BuzzerError's `message`. */
+/**
+ * FastAPI's 422 `detail` is a list of `{loc, msg}`; turn it into one readable line,
+ * e.g. "max_players: Input should be greater than or equal to 1".
+ */
+function validationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+  const parts = detail.map((d) => {
+    const item = d as { loc?: unknown; msg?: unknown };
+    const msg = typeof item.msg === 'string' ? item.msg.replace(/^Value error, /, '') : 'Invalid value';
+    const loc = Array.isArray(item.loc) ? item.loc.filter((l) => l !== 'body') : [];
+    return loc.length ? `${loc.join('.')}: ${msg}` : msg;
+  });
+  return parts.join('; ');
+}
+
+/** Error from a non-2xx response: FastAPI's string `detail`, a BuzzerError's `message`, or a 422's field errors. */
 async function toError(res: Response): Promise<Error> {
   const err = (await res.json().catch(() => ({}))) as { detail?: unknown; message?: unknown };
   return new Error(
     typeof err.detail === 'string' ? err.detail
     : typeof err.message === 'string' ? err.message
-    : `HTTP ${res.status}`,
+    : validationMessage(err.detail) ?? `HTTP ${res.status}`,
   );
 }
 

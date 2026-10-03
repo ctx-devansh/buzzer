@@ -10,7 +10,8 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   link, Delete-game button, Attach-to-course control); the server authorises every action.
 - `api.ts` — `api.get/post/put/patch/delete<T>(path, body?)` over `fetch`, prefixing `/api`,
   sending JSON and a Bearer token from `getToken()`. Non-2xx throws `ApiError(message, status)`:
-  the message is FastAPI's string `detail`, else a `BuzzerError`'s `message`, else
+  the message is FastAPI's string `detail`, else a `BuzzerError`'s `message`, else a 422's
+  field-error list flattened by `validationMessage` (`max_players: Input should be …`), else
   `HTTP <status>`. Two extras ported from admin: `postForm` (multipart, deliberately no
   `Content-Type`) and `download(path)` (reads the quoted `filename="…"` from
   `Content-Disposition`, saves the blob). Both bypass `apiFetch` on purpose.
@@ -30,5 +31,5 @@ outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/G
 - In Vite dev the apps run on separate ports, so `ADMIN_APP_URL` defaults to
   `http://localhost:5175` there (a bare `/admin` would hit the host dev server, match no route and
   land on `/login`). The token is per-origin, so the admin app asks you to sign in again.
-- `api.ts`/`utils.ts` are still copy-pasted per app; admin's `api.ts` reads only `detail` and
-  throws plain `Error`s.
+- `api.ts`/`utils.ts` are still copy-pasted per app; admin's `api.ts` has the same message
+  parse (incl. `validationMessage`) but throws plain `Error`s.

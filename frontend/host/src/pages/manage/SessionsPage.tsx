@@ -41,12 +41,20 @@ export default function SessionsPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
+    // Ignore a response for a filter that is no longer selected, and never leave the
+    // previous filter's rows (with live download buttons) under the new filter.
+    let cancelled = false;
     setLoading(true);
     setError('');
+    setSessions([]);
+    setRowErrors({});
     api.get<SessionItem[]>(status ? `/host/sessions?status=${status}` : '/host/sessions')
-      .then(setSessions)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load sessions'))
-      .finally(() => setLoading(false));
+      .then((data) => { if (!cancelled) setSessions(data); })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load sessions');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [status]);
 
   async function download(sessionId: string, path: string, key: string) {

@@ -9,6 +9,9 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   sanitising), the `buzzer/game` export bundle builder, and the bundle importer
   (`import_game_bundle(db, raw, course_id)`; raises `BundleError`, which routers map to 422).
   Shared by `routers/admin.py` and `routers/host.py`; callers authorise first.
+  `delete_question` refuses (409) a question with `session_scores` rows — those are grade data
+  and `question_id` is `NOT NULL` with no `ON DELETE` — and flushes before returning, because
+  `get_db` commits only after the response is sent.
 - `auth_service.py` — password hashing (bcrypt via passlib), RS256 JWT creation/decoding
   (access/refresh/temp tokens), auto-generates an ephemeral in-memory RSA keypair if
   `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` aren't set (dev convenience — tokens die on restart), and

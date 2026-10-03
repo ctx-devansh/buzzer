@@ -13,11 +13,13 @@ import json
 
 import bleach
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..common.exceptions import ConflictError, NotFoundError
 from ..models.game import Game, Question
+from ..models.session import SessionScore
 from ..schemas.admin import GameCreate, QuestionCreate, QuestionUpdate
 
 logger = structlog.get_logger()
@@ -121,8 +123,32 @@ async def update_question(
 
 
 async def delete_question(db: AsyncSession, game_id: int, question_id: int) -> None:
+    """
+    Delete an unplayed question. A question with recorded scores is a 409:
+    session_scores.question_id is NOT NULL with no ON DELETE, and those rows are
+    grade data, so they are neither nulled nor cascaded away.
+    """
     question = await _get_question_in_game(db, game_id, question_id)
+    result = await db.execute(
+        select(func.count())
+        .select_from(SessionScore)
+        .where(SessionScore.question_id == question_id)
+    )
+    if result.scalar_one():
+        raise ConflictError(
+            "This question has recorded answers from a past session, so it cannot "
+            "be deleted"
+        )
     await db.delete(question)
+    # Flush here, not in get_db: get_db commits only after the 204 is sent, so a
+    # score recorded between the check above and the commit would otherwise be a
+    # silent failure that the client saw as success.
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise ConflictError(
+            "This question has recorded answers and cannot be deleted"
+        ) from exc
 
 
 async def reorder_questions(db: AsyncSession, game_id: int, order: list[int]) -> None:
