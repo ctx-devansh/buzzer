@@ -28,6 +28,14 @@ ruff check .
 ruff format .
 ```
 
+### Tests (from the repo root, against the running Docker stack)
+```bash
+pytest                    # unit → integration → e2e (root pytest.ini; e2e must run last)
+pytest tests/integration  # REST + Socket.IO against :8000
+npm run build && pytest tests/e2e   # Playwright against nginx on :8080 (serves frontend/*/dist)
+# one-time e2e setup: pip install -r tests/e2e/requirements.txt && playwright install chromium
+```
+
 ### Frontend Applications
 ```bash
 npm run dev           # all three apps concurrently
