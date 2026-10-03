@@ -14,7 +14,8 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   `HTTP <status>`. Two extras ported from admin: `postForm` (multipart, deliberately no
   `Content-Type`) and `download(path)` (reads the quoted `filename="…"` from
   `Content-Disposition`, saves the blob). Both bypass `apiFetch` on purpose.
-- `links.ts` — `ADMIN_APP_URL` (`VITE_ADMIN_APP_URL ?? '/admin'`).
+- `links.ts` — `ADMIN_APP_URL` (`VITE_ADMIN_APP_URL`, else `http://localhost:5175` in dev and
+  `/admin` in a build).
 - `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`.
 
 **How it fits in.** `../pages/` and `../components/HostShell.tsx` call `api` for everything
@@ -26,7 +27,8 @@ outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/G
 - Never use `getRole()` for a real access decision — that would be a security bug.
 - No 401 handling: an expired token surfaces as a thrown error on the calling page (the shell
   shows it with Retry), not a redirect to `/login`.
-- In Vite dev the apps run on separate ports, so `ADMIN_APP_URL` needs
-  `VITE_ADMIN_APP_URL=http://localhost:5175`, and even then the token is not shared.
+- In Vite dev the apps run on separate ports, so `ADMIN_APP_URL` defaults to
+  `http://localhost:5175` there (a bare `/admin` would hit the host dev server, match no route and
+  land on `/login`). The token is per-origin, so the admin app asks you to sign in again.
 - `api.ts`/`utils.ts` are still copy-pasted per app; admin's `api.ts` reads only `detail` and
   throws plain `Error`s.

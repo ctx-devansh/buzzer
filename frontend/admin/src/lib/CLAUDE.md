@@ -13,8 +13,8 @@ clients (it includes file upload and download) and the Tailwind class-merging he
   - `api.download(path)` — authenticated GET that reads the filename from
     `Content-Disposition: attachment; filename="…"` (fallback `download`), then saves the blob
     via a temporary `<a download>` and object URL. Used for CSV/HTML/JSON exports.
-- `links.ts` — `HOST_APP_URL` (`VITE_HOST_APP_URL ?? '/host'`) and `PLAYER_APP_URL`
-  (`VITE_PLAYER_APP_URL ?? '/player'`) for the sidebar's Host tools links, the Courses Roster
+- `links.ts` — `HOST_APP_URL` and `PLAYER_APP_URL` (the `VITE_*` override, else
+  `http://localhost:5173`/`5174` in dev and `/host`/`/player` in a build) for the sidebar's Host tools links, the Courses Roster
   link and `ExternalRedirect`.
 - `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`.
 
@@ -26,12 +26,11 @@ to the host app). `../components/ui/` imports `cn`.
 
 **Gotchas.**
 - **Cross-app links in Vite dev.** Under nginx/Docker all apps share one origin, so "Games ↗"
-  lands in the host app already signed in. In dev each app has its own port: set
-  `VITE_HOST_APP_URL=http://localhost:5173` / `VITE_PLAYER_APP_URL=http://localhost:5174` to make
-  the links work at all (they then land on the host login page — the token isn't shared across
-  ports). **Without them the links fail silently**: `/host/games` hits the admin dev server
-  (`base: '/'`, only `/api` proxied), gets the SPA fallback, matches no admin route, and the
-  catch-all sends the user to `/users` with no error.
+  lands in the host app already signed in. In dev each app has its own port, so the links default
+  to `http://localhost:5173` / `5174` (override with `VITE_HOST_APP_URL` / `VITE_PLAYER_APP_URL`)
+  and land on that app's login page — the token isn't shared across ports. A bare `/host` path in
+  dev would fail silently: it hits the admin dev server (`base: '/'`, only `/api` proxied), matches
+  no admin route, and the catch-all sends the user to `/users`.
 - `download` needs `Content-Disposition` with a **quoted** filename. The regex is
   `filename="([^"]+)"`, so an unquoted or RFC 5987 `filename*=` header falls back to
   `download` with no extension.
