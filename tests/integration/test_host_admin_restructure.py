@@ -95,12 +95,20 @@ class Cleanup:
     users: list[str] = field(default_factory=list)
 
     def run(self) -> None:
-        for sid in self.sessions:
-            self.api.delete(f"/game/sessions/{sid}", self.admin)
-        for gid in self.games:
-            self.api.delete(f"/admin/games/{gid}", self.admin)
-        for uid in self.users:
-            self.api.delete(f"/admin/users/{uid}", self.admin)
+        # Every delete is attempted before failing, so one bad delete doesn't leak the
+        # rest. 404 is fine (a test may have deleted it already); anything else is a
+        # cleanup path that didn't clean up — exactly the leak T5 warns about.
+        failed = []
+        paths = (
+            [f"/game/sessions/{sid}" for sid in self.sessions]
+            + [f"/admin/games/{gid}" for gid in self.games]
+            + [f"/admin/users/{uid}" for uid in self.users]
+        )
+        for path in paths:
+            r = self.api.delete(path, self.admin)
+            if r.status_code not in (204, 404):
+                failed.append(f"DELETE {path} -> {r.status_code} {r.text[:200]}")
+        assert not failed, "teardown failed:\n" + "\n".join(failed)
 
 
 @dataclass
@@ -449,6 +457,14 @@ def test_host_cannot_create_game_in_unhosted_course(t4_env: T4Env, fn_cleanup: C
         fn_cleanup.games.append(r.json()["id"])
     assert r.status_code == 403
 
+    # H5 server-side: a host-created game must name a course. The UI's disabled Create
+    # button is not the gate — HostGameCreate's required course_id is.
+    for body in ({"title": "no course"}, {"title": "null course", "course_id": None}):
+        r = env.api.post("/host/games", env.host_a.token, json=body)
+        if r.status_code == 201:
+            fn_cleanup.games.append(r.json()["id"])
+        assert r.status_code == 422, (body, r.text)
+
 
 def test_host_question_crud_and_reorder(t4_env: T4Env, host_a_game: dict):
     env = t4_env
@@ -578,6 +594,25 @@ def test_admin_attach_course_once_then_409(t4_env: T4Env, fn_cleanup: Cleanup):
     assert r.status_code == 409
     stored = env.api.get(f"/admin/games/{game['id']}", env.admin).json()
     assert stored["course_id"] == env.course_a
+
+
+def test_admin_attach_to_missing_course_is_404(t4_env: T4Env, fn_cleanup: Cleanup):
+    env = t4_env
+    game = _admin_game(env.api, env.admin, fn_cleanup, "T4 attach missing", None)
+    r = env.api.put(f"/admin/games/{game['id']}", env.admin, json={"course_id": 99_999_999})
+    assert r.status_code == 404, r.text  # not a 500 from the FK
+    stored = env.api.get(f"/admin/games/{game['id']}", env.admin).json()
+    assert stored["course_id"] is None
+
+
+def test_admin_resending_same_course_is_a_noop(t4_env: T4Env, fn_cleanup: Cleanup):
+    env = t4_env
+    game = _admin_game(env.api, env.admin, fn_cleanup, "T4 attach twice", env.course_a)
+    # Same value as stored is not a "change", so not the 409 guard.
+    r = env.api.put(f"/admin/games/{game['id']}", env.admin, json={"course_id": env.course_a})
+    assert r.status_code == 200, r.text
+    assert r.json()["course_id"] == env.course_a
+    assert r.json()["course_name"] == env.game_a["course_name"]
 
 
 # ---------------------------------------------------------------------------
@@ -789,6 +824,19 @@ def test_hosts_cannot_delete_games(t4_env: T4Env, host_a_game: dict):
     assert env.api.delete(f"/host/games/{gid}", env.host_a.token).status_code == 405
     assert env.api.delete(f"/admin/games/{gid}", env.host_a.token).status_code == 403
     assert env.api.get(f"/host/games/{gid}", env.host_a.token).status_code == 200
+
+
+def test_admin_delete_removes_host_created_game_and_its_grant(t4_env: T4Env, host_a_game: dict):
+    # The delete is committed after the 204 is sent, so the 204 alone proves nothing:
+    # read back both the game and the creator's auto-grant.
+    env = t4_env
+    gid = host_a_game["id"]
+    assert gid in _game_access(env.api, env.admin, env.host_a.id)
+
+    assert env.api.delete(f"/admin/games/{gid}", env.admin).status_code == 204
+    assert env.api.get(f"/admin/games/{gid}", env.admin).status_code == 404
+    assert gid not in _game_access(env.api, env.admin, env.host_a.id)
+    assert gid not in {g["id"] for g in env.api.get("/game/my-games", env.host_a.token).json()}
 
 
 def test_other_host_cannot_see_host_created_game(t4_env: T4Env, host_a_game: dict):
