@@ -1,8 +1,21 @@
 # frontend/host/src/components/
 
-**Purpose.** Presentational UI primitives for the Host app, styled for its dark slate theme.
-Everything lives in `ui/`. These are hand-written components in the shadcn style (Tailwind +
+**Purpose.** The Host app's management shell plus presentational UI primitives, styled for its
+dark slate theme. Primitives live in `ui/`. These are hand-written components in the shadcn style (Tailwind +
 `cn`), not a generated shadcn install, and none of them holds game state.
+
+**`HostShell.tsx`.** Layout route for the management pages (`/home`, `/games…`, `/courses…`,
+`/sessions`; never the `/game/:code/*` projector screens). Top nav: Play, Games, Rosters,
+Sessions, an **Admin console** link (only when `getRole() === 'ADMIN'`), Sign out. It is the
+**sole caller of `GET /game/my-courses`** and hands the list to pages via
+`<Outlet context={{courses}}>`; pages read it with `useShellCourses()`. Four states:
+- *loading* — renders the routed page with `[]` (never the empty state, to avoid flashing "no
+  HOST access" at users who have it);
+- *403* — the guest-account message, no Retry (a GUEST token can't succeed);
+- *other error* — the message plus Retry (this is also how an expired token shows up);
+- *resolved* — `[]` for a non-admin shows "ask an administrator" (ADMIN: "No courses exist yet");
+  otherwise the page. The `[]` replacement is skipped when `pathname` is **exactly** `/home` or
+  `/sessions` (own sessions/live rooms stay reachable); the error states replace every path.
 
 **Contents (`ui/`).**
 - `button.tsx` — `Button`: native `<button>` with `variant` (`default` indigo, `outline`,
@@ -15,7 +28,7 @@ Everything lives in `ui/`. These are hand-written components in the shadcn style
   runs out, and freezes while `paused` (resuming continues from the frozen value). Display only:
   the server, not this bar, decides when the answer phase ends.
 
-**How it fits in.** Imported by `../pages/` (Login and Home use Button/Card/Input; the in-game
+**How it fits in.** `HostShell` wraps the management routes in `../App.tsx`. `ui/` is imported by `../pages/` (Login and Home use Button/Card/Input; the in-game
 pages use Button, and `game/QuestionPage.tsx` uses `TimerBar`). Class merging comes from
 `../lib/utils.ts`.
 

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { getToken } from '../../lib/auth';
 import { QRCodeSVG } from 'qrcode.react';
 import { io, Socket } from 'socket.io-client';
 import type {
@@ -24,6 +25,7 @@ interface GameContextValue {
   phase: HostPhase;
   roomCode: string;
   gameTitle: string;
+  sessionId: string | null;   // from GET /game/rooms/{code}; null until (or if) that fetch succeeds
   players: PlayerInfo[];
   playerCount: number;
   currentQuestion: QuestionPayload | null;
@@ -60,6 +62,7 @@ export default function GameLayout() {
 
   const [phase, setPhase] = useState<HostPhase>('lobby');
   const [gameTitle, setGameTitle] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [playerCount, setPlayerCount] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionPayload | null>(null);
@@ -74,19 +77,22 @@ export default function GameLayout() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token || !code) {
       navigate('/home', { replace: true });
       return;
     }
 
-    api.get<{ game_title: string }>(`/game/rooms/${code}`)
-      .then(data => setGameTitle(data.game_title))
+    api.get<{ game_title: string; session_id: string }>(`/game/rooms/${code}`)
+      .then(data => {
+        setGameTitle(data.game_title);
+        setSessionId(data.session_id);
+      })
       .catch(() => {}); // non-fatal — title stays blank if fetch fails
 
     const sock = io({
       path: '/socket.io',
-      auth: (cb) => cb({ token: localStorage.getItem('token') ?? '' }),
+      auth: (cb) => cb({ token: getToken() ?? '' }),
       transports: ['websocket', 'polling'],
     });
     socketRef.current = sock;
@@ -227,7 +233,7 @@ export default function GameLayout() {
 
   return (
     <GameContext.Provider
-      value={{ phase, roomCode: code, gameTitle, players, playerCount, currentQuestion, answeredCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, questionResults, gameOver, autoAdvance, setAutoAdvance, emitAdvance, emitLockQuestion }}
+      value={{ phase, roomCode: code, gameTitle, sessionId, players, playerCount, currentQuestion, answeredCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, questionResults, gameOver, autoAdvance, setAutoAdvance, emitAdvance, emitLockQuestion }}
     >
       <Outlet />
 

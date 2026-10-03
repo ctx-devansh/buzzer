@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Download, FileText } from 'lucide-react';
 import { useGame } from './GameLayout';
+import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal, HostQuestionSummaryItem } from '../../types/game';
 
@@ -222,8 +225,25 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
 // ---------------------------------------------------------------------------
 
 export default function GameOverPage() {
-  const { gameOver } = useGame();
+  const { gameOver, sessionId } = useGame();
   const navigate = useNavigate();
+  const [downloadError, setDownloadError] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
+  // No COMPLETED gate: reaching this screen means the server emitted game_over. But
+  // sessionId is null if GET /game/rooms/{code} failed or is still in flight, so the
+  // buttons stay disabled rather than requesting /host/sessions/null/report.
+  async function download(path: string) {
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      await api.download(path);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   if (!gameOver) {
     return (
@@ -290,7 +310,26 @@ export default function GameOverPage() {
         </div>
       </div>
 
-      <Button onClick={() => navigate('/home')}>New Game</Button>
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex gap-3 flex-wrap justify-center">
+          <Button onClick={() => navigate('/home')}>New Game</Button>
+          <Button
+            variant="outline"
+            disabled={!sessionId || downloading}
+            onClick={() => void download(`/host/sessions/${sessionId}/report`)}
+          >
+            <FileText size={16} className="mr-1" /> Download summary (HTML)
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!sessionId || downloading}
+            onClick={() => void download(`/game/sessions/${sessionId}/export`)}
+          >
+            <Download size={16} className="mr-1" /> Download scores (CSV)
+          </Button>
+        </div>
+        {downloadError && <p className="text-red-400 text-sm">{downloadError}</p>}
+      </div>
 
       {/* Per-question breakdown */}
       {questionSummary.length > 0 && (

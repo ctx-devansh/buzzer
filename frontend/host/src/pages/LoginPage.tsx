@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { setToken } from '../lib/auth';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
@@ -43,7 +44,7 @@ export default function LoginPage() {
     })
       .then(res => res.ok ? res.json() : res.json().then((e: { detail?: string }) => Promise.reject(e.detail ?? 'Sign-in failed')))
       .then((data: { access_token: string }) => {
-        localStorage.setItem('token', data.access_token);
+        setToken(data.access_token);
         window.history.replaceState(null, '', window.location.pathname);
         navigate('/home');
       })
@@ -60,7 +61,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const data = await api.post<{ access_token: string }>('/auth/login', { username, password });
-      localStorage.setItem('token', data.access_token);
+      setToken(data.access_token);
       navigate('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

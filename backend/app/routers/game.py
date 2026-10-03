@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ from ..common.exceptions import NotFoundError
 from ..config import settings
 from ..database import get_db
 from ..models.course import Course, UserCourseAccess
-from ..models.game import Game, Question, UserGameAccess
+from ..models.game import Game, Question
 from ..models.session import GameSession
 from ..models.user import User
 from ..redis_client import get_redis
@@ -74,21 +74,19 @@ async def my_courses(
 async def my_games(
     user: Annotated[User, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    course_id: int | None = Query(
+        None, description="Only games attached to this course"
+    ),
 ) -> list[Game]:
     """
-    Returns games the authenticated user can run.
-    ADMIN sees all games; USER sees games from user_game_access.
+    Returns games the authenticated user can run — the same rule as
+    game_service.assert_host_can_use_game, so every listed game is one
+    POST /game/rooms accepts for its own course ("listed ⇒ creatable").
+    ADMIN sees every game; a non-admin needs the game attached to a course they
+    HOST *and* a user_game_access row. `course_id` is a filter only (no 403).
     """
-    if user.role == "ADMIN":
-        result = await db.execute(select(Game).order_by(Game.title))
-        return result.scalars().all()
-
-    result = await db.execute(
-        select(Game)
-        .join(UserGameAccess, UserGameAccess.game_id == Game.id)
-        .where(UserGameAccess.user_id == user.id)
-        .order_by(Game.title)
-    )
+    query = game_service.visible_games_query(user, course_id)
+    result = await db.execute(query)
     return result.scalars().all()
 
 

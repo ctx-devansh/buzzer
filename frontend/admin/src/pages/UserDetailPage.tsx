@@ -20,7 +20,11 @@ interface UserDetail {
   game_access: number[];
 }
 interface Course { id: number; name: string; semester: string }
-interface Game { id: number; title: string }
+interface Game { id: number; title: string; course_id: number | null; course_name: string | null }
+
+function gameLabel(game: Game): string {
+  return `${game.title} \u2014 ${game.course_name ?? 'Unattached'}`;
+}
 
 interface CourseSelection { id: number; role: 'HOST' | 'PLAYER'; checked: boolean }
 interface GameSelection { id: number; checked: boolean }
@@ -176,6 +180,22 @@ export default function UserDetailPage() {
   const grantedGameIds = new Set(user.game_access);
   const availableCourses = courses.filter((c) => !grantedCourseIds.has(c.id));
   const availableGames = games.filter((g) => !grantedGameIds.has(g.id));
+
+  // Effective game access for a non-admin is HOST on the game's course AND a game
+  // grant, so a grant without the course access is stored but does nothing.
+  const hostCourseIds = new Set(
+    user.course_access.filter((ca) => ca.role === 'HOST').map((ca) => ca.course_id)
+  );
+  function grantWarning(game: Game | undefined): string | null {
+    if (!game || user?.role === 'ADMIN') return null;
+    if (game.course_id === null) {
+      return 'This game is not attached to a course \u2014 grant has no effect until it is attached.';
+    }
+    if (!hostCourseIds.has(game.course_id)) {
+      return "No HOST access to this game's course \u2014 grant has no effect until course access is granted.";
+    }
+    return null;
+  }
 
   const selectedCourseCount = courseSelections.filter((s) => s.checked).length;
   const selectedGameCount = gameSelections.filter((s) => s.checked).length;
@@ -400,12 +420,16 @@ export default function UserDetailPage() {
           )}
           {user.game_access.map((gid) => {
             const game = gameMap[gid];
+            const warning = grantWarning(game);
             return (
-              <div key={gid} className="flex items-center justify-between">
-                <span className="text-slate-200 text-sm">{game ? game.title : `Game ${gid}`}</span>
-                <Button variant="ghost" size="sm" onClick={() => void revokeGameAccess(gid)}>
-                  <Trash2 size={12} />
-                </Button>
+              <div key={gid}>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-200 text-sm">{game ? gameLabel(game) : `Game ${gid}`}</span>
+                  <Button variant="ghost" size="sm" onClick={() => void revokeGameAccess(gid)}>
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+                {warning && <p className="text-yellow-400 text-xs mt-0.5">{warning}</p>}
               </div>
             );
           })}
@@ -437,7 +461,7 @@ export default function UserDetailPage() {
                         )
                       }
                     />
-                    <span className="text-sm text-slate-200">{game ? game.title : `Game ${sel.id}`}</span>
+                    <span className="text-sm text-slate-200">{game ? gameLabel(game) : `Game ${sel.id}`}</span>
                   </div>
                 );
               })}
