@@ -32,6 +32,7 @@ ruff format .
 ```bash
 pytest                    # unit → integration → e2e (root pytest.ini; e2e must run last)
 pytest tests/integration  # REST + Socket.IO against :8000
+pytest tests/integration --fast   # also run timer-expiry cases (time_limit_seconds=2)
 npm run build && pytest tests/e2e   # Playwright against nginx on :8080 (serves frontend/*/dist)
 # one-time e2e setup: pip install -r tests/e2e/requirements.txt && playwright install chromium
 ```
@@ -51,6 +52,28 @@ python scripts/seed_demo.py
 python scripts/simulate_players.py --room ABCDE1
 python scripts/smoke_test_websocket.py
 ```
+
+## Architecture notes
+
+Per-directory detail lives in the nested `CLAUDE.md` files (this team's context hierarchy);
+the host/admin split is specified in [docs/design-host-admin-restructure.md](docs/design-host-admin-restructure.md).
+
+- **Admin app vs. host app.** The admin app is admin-first (Users, Courses, Guests, Sessions).
+  Game/question authoring, rosters and session downloads live in the host app (`/games`,
+  `/courses/:id/roster`, `/sessions`, GameOver downloads); the old admin routes redirect there.
+- **Two API surfaces, one service layer.** `/api/admin/*` is gated by `require_admin`;
+  `/api/host/*` (`routers/host.py`) by `assert_host_can_use_course` / `assert_host_can_use_game`
+  (ADMIN passes both). Logic past the gate lives in `services/authoring_service.py`,
+  `roster_service.py` and `session_list_service.py`; don't copy it into either router.
+- **Game visibility is one rule in three places.** A non-admin can use a game only if it is
+  attached to a course (`games.course_id`) they HOST *and* they have a `user_game_access` row.
+  `assert_host_can_use_game`, `visible_games_query` (`GET /game/my-games`, `GET /host/games`)
+  and `create_room` must agree. Change one, change all three. A game can only be run in its own
+  course, and hosts can't reassign or delete games (admin-only).
+- **Cross-app links** (`frontend/*/src/lib/links.ts`) point at the other app's dev port under
+  `npm run dev` and at `/host`, `/admin`, `/player` under nginx (:8080). The token is per-origin,
+  so admin→host links only stay signed in on :8080.
+- After pulling schema changes run `docker compose run --rm backend alembic upgrade head`.
 
 ## Elephant-Goldfish tooling (optional, encouraged)
 
