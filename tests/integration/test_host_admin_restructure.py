@@ -636,6 +636,31 @@ def test_host_roster_other_course_is_403_and_foreign_rid_404(t4_env: T4Env):
     assert r.status_code == 404
 
 
+def test_host_roster_patch_to_duplicate_netid_is_409(t4_env: T4Env):
+    # Course B / host_b, not A: an import deactivates every absent netid, and
+    # test_host_roster_upload_patch_and_deactivate counts deactivations on A.
+    env = t4_env
+    tok = env.host_b.token
+    base = f"/host/courses/{env.course_b}/roster"
+    tag = uuid.uuid4().hex[:6]
+    first, second = f"t4dupa{tag}", f"t4dupb{tag}"
+    rows = [
+        {"netid": first, "full_name": "First", "email": f"{first}@example.com"},
+        {"netid": second, "full_name": "Second", "email": f"{second}@example.com"},
+    ]
+    assert env.api.post(f"{base}/import", tok, json={"rows": rows}).status_code == 200
+    entries = {e["netid"]: e for e in env.api.get(base, tok).json()}
+
+    # The unique constraint fires on flush; it must be a 409, not a 200 whose commit
+    # then fails after the response has been sent.
+    r = env.api.patch(f"{base}/{entries[second]['id']}", tok, json={"netid": first})
+    assert r.status_code == 409, r.text
+
+    after = {e["id"]: e["netid"] for e in env.api.get(base, tok).json()}
+    assert after[entries[second]["id"]] == second
+    assert after[entries[first]["id"]] == first
+
+
 # ---------------------------------------------------------------------------
 # H1/H2 + Sessions
 # ---------------------------------------------------------------------------
@@ -784,6 +809,24 @@ def test_host_reorder_rejects_wrong_id_set(t4_env: T4Env, host_a_game: dict):
 def test_host_report_for_missing_session_is_404(t4_env: T4Env):
     env = t4_env
     assert env.api.get(f"/host/sessions/{uuid.uuid4()}/report", env.host_a.token).status_code == 404
+
+
+@pytest.mark.parametrize("title", ["测验 quiz", "Quiz 🎉", "测验"])
+def test_export_non_ascii_title_has_ascii_filename(t4_env: T4Env, fn_cleanup: Cleanup, title: str):
+    # Header values are latin-1; a non-latin-1 letter that passes isalnum() used to
+    # reach Content-Disposition and turn the export into a 500.
+    env = t4_env
+    r = env.api.post("/host/games", env.host_a.token, json={"title": title, "course_id": env.course_a})
+    assert r.status_code == 201, r.text
+    fn_cleanup.games.append(r.json()["id"])
+
+    r = env.api.get(f"/host/games/{r.json()['id']}/export", env.host_a.token)
+    assert r.status_code == 200, r.text
+    disposition = r.headers["content-disposition"]
+    assert disposition.isascii()
+    assert 'filename="' in disposition and disposition.endswith('.json"')
+    assert 'filename=".json"' not in disposition  # an all-non-ASCII title still gets a name
+    assert r.json()["game"]["title"] == title  # the bundle itself keeps the real title
 
 
 def test_export_then_import_into_a_different_course(t4_env: T4Env, fn_cleanup: Cleanup):

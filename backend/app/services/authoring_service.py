@@ -169,8 +169,12 @@ async def build_export_bundle(db: AsyncSession, game: Game) -> tuple[str, bytes]
         ],
     }
 
-    safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in game.title)
-    filename = f"{safe_title}.json"
+    # ASCII only: header values are latin-1, and str.isalnum() accepts CJK letters,
+    # which would make the response a 500. The bundle itself keeps the real title.
+    safe_title = "".join(
+        c if (c.isascii() and c.isalnum()) or c in " _-" else "_" for c in game.title
+    ).strip(" _")
+    filename = f"{safe_title or 'game'}.json"
     content = json.dumps(bundle, indent=2, ensure_ascii=False).encode()
     return filename, content
 

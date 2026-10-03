@@ -5,10 +5,11 @@ import io
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.course import CourseRoster
-from ..common.exceptions import NotFoundError
+from ..common.exceptions import ConflictError, NotFoundError
 from ..schemas.admin import RosterEntryPatch, RosterUploadResult
 
 logger = structlog.get_logger()
@@ -316,4 +317,15 @@ async def patch_roster_entry(
         entry.full_name = body.full_name.strip()
     if body.email is not None:
         entry.email = str(body.email).lower()
+    # Flush here, not in get_db: get_db commits only after the response is sent, so a
+    # netid that collides with uq_roster_course_netid would otherwise return 200 with
+    # the new value and then fail to commit. `netid` is read first because after a
+    # failed flush the session rejects even attribute access until it is rolled back.
+    netid = entry.netid
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise ConflictError(
+            f"NetID {netid!r} is already on this course's roster"
+        ) from exc
     return entry

@@ -32,7 +32,8 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
 - `roster_service.py` — parses Canvas gradebook CSV exports (and a pre-mapped row list from the
   frontend's column-mapping wizard) into `course_rosters` upserts, deactivating any netid missing
   from the latest upload; also `list_roster` and `patch_roster_entry` (404 if the entry is not in
-  that course), shared by the admin and host routers.
+  that course, 409 if the new netid is already on its roster), shared by the admin and host
+  routers.
 - `session_list_service.py` — `list_session_rows(db, status, host_user_id)`: the hand-built
   `AdminSessionItem` rows for `GET /admin/sessions` (`host_user_id=None`) and
   `GET /host/sessions` (`None` for ADMIN, the caller's id otherwise). N+1 per session, as before.
@@ -71,3 +72,9 @@ score state, so this is the one place that logic should be edited.
   as Redis key naming evolves.
 - `auth_service`'s auto-generated JWT keys are silently ephemeral in dev — don't assume tokens
   survive a backend restart unless `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` are actually set.
+- **`get_db` commits after the response is sent.** A service that changes a row a constraint can
+  reject (e.g. `uq_roster_course_netid`) must `await db.flush()` itself and turn the
+  `IntegrityError` into a `BuzzerError`; otherwise the client gets a 200 for a write that then
+  fails to commit, and the connection is dropped. Read anything needed for the error message
+  *before* the flush — a session whose flush failed refuses attribute access until rollback.
+  `roster_service.patch_roster_entry` is the worked example.
