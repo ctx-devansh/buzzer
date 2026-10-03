@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useShellCourses } from '../components/HostShell';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
 
-interface Course { id: number; name: string; semester: string }
 interface Game { id: number; title: string }
 interface ActiveSession {
   session_id: string;
@@ -16,8 +16,11 @@ interface ActiveSession {
 }
 
 export default function HomePage() {
-  const [courses, setCourses] = useState<Course[]>([]);
+  // Course list comes from the shell (its sole /game/my-courses caller), after mount.
+  const courses = useShellCourses();
   const [games, setGames] = useState<Game[]>([]);
+  const [gamesLoaded, setGamesLoaded] = useState(false);
+  const [gamesError, setGamesError] = useState('');
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [courseId, setCourseId] = useState<number | ''>('');
@@ -27,18 +30,38 @@ export default function HomePage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([
-      api.get<Course[]>('/game/my-courses'),
-      api.get<Game[]>('/game/my-games'),
-      api.get<ActiveSession[]>('/game/my-active-sessions'),
-    ]).then(([c, g, s]) => {
-      setCourses(c);
-      setGames(g);
-      setActiveSessions(s);
-      if (c.length === 1) setCourseId(c[0].id);
-      if (g.length === 1) setGameId(g[0].id);
-    }).catch(() => setError('Failed to load courses or games. Are you still logged in?'));
+    api.get<ActiveSession[]>('/game/my-active-sessions')
+      .then(setActiveSessions)
+      .catch(() => setError('Failed to load your active sessions.'));
   }, []);
+
+  // Single-course auto-select, keyed on the shell's list (it arrives after mount, and
+  // again if the shell's Retry refetch resolves).
+  useEffect(() => {
+    if (courses.length === 1) setCourseId(courses[0].id);
+  }, [courses]);
+
+  // Games are per course. Clear the selection first so a stale game can never
+  // survive into a new course; no request until a course is chosen.
+  useEffect(() => {
+    setGameId('');
+    setGames([]);
+    setGamesLoaded(false);
+    setGamesError('');
+    if (courseId === '') return;
+    let cancelled = false;
+    api.get<Game[]>(`/game/my-games?course_id=${courseId}`)
+      .then(g => {
+        if (cancelled) return;
+        setGames(g);
+        setGamesLoaded(true);
+        if (g.length === 1) setGameId(g[0].id);
+      })
+      .catch(err => {
+        if (!cancelled) setGamesError(err instanceof Error ? err.message : 'Failed to load quizzes');
+      });
+    return () => { cancelled = true; };
+  }, [courseId]);
 
   async function deleteSession(sessionId: string) {
     try {
@@ -67,13 +90,8 @@ export default function HomePage() {
     }
   }
 
-  function logout() {
-    localStorage.removeItem('token');
-    navigate('/login');
-  }
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
+    <div className="flex flex-col items-center px-4 py-8 gap-4">
       {activeSessions.length > 0 && (
         <Card className="w-full max-w-lg border-amber-500/40">
           <CardHeader>
@@ -127,20 +145,15 @@ export default function HomePage() {
 
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-100">Create Game Room</h1>
-              <p className="text-slate-400 text-sm mt-1">Select a course and quiz to begin</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={logout}>Sign Out</Button>
-          </div>
+          <h1 className="text-2xl font-bold text-slate-100">Create Game Room</h1>
+          <p className="text-slate-400 text-sm mt-1">Select a course and quiz to begin</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Course</label>
             <select
               value={courseId}
-              onChange={e => setCourseId(Number(e.target.value))}
+              onChange={e => setCourseId(e.target.value ? Number(e.target.value) : '')}
               className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">Select a course…</option>
@@ -153,14 +166,19 @@ export default function HomePage() {
             <label className="block text-sm font-medium text-slate-300 mb-1">Quiz</label>
             <select
               value={gameId}
-              onChange={e => setGameId(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              onChange={e => setGameId(e.target.value ? Number(e.target.value) : '')}
+              disabled={courseId === ''}
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             >
-              <option value="">Select a quiz…</option>
+              <option value="">{courseId === '' ? 'Select a course first' : 'Select a quiz…'}</option>
               {games.map(g => (
                 <option key={g.id} value={g.id}>{g.title}</option>
               ))}
             </select>
+            {gamesLoaded && games.length === 0 && (
+              <p className="text-slate-400 text-sm mt-1">No quizzes for this course yet — create one in Games.</p>
+            )}
+            {gamesError && <p className="text-red-400 text-sm mt-1">{gamesError}</p>}
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <Button

@@ -45,12 +45,21 @@ _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
 # pytest options
 # ---------------------------------------------------------------------------
 
+_DEFAULT_BASE_URL = "http://localhost:8000"
+
+
 def pytest_addoption(parser):
-    parser.addoption(
-        "--base-url",
-        default="http://localhost:8000",
-        help="Backend base URL (default: http://localhost:8000)",
-    )
+    # pytest-base-url (installed with pytest-playwright for tests/e2e/) already
+    # registers --base-url, default None; registering it again is a ValueError that
+    # stops collection. Reuse it when present and apply our default in `base_url`.
+    try:
+        parser.addoption(
+            "--base-url",
+            default=None,
+            help=f"Backend base URL (default: {_DEFAULT_BASE_URL})",
+        )
+    except ValueError:
+        pass
     parser.addoption(
         "--fast",
         action="store_true",
@@ -65,7 +74,7 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope="session")
 def base_url(request) -> str:
-    return request.config.getoption("--base-url").rstrip("/")
+    return (request.config.getoption("--base-url") or _DEFAULT_BASE_URL).rstrip("/")
 
 
 @pytest.fixture(scope="session")

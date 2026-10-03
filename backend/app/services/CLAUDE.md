@@ -5,6 +5,13 @@
 over SQLAlchemy sessions and the Redis client, so both transports share one implementation.
 
 **Contents.**
+- `authoring_service.py` — question list/create/update/delete/reorder (with `bleach` prompt
+  sanitising), the `buzzer/game` export bundle builder, and the bundle importer
+  (`import_game_bundle(db, raw, course_id)`; raises `BundleError`, which routers map to 422).
+  Shared by `routers/admin.py` and `routers/host.py`; callers authorise first.
+  `delete_question` refuses (409) a question with `session_scores` rows — those are grade data
+  and `question_id` is `NOT NULL` with no `ON DELETE` — and flushes before returning, because
+  `get_db` commits only after the response is sent.
 - `auth_service.py` — password hashing (bcrypt via passlib), RS256 JWT creation/decoding
   (access/refresh/temp tokens), auto-generates an ephemeral in-memory RSA keypair if
   `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` aren't set (dev convenience — tokens die on restart), and
@@ -17,7 +24,7 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   Canvas-gradebook-formatted one (SIS Login ID matching, optional per-question columns,
   roster-only filtering).
 - `game_service.py` — the core game/session logic: room code generation, host access checks
-  (`assert_host_can_use_course/game`), session lifecycle (create/start/complete/abandon),
+  (`assert_host_can_use_course/game`, plus `visible_games_query`, its list-side twin), session lifecycle (create/start/complete/abandon),
   player authorization against the course roster (`authorise_player`), answer scoring
   (`calculate_score` — one branch per question type × grading type), `record_answer` (persists
   to MySQL + updates Redis in one call), and leaderboard/summary builders for GAME_OVER payloads.
@@ -27,7 +34,12 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   dependency at report-generation time) — keep both in sync if scoring/reveal rules change.
 - `roster_service.py` — parses Canvas gradebook CSV exports (and a pre-mapped row list from the
   frontend's column-mapping wizard) into `course_rosters` upserts, deactivating any netid missing
-  from the latest upload.
+  from the latest upload; also `list_roster` and `patch_roster_entry` (404 if the entry is not in
+  that course, 409 if the new netid is already on its roster), shared by the admin and host
+  routers.
+- `session_list_service.py` — `list_session_rows(db, status, host_user_id)`: the hand-built
+  `AdminSessionItem` rows for `GET /admin/sessions` (`host_user_id=None`) and
+  `GET /host/sessions` (`None` for ADMIN, the caller's id otherwise). N+1 per session, as before.
 - `state_service.py` — the Redis key schema and all room/player/question-state read/write
   helpers (room TTL, player set, current-question record, per-question answered set, answer
   distribution hashes), plus `restore_from_mysql` to rebuild state after a Redis flush/restart.
@@ -39,6 +51,12 @@ the gateway both call into `game_service.py`/`state_service.py` for anything tou
 score state, so this is the one place that logic should be edited.
 
 **Gotchas.**
+- **Game visibility is one rule in two functions.** `assert_host_can_use_game` (per game) and
+  `visible_games_query` (lists, used by `/game/my-games` and `/host/games`) must agree: ADMIN →
+  every game; anyone else → game attached to a course (`course_id IS NOT NULL`) they HOST **and**
+  a `user_game_access` row. If they drift, the UI lists games `create_room` rejects.
+- `create_room` also rejects a game attached to a *different* course than the room's — for
+  ADMIN too (it is a course-identity rule, not an access check).
 - `game_service.calculate_score` and `report_service._answer_reveal` /
   `websocket/gateway.py::_answer_reveal` independently encode "what counts as correct" per
   question type — there is no single source of truth. A new question type needs updates in all
@@ -57,3 +75,9 @@ score state, so this is the one place that logic should be edited.
   as Redis key naming evolves.
 - `auth_service`'s auto-generated JWT keys are silently ephemeral in dev — don't assume tokens
   survive a backend restart unless `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` are actually set.
+- **`get_db` commits after the response is sent.** A service that changes a row a constraint can
+  reject (e.g. `uq_roster_course_netid`) must `await db.flush()` itself and turn the
+  `IntegrityError` into a `BuzzerError`; otherwise the client gets a 200 for a write that then
+  fails to commit, and the connection is dropped. Read anything needed for the error message
+  *before* the flush — a session whose flush failed refuses attribute access until rollback.
+  `roster_service.patch_roster_entry` is the worked example.

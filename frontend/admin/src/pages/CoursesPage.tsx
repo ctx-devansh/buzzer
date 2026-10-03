@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Pencil } from 'lucide-react';
+import { Plus, Users, Pencil, ExternalLink } from 'lucide-react';
 import { api } from '../lib/api';
+import { HOST_APP_URL } from '../lib/links';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -25,7 +25,6 @@ export default function CoursesPage() {
   const [editName, setEditName] = useState('');
   const [editSemester, setEditSemester] = useState('');
   const [editSaving, setEditSaving] = useState(false);
-  const navigate = useNavigate();
 
   async function load() {
     try {
@@ -165,12 +164,13 @@ export default function CoursesPage() {
                 >
                   <Pencil size={14} />
                 </Button>
+                {/* Rosters are a host tool now; this opens the host app. */}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate(`/courses/${c.id}/roster`)}
+                  onClick={() => window.location.assign(`${HOST_APP_URL}/courses/${c.id}/roster`)}
                 >
-                  <Users size={14} className="mr-1" /> Roster
+                  <Users size={14} className="mr-1" /> Roster <ExternalLink size={12} className="ml-1" />
                 </Button>
               </div>
             </Card>

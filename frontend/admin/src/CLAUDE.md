@@ -1,22 +1,23 @@
 # frontend/admin/src/
 
 **Purpose.** Source of the Admin app, a desktop dashboard served at `/admin/` for
-administrators. Today it mixes admin work (users, courses, access grants, guests) with host
-work (games/questions, rosters, session exports). T4 separates the two
-(`docs/design-host-admin-restructure.md`).
+administrators. Admin-first since T4 (`docs/design-host-admin-restructure.md`): users, courses,
+access grants and guests come first; host work (games/questions, rosters) moved to the host app,
+which the "Host tools" sidebar group links to.
 
 **Contents.**
 - `pages/` — `LoginPage` (password only), `UsersPage`/`UserDetailPage` (accounts plus
-  course/game access grants), `CoursesPage`, `RosterPage` (Canvas-aware CSV import wizard),
-  `GamesPage` (CRUD and JSON import), `QuestionEditorPage` (all question types and scoring,
-  reorder, JSON export), `SessionsPage` (all hosts; Canvas/raw CSV and HTML report), and
-  `GuestsPage` (merge/delete). See `pages/CLAUDE.md`.
-- `components/` — `ui/` primitives (`Button`, `Card`, `Input`), identical to the host's copies.
-  See `components/CLAUDE.md`.
-- `lib/` — the fullest `api.ts` (`get/post/put/patch/delete`, `postForm`, `download`) and
-  `cn`. See `lib/CLAUDE.md`.
-- `App.tsx` — `RequireAdmin` (token-presence only) → `AdminLayout` (sidebar: Courses, Users,
-  Games, Guests, Sessions, Logout). Unknown routes → `/courses`.
+  course/game access grants), `CoursesPage`, `SessionsPage` (all hosts; Canvas/raw CSV and HTML
+  report), and `GuestsPage` (merge/delete). See `pages/CLAUDE.md`.
+- `components/` — `ExternalRedirect` plus `ui/` primitives (`Button`, `Card`, `Input`),
+  identical to the host's copies. See `components/CLAUDE.md`.
+- `lib/` — `api.ts` (`get/post/put/patch/delete`, `postForm`, `download`), `links.ts`
+  (`HOST_APP_URL`, `PLAYER_APP_URL`) and `cn`. See `lib/CLAUDE.md`.
+- `App.tsx` — `RequireAdmin` (token-presence only) → `AdminLayout`. Sidebar group
+  **Administration** (Users, Courses, Guests) above a muted **Host tools** group (Sessions, then
+  outbound links: Games ↗, Rosters ↗, Host a game ↗, Join as player ↗) and Logout. The old
+  `/games`, `/games/:gameId/questions`, `/courses/:courseId/roster` routes are
+  `ExternalRedirect`s to the same resource in the host app. Unknown routes → `/users`.
 - `main.tsx`, `index.css` — React root and Tailwind entry.
 
 **How it fits in.** Sibling of the host and player apps under `frontend/`. It talks almost
@@ -27,4 +28,5 @@ client, is what keeps non-admins out.
 - No `types/` directory: response shapes are declared inline per page and can drift from
   `backend/app/schemas/admin.py`.
 - A non-admin token (shared origin) passes `RequireAdmin` and then hits 403s everywhere.
-- `Loading…` renders literally in four pages (JS escape inside JSX text).
+- `Loading…` renders literally in two remaining pages (JS escape inside JSX text).
+- Host-tool links need the shared origin (nginx build) to arrive signed in; see `lib/CLAUDE.md`.

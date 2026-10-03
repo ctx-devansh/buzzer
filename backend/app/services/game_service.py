@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import structlog
 from rapidfuzz.distance import Levenshtein
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,13 +67,23 @@ async def assert_host_can_use_course(
         raise ForbiddenError("You do not have HOST access to this course")
 
 
-async def assert_host_can_use_game(db: AsyncSession, user: User, game_id: int) -> None:
-    """Admin can use any game; USER must have an entry in user_game_access."""
+async def assert_host_can_use_game(db: AsyncSession, user: User, game_id: int) -> Game:
+    """
+    Admin can use any game, attached or not. A non-admin needs all three of:
+    the game is attached to a course (course_id IS NOT NULL), HOST on that course,
+    and a user_game_access row. This is the same visibility rule GET /game/my-games
+    and GET /host/games apply — keep the three in sync, or the UI lists games that
+    create_room then rejects.
+    """
+    game = await db.get(Game, game_id)
     if user.role == "ADMIN":
-        game = await db.get(Game, game_id)
         if not game:
             raise NotFoundError(f"Game {game_id} not found")
-        return
+        return game
+
+    # A missing game is a 403, like a missing grant, so game ids are not leaked.
+    if not game or game.course_id is None:
+        raise ForbiddenError("You do not have access to this game")
 
     result = await db.execute(
         select(UserGameAccess).where(
@@ -83,6 +93,46 @@ async def assert_host_can_use_game(db: AsyncSession, user: User, game_id: int) -
     )
     if not result.scalar_one_or_none():
         raise ForbiddenError("You do not have access to this game")
+
+    result = await db.execute(
+        select(UserCourseAccess).where(
+            UserCourseAccess.user_id == user.id,
+            UserCourseAccess.course_id == game.course_id,
+            UserCourseAccess.role == "HOST",
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise ForbiddenError("You do not have HOST access to this game's course")
+    return game
+
+
+def visible_games_query(user: User, course_id: int | None = None) -> Select:
+    """
+    SELECT of the games `user` may host — the list-side twin of
+    assert_host_can_use_game, shared by GET /game/my-games and GET /host/games.
+    ADMIN: every game. Non-admin: attached to a course they HOST *and* granted.
+    `course_id` filters for every role, so unattached games appear (to ADMIN) only
+    when it is omitted. Authorising `course_id` itself is the caller's job.
+    """
+    query = select(Game).order_by(Game.title)
+    if user.role != "ADMIN":
+        query = (
+            query.join(
+                UserGameAccess,
+                (UserGameAccess.game_id == Game.id)
+                & (UserGameAccess.user_id == user.id),
+            )
+            .join(
+                UserCourseAccess,
+                (UserCourseAccess.course_id == Game.course_id)
+                & (UserCourseAccess.user_id == user.id)
+                & (UserCourseAccess.role == "HOST"),
+            )
+            .where(Game.course_id.is_not(None))
+        )
+    if course_id is not None:
+        query = query.where(Game.course_id == course_id)
+    return query
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +150,13 @@ async def create_room(
 ) -> GameSession:
     # Validate access
     await assert_host_can_use_course(db, host, course_id)
-    await assert_host_can_use_game(db, host, game_id)
+    game = await assert_host_can_use_game(db, host, game_id)
+
+    # H5: a game attached to a course can only be run in that course. Deliberately
+    # role-blind — ADMIN bypasses the access checks above, not this identity rule,
+    # because a session in the wrong course would be scored against the wrong roster.
+    if game.course_id is not None and game.course_id != course_id:
+        raise ForbiddenError("This game belongs to a different course")
 
     # Enforce global room limit — count only LOBBY/IN_PROGRESS rooms.
     # COMPLETED/ABANDONED rooms may linger in Redis briefly for reconnection
@@ -120,7 +176,6 @@ async def create_room(
     if room_count >= max_rooms:
         raise ConflictError(f"Maximum of {max_rooms} concurrent rooms reached")
 
-    await db.get(Game, game_id)
     room_code = await generate_room_code(redis)
 
     session = GameSession(

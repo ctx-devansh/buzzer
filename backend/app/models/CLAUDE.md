@@ -14,7 +14,9 @@ class here.
 - `game.py` — `Game` (a quiz), `Question` (belongs to a game; `type` +
   `grading_type` (`ACCURACY`/`COMPLETENESS`) + freeform `config`/`answer_data` JSON columns hold
   all per-type-specific shape — validated at the Pydantic layer in `../schemas/admin.py`, not
-  here), `UserGameAccess` (which users may host a given game, composite PK).
+  here), `UserGameAccess` (which users may host a given game, composite PK). `Game.course_id` is
+  a nullable FK to `courses` (NULL = "unattached", ADMIN-only) with a `course` relationship
+  (`lazy="selectin"`) and a `course_name` property that `GameResponse`/`MyGameItem` read.
 - `session.py` — `GameSession` (one played instance of a `Game` in a `Course`, keyed by
   `room_code`; `status` is `LOBBY`/`IN_PROGRESS`/`COMPLETED`/`ABANDONED`), `SessionScore` (one row
   per player-question answer: points, correctness, timing, raw `answer_data`).
@@ -28,6 +30,10 @@ wrap these models for requests/responses — they are deliberately separate so D
 from wire format (e.g. `Question.answer_data` is never serialized to players).
 
 **Gotchas.**
+- `Game.course`'s `lazy="selectin"` only fires on a SELECT. A `Game` the request just **created**
+  or **re-pointed** (`course_id` assigned) has no loaded `course`, and serialising `course_name`
+  would lazy-load outside the greenlet (`MissingGreenlet`) or return a stale `None`. Those write
+  paths do `await db.refresh(game, ["created_at", "course"])` / expire + refresh explicitly.
 - `Question.config`/`answer_data` and `SessionScore.answer_data` are untyped JSON — their actual
   shape varies by `Question.type` and is enforced only by Pydantic validators in
   `../schemas/admin.py::QuestionCreate.validate_structure`, not by the DB or ORM layer.
