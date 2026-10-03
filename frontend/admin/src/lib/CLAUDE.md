@@ -6,7 +6,10 @@ clients (it includes file upload and download) and the Tailwind class-merging he
 **Contents.**
 - `api.ts` — `api.get/post/put/patch/delete<T>(path, body?)` over `fetch`, prefixing `/api`,
   sending JSON, and attaching `Authorization: Bearer <localStorage.token>`. On non-2xx it throws
-  `Error(detail)` from FastAPI's `{detail}` (or `HTTP <status>`). An empty body resolves to
+  `Error` with FastAPI's string `detail`, else a `BuzzerError`'s `message`, else `HTTP <status>`.
+  A **401 on a request that sent a token** (outside `/auth/*`) clears the token and
+  `location.replace`s to the admin `login` — `RequireAdmin` only checks that a token exists, so
+  an expired or leftover one would otherwise strand every page on a 401. An empty body resolves to
   `{}`. Two extras:
   - `api.postForm<T>(path, FormData)` — multipart POST **without** a `Content-Type` header (the
     browser sets the boundary). Used for game JSON import.
@@ -36,11 +39,13 @@ to the host app). `../components/ui/` imports `cn`.
   `download` with no extension.
 - `download` revokes the object URL right after `a.click()`. That works in current browsers,
   but it is the usual suspect if a download silently fails.
-- No 401 handling. An expired token (2 h access-token lifetime) shows up as a thrown error on
-  whatever page is open, not as a redirect to `/login`.
+- 401 → login applies to `apiFetch`, `download` and `postForm` alike. `/auth/*` is excluded so a
+  wrong password still shows its error on the login page. In the nginx setup clearing the token
+  also signs the user out of the host app (shared origin) — correct, since that token is dead
+  there too.
 - The token key `localStorage.token` is shared with `../App.tsx` (`RequireAdmin`) and
   `../pages/LoginPage.tsx`. In the Docker/nginx setup it is also shared with the host and player
   apps (same origin), so logging in or out in one app affects the others in that browser.
 - Copy-pasted across `host`/`player`/`admin` with diverging features. The host copy now also
-  has `put`/`patch`/`postForm`/`download`, plus `ApiError` (status) and `message` fallback that
-  this copy lacks.
+  has `put`/`patch`/`postForm`/`download` and `ApiError` (status); this copy shares the `message`
+  fallback but not `ApiError`, and only this copy redirects on 401.
