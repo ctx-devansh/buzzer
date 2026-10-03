@@ -5,10 +5,12 @@ import io
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.course import CourseRoster
-from ..schemas.admin import RosterUploadResult
+from ..common.exceptions import ConflictError, NotFoundError
+from ..schemas.admin import RosterEntryPatch, RosterUploadResult
 
 logger = structlog.get_logger()
 
@@ -283,3 +285,47 @@ async def process_roster_rows(
         deactivated=deactivated,
         errors=errors,
     )
+
+
+async def list_roster(db: AsyncSession, course_id: int) -> list[CourseRoster]:
+    result = await db.execute(
+        select(CourseRoster)
+        .where(CourseRoster.course_id == course_id)
+        .order_by(CourseRoster.full_name)
+    )
+    return list(result.scalars().all())
+
+
+async def patch_roster_entry(
+    db: AsyncSession, course_id: int, roster_id: int, body: RosterEntryPatch
+) -> CourseRoster:
+    """Apply an inline edit/deactivate. The entry must belong to `course_id` (else 404)."""
+    result = await db.execute(
+        select(CourseRoster).where(
+            CourseRoster.id == roster_id,
+            CourseRoster.course_id == course_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise NotFoundError(f"Roster entry {roster_id} not found in course {course_id}")
+    if body.is_active is not None:
+        entry.is_active = body.is_active
+    if body.netid is not None:
+        entry.netid = body.netid.strip().lower()
+    if body.full_name is not None:
+        entry.full_name = body.full_name.strip()
+    if body.email is not None:
+        entry.email = str(body.email).lower()
+    # Flush here, not in get_db: get_db commits only after the response is sent, so a
+    # netid that collides with uq_roster_course_netid would otherwise return 200 with
+    # the new value and then fail to commit. `netid` is read first because after a
+    # failed flush the session rejects even attribute access until it is rolled back.
+    netid = entry.netid
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise ConflictError(
+            f"NetID {netid!r} is already on this course's roster"
+        ) from exc
+    return entry

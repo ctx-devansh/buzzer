@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Pencil } from 'lucide-react';
-import { api } from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader } from '../components/ui/card';
-import { Input } from '../components/ui/input';
+import { api, ApiError } from '../../lib/api';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
 
 interface RosterEntry {
   id: number;
@@ -121,6 +121,8 @@ export default function RosterPage() {
   // Roster list
   const [entries, setEntries] = useState<RosterEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  // Separate from `loading`: a failed initial load (e.g. 403) must not render the upload wizard.
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
 
   // Inline edit
@@ -144,10 +146,15 @@ export default function RosterPage() {
 
   async function load() {
     try {
-      const data = await api.get<RosterEntry[]>(`/admin/courses/${courseId}/roster`);
+      const data = await api.get<RosterEntry[]>(`/host/courses/${courseId}/roster`);
       setEntries(data);
+      setLoaded(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load roster');
+      setError(
+        err instanceof ApiError && err.status === 403
+          ? "You don't have HOST access to this course"
+          : err instanceof Error ? err.message : 'Failed to load roster',
+      );
     } finally {
       setLoading(false);
     }
@@ -222,7 +229,7 @@ export default function RosterPage() {
     setError('');
     try {
       const result = await api.post<UploadResult>(
-        `/admin/courses/${courseId}/roster/import`,
+        `/host/courses/${courseId}/roster/import`,
         { rows },
       );
       setUploadResult(result);
@@ -268,7 +275,7 @@ export default function RosterPage() {
     setError('');
     try {
       const updated = await api.patch<RosterEntry>(
-        `/admin/courses/${courseId}/roster/${entryId}`,
+        `/host/courses/${courseId}/roster/${entryId}`,
         editDraft,
       );
       setEntries((prev) => prev.map((e) => e.id === entryId ? updated : e));
@@ -289,14 +296,27 @@ export default function RosterPage() {
   const active = entries.filter((e) => e.is_active);
   const inactive = entries.filter((e) => !e.is_active);
 
+  const backLink = (
+    <button
+      onClick={() => navigate('/courses')}
+      className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-6"
+    >
+      <ArrowLeft size={14} /> Back to Rosters
+    </button>
+  );
+
+  if (!loading && !loaded) {
+    return (
+      <div className="p-8 max-w-5xl mx-auto">
+        {backLink}
+        <p className="text-red-400 text-sm">{error}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 max-w-5xl">
-      <button
-        onClick={() => navigate('/courses')}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-6"
-      >
-        <ArrowLeft size={14} /> Back to Courses
-      </button>
+    <div className="p-8 max-w-5xl mx-auto">
+      {backLink}
 
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-slate-100">Course Roster</h2>

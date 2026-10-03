@@ -1,0 +1,4 @@
+pytest-playwright>=0.5
+httpx>=0.26
+python-socketio[asyncio_client]>=5.10
+aiohttp>=3.9

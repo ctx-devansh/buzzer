@@ -90,9 +90,29 @@ class GameCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: str = Field("", max_length=5000)
     max_players: int = Field(150, ge=1, le=500)
+    course_id: int | None = None
+
+
+class HostGameCreate(GameCreate):
+    """POST /host/games — a host-created game must always be attached to a course."""
+
+    course_id: int
 
 
 class GameUpdate(BaseModel):
+    """PUT /admin/games/{id}. course_id is accepted only while the stored value is NULL."""
+
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=5000)
+    max_players: int | None = Field(None, ge=1, le=500)
+    course_id: int | None = None
+
+
+class HostGameUpdate(BaseModel):
+    """PUT /host/games/{id}. Deliberately has no course_id: extra="forbid" makes a host
+    attempt to re-point a game a 422, so course reassignment stays admin-only."""
+
     model_config = ConfigDict(extra="forbid")
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=5000)
@@ -105,6 +125,8 @@ class GameResponse(BaseModel):
     title: str
     description: str
     max_players: int
+    course_id: int | None
+    course_name: str | None
     created_at: datetime
 
 

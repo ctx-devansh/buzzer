@@ -198,11 +198,14 @@ def create_course(client: httpx.Client) -> int:
     return course["id"]
 
 
-def create_game(client: httpx.Client) -> int:
+def create_game(client: httpx.Client, course_id: int) -> int:
     resp = client.post(
         f"{BASE_URL}/api/admin/games",
         json={
             "title": "Buzzer Demo",
+            # Attach to the demo course, or the host app's course-filtered Quiz
+            # select never lists this game.
+            "course_id": course_id,
             "description": (
                 "A demonstration game covering every question type and grading mode. "
                 "ACCURACY questions reward correct answers only; "
@@ -247,7 +250,7 @@ def main() -> None:
         client.headers["Authorization"] = f"Bearer {token}"
 
         course_id = create_course(client)
-        game_id = create_game(client)
+        game_id = create_game(client, course_id)
 
         print(f"\n{AR} Creating {len(QUESTIONS)} questions …\n")
         create_questions(client, game_id)

@@ -82,6 +82,8 @@ class MyGameItem(BaseModel):
     title: str
     description: str
     max_players: int
+    course_id: int | None
+    course_name: str | None
 
 
 # ---------------------------------------------------------------------------

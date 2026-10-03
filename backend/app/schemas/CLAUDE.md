@@ -10,13 +10,15 @@ directly to clients and so player-facing responses can omit fields (answer keys,
   — that enforces per-question-type shape of `config`/`answer_data`, e.g. `multiple_choice` needs
   `answer_points` matching `options` length; this is the *only* structural validation for question
   data, since `../models/game.py` stores it as untyped JSON), users, access grants, and the admin
-  session list/export item.
+  session list/export item. `GameResponse` carries `course_id`/`course_name`; `GameCreate` and
+  `GameUpdate` take an optional `course_id`; `HostGameCreate` requires it; `HostGameUpdate` has
+  **no** `course_id` on purpose (with `extra="forbid"`, a host sending it gets a 422).
 - `auth.py` — login/token request-response pairs: `LoginRequest` (username+password OR dev-only
   netid, enforced by a `model_validator`), `TokenResponse`/`TempTokenResponse`/`RefreshResponse`,
   `GuestJoinRequest`.
 - `game.py` — player/host-facing game schemas: `QuestionPublic` (deliberately omits
   `answer_data`/`grading_type` — the client-safe question shape), room create/info schemas, host
-  resource-list items (`MyCourseItem`, `MyGameItem`), and `ScoreResult` (internal, used by
+  resource-list items (`MyCourseItem`, `MyGameItem` — which also carries `course_id`/`course_name`), and `ScoreResult` (internal, used by
   `../services/game_service.py::calculate_score`, not a route response model).
 - `__init__.py` — empty.
 
