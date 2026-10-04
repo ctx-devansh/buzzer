@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
 
-type QuestionType = 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select';
+type QuestionType = 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order';
 type GradingType = 'ACCURACY' | 'COMPLETENESS';
 
 interface Question {
@@ -61,6 +61,86 @@ function buildFibPayload(answers: FibAnswer[], editDistance: number) {
   };
 }
 
+// ---- put_in_order ----
+
+const PIO_MIN_ITEMS = 3;
+const PIO_MAX_ITEMS = 6;
+
+/** The stored scramble as loaded, so an unchanged item list is resent verbatim. */
+interface PioStored { items: string[]; correct_order?: number[] }
+
+function sameList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/** Pairs (i < j) of the display order that already sit in the correct relative order. */
+function concordantPairs(correctOrder: number[]): number {
+  // correctOrder[p] = display index of the item that belongs at position p, so display
+  // order i < j is concordant when the item at i belongs earlier than the item at j.
+  const rank: number[] = [];
+  correctOrder.forEach((displayIdx, p) => { rank[displayIdx] = p; });
+  let c = 0;
+  for (let i = 0; i < rank.length; i++) {
+    for (let j = i + 1; j < rank.length; j++) if (rank[i] < rank[j]) c++;
+  }
+  return c;
+}
+
+/**
+ * Scramble items typed in the correct order. Reshuffles (Fisher–Yates) until at most
+ * floor(t/2) pairs are concordant, so locking in without moving anything earns at most
+ * about half. Returns the display order and correct_order (display indices in correct order).
+ */
+function scramblePio(correctItems: string[]): { items: string[]; correct_order: number[] } {
+  const n = correctItems.length;
+  const maxConcordant = Math.floor((n * (n - 1)) / 2 / 2);
+  for (;;) {
+    const perm = correctItems.map((_, i) => i); // perm[displayIdx] = correct position
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    const correct_order: number[] = [];
+    perm.forEach((pos, displayIdx) => { correct_order[pos] = displayIdx; });
+    if (concordantPairs(correct_order) <= maxConcordant) {
+      return { items: perm.map((pos) => correctItems[pos]), correct_order };
+    }
+  }
+}
+
+/**
+ * The scramble is fixed for a question's lifetime (past answers index into config.items),
+ * so only an edited item list is reshuffled:
+ *   1. stored correct_order and the same (trimmed) items → resend both verbatim, unless
+ *      switching to ACCURACY with an identity order (the server would reject it) → case 3;
+ *   2. stored without correct_order (imported COMPLETENESS) and the same items → resend
+ *      the items, still without correct_order;
+ *   3. otherwise → fresh scramble of the trimmed items.
+ */
+function buildPioPayload(pioItems: string[], pioStored: PioStored | null, gradingType: GradingType) {
+  const trimmed = pioItems.map((s) => s.trim());
+  if (pioStored?.correct_order) {
+    const { items, correct_order } = pioStored;
+    const storedCorrect = correct_order.map((i) => (items[i] ?? '').trim());
+    const isIdentity = correct_order.every((v, i) => v === i);
+    if (sameList(trimmed, storedCorrect) && !(gradingType === 'ACCURACY' && isIdentity)) {
+      return { config: { items }, answer_data: { correct_order } };
+    }
+  } else if (pioStored && sameList(trimmed, pioStored.items.map((s) => s.trim()))) {
+    return { config: { items: pioStored.items }, answer_data: {} };
+  }
+  const { items, correct_order } = scramblePio(trimmed);
+  return { config: { items }, answer_data: { correct_order } };
+}
+
+/** Client-side mirror of the server's commonest put_in_order 422s (same texts). */
+function pioItemsError(pioItems: string[]): string | null {
+  const trimmed = pioItems.map((s) => s.trim());
+  if (trimmed.some((s) => !s)) return 'Every item needs text';
+  if (new Set(trimmed.map((s) => s.toLowerCase())).size !== trimmed.length) return 'Items must be different';
+  return null;
+}
+
 // ---- QuestionForm subcomponent ----
 
 interface FormState {
@@ -79,6 +159,9 @@ interface FormState {
   fibEditDistance: number;
   // multi_select
   msOptions: McOption[];
+  // put_in_order: items in the CORRECT order; pioStored is the loaded scramble (null if new)
+  pioItems: string[];
+  pioStored: PioStored | null;
 }
 
 const defaultForm = (): FormState => ({
@@ -93,6 +176,8 @@ const defaultForm = (): FormState => ({
   fibAnswers: [{ text: '', points: 1 }],
   fibEditDistance: 0,
   msOptions: [{ text: '', points: 1 }, { text: '', points: 1 }],
+  pioItems: ['', '', ''],
+  pioStored: null,
 });
 
 function questionToForm(q: Question): FormState {
@@ -125,6 +210,13 @@ function questionToForm(q: Question): FormState {
     base.msOptions = opts.length
       ? opts.map((text, i) => ({ text, points: pts[i] ?? 1 }))
       : [{ text: '', points: 1 }, { text: '', points: 1 }];
+  } else if (q.type === 'put_in_order') {
+    const items = (q.config['items'] as string[]) ?? [];
+    const co = q.answer_data['correct_order'];
+    const correctOrder = Array.isArray(co) ? (co as number[]) : undefined;
+    // Without a correct_order (imported COMPLETENESS only) the display order is all we have.
+    base.pioItems = correctOrder ? correctOrder.map((i) => items[i] ?? '') : [...items];
+    base.pioStored = correctOrder ? { items, correct_order: correctOrder } : { items };
   }
   return base;
 }
@@ -144,13 +236,18 @@ function formToPayload(form: FormState) {
     const p = buildMsPayload(form.msOptions.filter((o) => o.text.trim()));
     config = p.config;
     answer_data = p.answer_data;
+  } else if (form.type === 'put_in_order') {
+    const p = buildPioPayload(form.pioItems, form.pioStored, form.grading);
+    config = p.config;
+    answer_data = p.answer_data;
   } else {
     const p = buildFibPayload(form.fibAnswers.filter((a) => a.text.trim()), form.fibEditDistance);
     config = p.config;
     answer_data = p.answer_data;
   }
+  // put_in_order's points_value is authored directly under both grading types.
   const points_value =
-    form.grading === 'COMPLETENESS'
+    form.grading === 'COMPLETENESS' || form.type === 'put_in_order'
       ? form.pointsValue
       : form.type === 'multiple_choice'
       ? Math.max(0, ...form.mcOptions.map((o) => o.points))
@@ -187,6 +284,16 @@ function QuestionForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const pioError = form.type === 'put_in_order' ? pioItemsError(form.pioItems) : null;
+
+  function movePioItem(i: number, direction: -1 | 1) {
+    const target = i + direction;
+    if (target < 0 || target >= form.pioItems.length) return;
+    const items = [...form.pioItems];
+    [items[i], items[target]] = [items[target], items[i]];
+    set('pioItems', items);
+  }
+
   return (
     <div className="space-y-4">
       {/* Type + grading */}
@@ -202,6 +309,7 @@ function QuestionForm({
             <option value="true_false">True / False</option>
             <option value="fill_in_the_blank">Fill in the Blank</option>
             <option value="multi_select">Multi-Select (Select All That Apply)</option>
+            <option value="put_in_order">Put in Order</option>
           </select>
         </div>
         <div className="flex-1">
@@ -359,6 +467,75 @@ function QuestionForm({
         </div>
       )}
 
+      {form.type === 'put_in_order' && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-2">
+            Items, in the correct order (players see them scrambled)
+          </label>
+          <div className="space-y-2">
+            {form.pioItems.map((item, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <span className="w-5 text-right text-xs text-slate-500 font-mono">{i + 1}.</span>
+                <Input
+                  data-testid={`pio-item-${i}`}
+                  placeholder={`Item ${i + 1}`}
+                  value={item}
+                  maxLength={200}
+                  onChange={(e) => {
+                    const items = [...form.pioItems];
+                    items[i] = e.target.value;
+                    set('pioItems', items);
+                  }}
+                  className="flex-1 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`pio-up-${i}`}
+                  disabled={i === 0}
+                  onClick={() => movePioItem(i, -1)}
+                >
+                  <ChevronUp size={12} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`pio-down-${i}`}
+                  disabled={i === form.pioItems.length - 1}
+                  onClick={() => movePioItem(i, 1)}
+                >
+                  <ChevronDown size={12} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`pio-remove-row-${i}`}
+                  disabled={form.pioItems.length <= PIO_MIN_ITEMS}
+                  onClick={() => set('pioItems', form.pioItems.filter((_, j) => j !== i))}
+                >
+                  <Trash2 size={12} />
+                </Button>
+              </div>
+            ))}
+            {form.pioItems.length < PIO_MAX_ITEMS && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="pio-add-row"
+                onClick={() => set('pioItems', [...form.pioItems, ''])}
+              >
+                <Plus size={12} className="mr-1" /> Add item
+              </Button>
+            )}
+          </div>
+          {pioError && <p className="text-red-400 text-xs mt-2">{pioError}</p>}
+        </div>
+      )}
+
       {form.type === 'true_false' && form.grading === 'ACCURACY' && (
         <div>
           <label className="block text-xs text-slate-400 mb-2">Points per answer</label>
@@ -472,7 +649,7 @@ function QuestionForm({
             max="300"
           />
         </div>
-        {form.grading === 'COMPLETENESS' && (
+        {(form.grading === 'COMPLETENESS' || form.type === 'put_in_order') && (
           <div>
             <label className="block text-xs text-slate-400 mb-1">Points value</label>
             <Input
@@ -489,7 +666,7 @@ function QuestionForm({
       </div>
 
       <div className="flex gap-3">
-        <Button type="button" onClick={() => onSave(formToPayload(form))} disabled={saving}>
+        <Button type="button" onClick={() => onSave(formToPayload(form))} disabled={saving || pioError !== null}>
           {saving ? 'Saving\u2026' : 'Save Question'}
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
@@ -602,6 +779,7 @@ export default function QuestionEditorPage() {
     true_false: 'T/F',
     fill_in_the_blank: 'Fill',
     multi_select: 'Multi',
+    put_in_order: 'Order',
   };
 
   if (loading) return <div className="p-8 text-slate-400">Loading…</div>;
@@ -761,6 +939,18 @@ export default function QuestionEditorPage() {
                       )}
                     </div>
                   )}
+
+                  {q.type === 'put_in_order' && (() => {
+                    const items = (q.config['items'] as string[]) ?? [];
+                    const co = q.answer_data['correct_order'];
+                    const ordered = Array.isArray(co) ? (co as number[]).map((i) => items[i]) : null;
+                    return (
+                      <div className="mt-2 text-xs text-slate-400">
+                        {ordered ? 'Correct order: ' : 'Items: '}
+                        <span className="text-slate-200">{(ordered ?? items).join(' \u2192 ')}</span>
+                      </div>
+                    );
+                  })()}
 
                   {q.type === 'multi_select' && (
                     <div className="mt-2 space-y-1">
