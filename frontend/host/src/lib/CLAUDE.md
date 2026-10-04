@@ -18,6 +18,10 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
 - `links.ts` — `ADMIN_APP_URL` (`VITE_ADMIN_APP_URL`, else `http://localhost:5175` in dev and
   `/admin` in a build).
 - `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`.
+- `putInOrder.ts` — `buildPioBars(reveal, distribution, items)` (one bar per correct position,
+  counting `"{item}@{position}"` keys; green for ACCURACY, neutral for COMPLETENESS, `[]`
+  without `correctOrder`), `pioCaption(reveal)` and `correctOrderText(reveal, items)`. Used by
+  `ResultsPage` and `GameOverPage` so the live and game-over charts can't drift.
 
 **How it fits in.** `../pages/` and `../components/HostShell.tsx` call `api` for everything
 outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/GameLayout.tsx`
