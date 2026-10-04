@@ -17,10 +17,15 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..common.exceptions import ConflictError, NotFoundError
+from ..common.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from ..models.game import Game, Question
 from ..models.session import SessionScore
-from ..schemas.admin import GameCreate, QuestionCreate, QuestionUpdate
+from ..schemas.admin import (
+    GameCreate,
+    QuestionCreate,
+    QuestionUpdate,
+    validate_put_in_order,
+)
 
 logger = structlog.get_logger()
 
@@ -98,10 +103,55 @@ async def _get_question_in_game(
     return question
 
 
+async def _score_count(db: AsyncSession, question_id: int) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(SessionScore)
+        .where(SessionScore.question_id == question_id)
+    )
+    return result.scalar_one()
+
+
 async def update_question(
     db: AsyncSession, game_id: int, question_id: int, body: QuestionUpdate
 ) -> Question:
+    """
+    Apply a partial update. For put_in_order (stored or requested type) the merged values
+    are checked before anything is assigned: a played question's items, correct_order and
+    type are frozen (409), because stored orderedIndices point into config.items as it was
+    at play time; then the merged question must pass validate_put_in_order (422).
+    """
     question = await _get_question_in_game(db, game_id, question_id)
+
+    new_type = body.type if body.type is not None else question.type
+    new_grading_type = (
+        body.grading_type if body.grading_type is not None else question.grading_type
+    )
+    old_config = question.config or {}
+    old_answer_data = question.answer_data or {}
+    new_config = (body.config if body.config is not None else old_config) or {}
+    new_answer_data = (
+        body.answer_data if body.answer_data is not None else old_answer_data
+    ) or {}
+
+    if question.type == "put_in_order" or new_type == "put_in_order":
+        frozen_changed = (
+            new_type != question.type
+            or new_config.get("items") != old_config.get("items")
+            or new_answer_data.get("correct_order")
+            != old_answer_data.get("correct_order")
+        )
+        if frozen_changed and await _score_count(db, question_id):
+            raise ConflictError(
+                "This question has recorded answers from a past session, so its items "
+                "cannot be changed. Create a new question instead."
+            )
+
+    if new_type == "put_in_order":
+        try:
+            validate_put_in_order(new_grading_type, new_config, new_answer_data)
+        except ValueError as exc:
+            raise ValidationFailedError(str(exc)) from exc
 
     if body.type is not None:
         question.type = body.type
@@ -129,12 +179,7 @@ async def delete_question(db: AsyncSession, game_id: int, question_id: int) -> N
     grade data, so they are neither nulled nor cascaded away.
     """
     question = await _get_question_in_game(db, game_id, question_id)
-    result = await db.execute(
-        select(func.count())
-        .select_from(SessionScore)
-        .where(SessionScore.question_id == question_id)
-    )
-    if result.scalar_one():
+    if await _score_count(db, question_id):
         raise ConflictError(
             "This question has recorded answers from a past session, so it cannot "
             "be deleted"
