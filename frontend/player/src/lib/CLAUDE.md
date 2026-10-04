@@ -9,6 +9,8 @@ client-side JWT expiry check.
   `/api`, sends JSON, and attaches `Authorization: Bearer <localStorage.token>` when a token
   exists. On a non-2xx response it throws `Error(detail)` from FastAPI's `{detail}` body (or
   `HTTP <status>`). An empty response body resolves to `{}`.
+- `putInOrder.ts` — `isPermutation(value, n)` and `orderText(indices, items)` ("A → B → C",
+  or null for an invalid order), used by `ResultsPage` and `GameOverPage`.
 - `utils.ts` — `cn(...classes)` (`clsx` + `tailwind-merge`), plus
   `isTokenExpired(token)`: base64url-decodes the JWT payload **without verifying it** and
   returns true if the token is missing, malformed, or past `exp`.

@@ -1,9 +1,11 @@
 import { useGame } from './GameLayout';
+import { orderText } from '../../lib/putInOrder';
 
 function describeAnswer(
   lastAnswerData: Record<string, unknown> | null,
   type: string,
   options: string[] | undefined,
+  items: string[] | undefined,
 ): string | null {
   if (!lastAnswerData) return null;
   if (type === 'multiple_choice') {
@@ -27,6 +29,9 @@ function describeAnswer(
         .join(', ');
     }
   }
+  if (type === 'put_in_order') {
+    return orderText(lastAnswerData.orderedIndices, items);
+  }
   return null;
 }
 
@@ -41,15 +46,24 @@ export default function ResultsPage() {
     );
   }
 
-  const { answerReveal, yourPoints, yourScore, yourRank, playerCount } = questionResults;
+  const { answerReveal, yourPoints, yourIsCorrect, yourScore, yourRank, playerCount } = questionResults;
+  const items = currentQuestion?.config.items;
   const answeredLabel = describeAnswer(
     lastAnswerData,
     currentQuestion?.type ?? '',
     currentQuestion?.config.options,
+    items,
   );
   const isCompleteness = answerReveal.type === 'completeness';
   const isFitb = answerReveal.type === 'fill_in_the_blank';
-  const isCorrect = !isCompleteness && yourPoints > 0;
+  // put_in_order ACCURACY reads the server's is_correct (perfect order only); partial
+  // scores are "Partially correct". Points can equal pointsValue without a perfect order.
+  const isPioAccuracy =
+    currentQuestion?.type === 'put_in_order' && answerReveal.type === 'put_in_order';
+  const isCorrect = isPioAccuracy ? yourIsCorrect : !isCompleteness && yourPoints > 0;
+  const isPartial = isPioAccuracy && !yourIsCorrect && yourPoints > 0;
+  const correctOrderLabel =
+    'correctOrder' in answerReveal ? orderText(answerReveal.correctOrder, items) : null;
 
   const fitbAccepted: string[] =
     isFitb && 'acceptedAnswers' in answerReveal ? answerReveal.acceptedAnswers : [];
@@ -62,6 +76,8 @@ export default function ResultsPage() {
         <p className="text-indigo-400 text-4xl font-black">Answer recorded!</p>
       ) : isCorrect ? (
         <p className="text-green-400 text-4xl font-black">Correct!</p>
+      ) : isPartial ? (
+        <p className="text-amber-400 text-4xl font-black">Partially correct</p>
       ) : (
         <p className="text-red-400 text-4xl font-black">Incorrect</p>
       )}
@@ -77,6 +93,13 @@ export default function ResultsPage() {
       {isFitb && fitbAccepted.length > 0 && (
         <p className="text-slate-400 text-base">
           Correct: <span className="text-green-400 font-semibold">{fitbAccepted.join(' / ')}</span>
+        </p>
+      )}
+
+      {/* Correct order for put_in_order (both grading types, whenever revealed) */}
+      {correctOrderLabel && (
+        <p className="text-slate-400 text-base">
+          Correct order: <span className="text-green-400 font-semibold">{correctOrderLabel}</span>
         </p>
       )}
 
