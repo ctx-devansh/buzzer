@@ -14,6 +14,13 @@ from ..models.session import GameSession, SessionScore
 from ..models.user import User
 
 
+def _pts(x: float) -> float:
+    """Round a points value for CSV output. Points columns are single-precision FLOAT, so
+    a stored 0.83 reads back as 0.8299999833…, and float sums add more noise. 4 dp keeps
+    a 3-dp points_value such as 0.125 intact."""
+    return round(float(x), 4)
+
+
 async def build_session_csv(db: AsyncSession, session_id: str) -> tuple[str, bytes]:
     """
     Return (filename, csv_bytes) for a session score export.
@@ -48,7 +55,7 @@ async def build_session_csv(db: AsyncSession, session_id: str) -> tuple[str, byt
             seen.add(s.user_id)
 
     # Build score lookup: player_id → question_id → points_awarded
-    score_map: dict[str, dict[int, int]] = {pid: {} for pid in player_ids}
+    score_map: dict[str, dict[int, float]] = {pid: {} for pid in player_ids}
     for s in scores:
         score_map[s.user_id][s.question_id] = s.points_awarded
 
@@ -68,8 +75,10 @@ async def build_session_csv(db: AsyncSession, session_id: str) -> tuple[str, byt
 
     for pid in player_ids:
         row_scores = [score_map[pid].get(q.id, 0) for q in questions]
-        total = sum(row_scores)
-        writer.writerow([name_map.get(pid, pid)] + row_scores + [total])
+        total = _pts(sum(row_scores))
+        writer.writerow(
+            [name_map.get(pid, pid)] + [_pts(x) for x in row_scores] + [total]
+        )
 
     # Filename based on session id (safe for all filesystems)
     filename = f"session_{session_id[:8]}_scores.csv"
@@ -152,11 +161,12 @@ async def build_canvas_csv(
         ]
         writer.writerow(canvas_base + q_headers)
         writer.writerow(
-            ["Points Possible", "", "", "", ""] + [q.points_value for q in questions]
+            ["Points Possible", "", "", "", ""]
+            + [_pts(q.points_value) for q in questions]
         )
     else:
         writer.writerow(canvas_base + [title])
-        max_score = sum(q.points_value for q in questions)
+        max_score = _pts(sum(q.points_value for q in questions))
         writer.writerow(["Points Possible", "", "", "", "", max_score])
 
     for pid in player_ids:
@@ -177,9 +187,14 @@ async def build_canvas_csv(
         q_scores = [score_map[pid].get(q.id, 0.0) for q in questions]
 
         if per_question:
-            writer.writerow([display, "", "", sis_login(netid), section] + q_scores)
+            writer.writerow(
+                [display, "", "", sis_login(netid), section]
+                + [_pts(x) for x in q_scores]
+            )
         else:
-            writer.writerow([display, "", "", sis_login(netid), section, sum(q_scores)])
+            writer.writerow(
+                [display, "", "", sis_login(netid), section, _pts(sum(q_scores))]
+            )
 
     safe = "".join(c if c.isalnum() or c in " _-" else "_" for c in title)
     filename = f"canvas_{safe}_{session_id[:8]}.csv"
