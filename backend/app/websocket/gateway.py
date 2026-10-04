@@ -139,6 +139,13 @@ def _answer_reveal(q: Question) -> dict:
     Derive a client-safe correct-answer reveal from answer_data.
     answer_data is NEVER forwarded directly — only derived facts are sent.
     """
+    if q.type == "put_in_order":
+        correct_order = (q.answer_data or {}).get("correct_order")
+        if q.grading_type == "COMPLETENESS":
+            if correct_order is None:
+                return {"type": "completeness"}
+            return {"type": "completeness", "correctOrder": correct_order}
+        return {"type": "put_in_order", "correctOrder": correct_order or []}
     if q.grading_type == "COMPLETENESS":
         return {"type": "completeness"}
     if q.type == "multiple_choice":
@@ -872,14 +879,21 @@ async def _on_host_advance_impl(sid: str) -> None:
             from sqlalchemy import select as sa_select
             from ..models.session import SessionScore as _Score
 
-            q_score_rows = await db.execute(
-                sa_select(_Score.user_id, _Score.points_awarded).where(
-                    _Score.session_id == session_id,
-                    _Score.question_id == question.id,
+            q_score_rows = (
+                await db.execute(
+                    sa_select(
+                        _Score.user_id, _Score.points_awarded, _Score.is_correct
+                    ).where(
+                        _Score.session_id == session_id,
+                        _Score.question_id == question.id,
+                    )
                 )
-            )
-            q_scores: dict[str, int] = {
+            ).all()
+            q_scores: dict[str, float] = {
                 r.user_id: r.points_awarded for r in q_score_rows
+            }
+            q_correct: dict[str, bool] = {
+                r.user_id: bool(r.is_correct) for r in q_score_rows
             }
 
             # Bar-chart results → host (no player names)
@@ -908,6 +922,7 @@ async def _on_host_advance_impl(sid: str) -> None:
                         "questionId": question.id,
                         "answerReveal": reveal,
                         "yourPoints": q_scores.get(uid, 0),
+                        "yourIsCorrect": q_correct.get(uid, False),
                         "yourScore": player.get("score", 0),
                         "yourRank": rank_map.get(uid, len(players)),
                         "playerCount": len(players),
@@ -1146,6 +1161,20 @@ async def on_submit_answer(sid: str, data: dict) -> None:
             if any(not (0 <= i < num_opts) for i in indices):
                 await _emit_error(
                     sid, "selectedIndices contains an out-of-bounds index"
+                )
+                return
+
+        if question.type == "put_in_order":
+            ordered = answer_data.get("orderedIndices")
+            num_items = len((question.config or {}).get("items", []))
+            if (
+                not isinstance(ordered, list)
+                or not all(type(i) is int for i in ordered)
+                or sorted(ordered) != list(range(num_items))
+            ):
+                await _emit_error(
+                    sid,
+                    "put_in_order answer must include orderedIndices as a permutation of the item indices",
                 )
                 return
 

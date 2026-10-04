@@ -5,6 +5,7 @@ import { useGame } from './GameLayout';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal, HostQuestionSummaryItem } from '../../types/game';
+import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
 
 const TARGET_BUCKETS = 8;
 
@@ -55,12 +56,12 @@ function buildBuckets(scores: number[], maxPossibleScore: number): Bucket[] {
 
 function optionLabel(i: number) { return String.fromCharCode(65 + i); }
 
-function AnswerBar({ label, count, total, correct, colorClass }: {
-  label: string; count: number; total: number; correct: boolean; colorClass: string;
+function AnswerBar({ label, count, total, correct, colorClass, testId }: {
+  label: string; count: number; total: number; correct: boolean; colorClass: string; testId?: string;
 }) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3" data-testid={testId}>
       <span className={`w-6 text-center font-bold text-sm shrink-0 ${correct ? 'text-green-400' : 'text-slate-400'}`}>
         {label}
       </span>
@@ -70,7 +71,10 @@ function AnswerBar({ label, count, total, correct, colorClass }: {
           style={{ width: `${Math.max(pct, count > 0 ? 2 : 0)}%` }}
         />
       </div>
-      <span className={`w-8 text-right text-sm font-semibold shrink-0 ${correct ? 'text-green-400' : 'text-slate-400'}`}>
+      <span
+        className={`w-8 text-right text-sm font-semibold shrink-0 ${correct ? 'text-green-400' : 'text-slate-400'}`}
+        data-testid={testId ? `${testId}-count` : undefined}
+      >
         {count}
       </span>
       {correct && <span className="text-green-500 text-xs font-bold shrink-0">✓</span>}
@@ -87,12 +91,18 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
     true_false: 'True / False',
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
+    put_in_order: 'Put in Order',
   };
 
   const answeredPct = totalPlayers > 0 ? Math.round((totalAnswered / totalPlayers) * 100) : 0;
   const correctPct = totalAnswered > 0 ? Math.round((correctCount / totalAnswered) * 100) : 0;
 
   const reveal = answerReveal as AnswerReveal;
+  // put_in_order is decided by question type before any reveal.type check: a COMPLETENESS
+  // put_in_order reveal is type 'completeness'.
+  const isPio = type === 'put_in_order';
+  const pioBars = isPio ? buildPioBars(reveal, answerDistribution, config.items) : [];
+  const pioOrderText = isPio ? correctOrderText(reveal, config.items) : null;
 
   function isCorrectIndex(i: number): boolean {
     if (reveal.type === 'multiple_choice') {
@@ -126,7 +136,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
             {gradingType === 'COMPLETENESS' ? 'Participation' : 'Accuracy'}
           </span>
           <span className="text-slate-600">·</span>
-          <span className="text-slate-400 text-xs">{pointsValue} {pointsValue === 1 ? 'pt' : 'pts'}</span>
+          <span className="text-slate-400 text-xs">{pointsValue.toLocaleString()} {pointsValue === 1 ? 'pt' : 'pts'}</span>
         </div>
         <div className="text-right text-xs text-slate-500 shrink-0">
           <span className="text-slate-300 font-semibold">{totalAnswered}</span>/{totalPlayers} answered
@@ -141,6 +151,28 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
 
       {/* Distribution */}
       <div className="space-y-2">
+        {isPio && pioBars.length > 0 && (
+          <p className="text-slate-400 text-sm">{pioCaption(reveal)}</p>
+        )}
+        {isPio && pioBars.map((bar, p) => (
+          <div key={p} className="space-y-0.5">
+            <div className={`text-xs ${bar.correct ? 'text-green-300' : 'text-slate-400'}`}>{bar.label}</div>
+            <AnswerBar
+              label={String(p + 1)}
+              count={bar.count}
+              total={totalPlayers}
+              correct={bar.correct === true}
+              colorClass={bar.correct ? 'bg-green-500' : 'bg-indigo-500'}
+              testId={bar.testId}
+            />
+          </div>
+        ))}
+        {pioOrderText && (
+          <p className="text-slate-400 text-sm">
+            Correct order: <span className="text-green-300 font-medium">{pioOrderText}</span>
+          </p>
+        )}
+
         {(type === 'multiple_choice' || type === 'multi_select') && (config.options ?? []).map((opt, i) => {
           const count = answerDistribution[String(i)] ?? 0;
           const correct = isCorrectIndex(i);
@@ -258,7 +290,7 @@ export default function GameOverPage() {
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
 
   const avg = scores.length > 0
-    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    ? scores.reduce((a, b) => a + b, 0) / scores.length
     : 0;
   const high = scores.length > 0 ? Math.max(...scores) : 0;
 

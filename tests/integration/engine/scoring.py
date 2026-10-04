@@ -8,6 +8,7 @@ or grading method is added to the backend.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Decimal
 
 
 # ---------------------------------------------------------------------------
@@ -17,12 +18,12 @@ from dataclasses import dataclass, field
 @dataclass
 class QuestionSpec:
     """Declarative description of one question — mirrors the DB Question model."""
-    type: str           # 'multiple_choice' | 'true_false' | 'fill_in_the_blank'
+    type: str           # 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'put_in_order'
     grading_type: str   # 'ACCURACY' | 'COMPLETENESS'
     prompt: str
     config: dict        # e.g. {"options": ["A", "B", "C"]}
     answer_data: dict   # e.g. {"answer_points": [0, 1000, 0]}
-    points_value: int = 1000
+    points_value: float = 1000
     time_limit_seconds: int = 30
 
 
@@ -47,7 +48,7 @@ class GameScenario:
     description: str = ""
 
     # Derived fields (populated by __post_init__)
-    _expected_scores: list[int] = field(default_factory=list, init=False, repr=False)
+    _expected_scores: list[float] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self):
         self._expected_scores = [
@@ -55,7 +56,7 @@ class GameScenario:
         ]
 
     @property
-    def expected_scores(self) -> list[int]:
+    def expected_scores(self) -> list[float]:
         return self._expected_scores
 
     def __str__(self):
@@ -90,13 +91,57 @@ def _levenshtein(a: str, b: str) -> int:
 # Scoring functions — must stay in sync with backend calculate_score()
 # ---------------------------------------------------------------------------
 
-def compute_question_score(q: QuestionSpec, response: dict | None) -> int:
+def _is_permutation(value: object, n: int) -> bool:
+    """Mirrors backend: a list of real ints (no bools) forming a permutation of 0..n-1."""
+    return (
+        isinstance(value, list)
+        and all(type(x) is int for x in value)
+        and sorted(value) == list(range(n))
+    )
+
+
+def _concordant_pairs(ordered: list[int], correct: list[int]) -> tuple[int, int]:
+    """(c, t): pairs in the same relative order as `correct`, and the total pair count."""
+    rank = {item: pos for pos, item in enumerate(correct)}
+    n = len(ordered)
+    c = sum(
+        1
+        for i in range(n)
+        for j in range(i + 1, n)
+        if rank[ordered[i]] < rank[ordered[j]]
+    )
+    return c, n * (n - 1) // 2
+
+
+def _put_in_order_score(q: QuestionSpec, response: dict) -> float:
+    ordered = response.get("orderedIndices")
+    n = len(q.config.get("items", []))
+    if not _is_permutation(ordered, n):
+        return 0
+    if q.grading_type == "COMPLETENESS":
+        return q.points_value
+    correct = q.answer_data.get("correct_order", [])
+    c, t = _concordant_pairs(ordered, correct)
+    pv = q.points_value
+    if c == t:
+        return pv
+    raw = (Decimal(str(round(pv, 6))) * c / t).quantize(
+        Decimal("0.01"), ROUND_HALF_UP
+    )
+    return min(float(raw), pv)
+
+
+def compute_question_score(q: QuestionSpec, response: dict | None) -> float:
     """
     Return the points awarded for one player's response to one question.
     Mirrors backend game_service.calculate_score() logic exactly.
     """
     if response is None:
         return 0  # no answer → 0 points regardless of grading type
+
+    # Before the COMPLETENESS short-circuit, so an invalid order isn't credited.
+    if q.type == "put_in_order":
+        return _put_in_order_score(q, response)
 
     if q.grading_type == "COMPLETENESS":
         return q.points_value  # any answer → full points
@@ -133,7 +178,38 @@ def compute_question_score(q: QuestionSpec, response: dict | None) -> int:
     return 0
 
 
-def compute_player_score(scenario: GameScenario, player_idx: int) -> int:
+def expected_is_correct(q: QuestionSpec, response: dict | None) -> bool | None:
+    """
+    The is_correct flag the backend should store, for the types where the tests assert
+    it: put_in_order (perfect order under ACCURACY, any answer under COMPLETENESS, False
+    when unanswered). None for every other type, meaning "not asserted".
+    """
+    if q.type != "put_in_order":
+        return None
+    if response is None:
+        return False
+    if q.grading_type == "COMPLETENESS":
+        return True
+    ordered = response.get("orderedIndices")
+    if not _is_permutation(ordered, len(q.config.get("items", []))):
+        return False
+    c, t = _concordant_pairs(ordered, q.answer_data.get("correct_order", []))
+    return c == t
+
+
+def expected_distribution(q: QuestionSpec, responses: list[dict | None]) -> dict:
+    """put_in_order host distribution: one "item@position" count per item per answer."""
+    dist: dict[str, int] = {}
+    for response in responses:
+        if response is None:
+            continue
+        for pos, item in enumerate(response["orderedIndices"]):
+            key = f"{item}@{pos}"
+            dist[key] = dist.get(key, 0) + 1
+    return dist
+
+
+def compute_player_score(scenario: GameScenario, player_idx: int) -> float:
     """Sum of compute_question_score across all questions for one player."""
     script = scenario.player_scripts[player_idx]
     return sum(
@@ -158,12 +234,20 @@ def compute_expected_summary(scenario: GameScenario, player_idx: int) -> list[di
             "answerReveal": reveal,
             "gradingType": q.grading_type,
             "type": q.type,
+            "isCorrect": expected_is_correct(q, response),
         })
     return summary
 
 
 def _build_reveal(q: QuestionSpec) -> dict:
     """Build the answerReveal dict the backend will produce for a question."""
+    # put_in_order first: its COMPLETENESS reveal can carry correctOrder.
+    if q.type == "put_in_order":
+        correct_order = q.answer_data.get("correct_order")
+        if q.grading_type == "ACCURACY":
+            return {"type": "put_in_order", "correctOrder": correct_order}
+        if correct_order is not None:
+            return {"type": "completeness", "correctOrder": correct_order}
     if q.grading_type == "COMPLETENESS":
         return {"type": "completeness"}
     if q.type == "multiple_choice":

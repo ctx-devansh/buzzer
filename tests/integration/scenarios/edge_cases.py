@@ -150,4 +150,40 @@ TIMER_EXPIRY_PARTIAL = EdgeScenario(
 )
 
 
-SCENARIOS: list[EdgeScenario] = [ALL_SKIP, MINIMAL, LATE_JOIN, TIMER_EXPIRY, TIMER_EXPIRY_PARTIAL]
+# ---------------------------------------------------------------------------
+# Timer-expiry put_in_order (requires --fast)
+# ---------------------------------------------------------------------------
+
+PIO_ACCURACY = QuestionSpec(
+    type="put_in_order",
+    grading_type="ACCURACY",
+    prompt="Put the letters in alphabetical order.",
+    config={"items": ["C", "A", "D", "B"]},
+    answer_data={"correct_order": [1, 3, 0, 2]},
+    points_value=1,
+)
+
+TIMER_EXPIRY_PUT_IN_ORDER = EdgeScenario(
+    name="timer_expiry_put_in_order",
+    description=(
+        "put_in_order: player 0 locks in the perfect order before the timer fires; "
+        "player 1 never answers and scores 0. Requires --fast."
+    ),
+    questions=[PIO_ACCURACY],
+    player_scripts=[
+        PlayerScript(responses=[{"orderedIndices": [1, 3, 0, 2]}]),
+        PlayerScript(responses=[None]),
+    ],
+    requires_fast=True,
+    uses_timer_expiry=True,
+)
+
+
+SCENARIOS: list[EdgeScenario] = [
+    ALL_SKIP,
+    MINIMAL,
+    LATE_JOIN,
+    TIMER_EXPIRY,
+    TIMER_EXPIRY_PARTIAL,
+    TIMER_EXPIRY_PUT_IN_ORDER,
+]

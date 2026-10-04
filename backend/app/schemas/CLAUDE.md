@@ -6,10 +6,13 @@ directly to clients and so player-facing responses can omit fields (answer keys,
 
 **Contents.**
 - `admin.py` — schemas for every admin-only resource: courses, roster entries/upload/import,
-  games, questions (`QuestionCreate`/`QuestionUpdate` carry a `model_validator` — `validate_structure`
+  games, questions (only `QuestionCreate` carries a `model_validator` — `validate_structure`
   — that enforces per-question-type shape of `config`/`answer_data`, e.g. `multiple_choice` needs
-  `answer_points` matching `options` length; this is the *only* structural validation for question
-  data, since `../models/game.py` stores it as untyped JSON), users, access grants, and the admin
+  `answer_points` matching `options` length; `QuestionUpdate` has **no** validator, since it sees
+  only a partial body. `put_in_order` rules live in the module-level `validate_put_in_order`,
+  called from `validate_structure` and, on the merged values, from
+  `../services/authoring_service.py::update_question`. `../models/game.py` stores question data
+  as untyped JSON, so these are the only structural checks), users, access grants, and the admin
   session list/export item. `GameResponse` carries `course_id`/`course_name`; `GameCreate` and
   `GameUpdate` take an optional `course_id`; `HostGameCreate` requires it; `HostGameUpdate` has
   **no** `course_id` on purpose (with `extra="forbid"`, a host sending it gets a 422).
@@ -29,11 +32,16 @@ kept in sync with these schemas by hand where they overlap (e.g. `QuestionPublic
 `gateway._question_payload`).
 
 **Gotchas.**
-- `QuestionCreate.validate_structure` is the single place per-question-type answer validation
-  lives — adding a new `type` requires a new branch here *and* matching logic in
-  `../services/game_service.py::calculate_score` and the reveal builders in
-  `../services/report_service.py` / `../websocket/gateway.py`. Missing one silently lets
-  malformed questions through or scores them as always-zero.
+- `QuestionCreate.validate_structure` is where per-question-type answer validation lives for
+  creates and imports (for `put_in_order` it delegates to the shared `validate_put_in_order`
+  helper, which `update_question` also calls). Adding a new `type` requires a new branch here,
+  the `type` regex on both `QuestionCreate` and `QuestionUpdate`, *and* matching logic in
+  `../services/game_service.py::calculate_score` and the **four** reveal builders
+  (`../websocket/gateway.py::_answer_reveal`, `../services/report_service.py::_answer_reveal`,
+  and `_player_summary_reveal` / `_host_summary_reveal` in `../services/game_service.py`).
+  Missing one silently lets malformed questions through or scores them as always-zero.
+- Integer checks in `validate_put_in_order` use `type(x) is int`, not `isinstance`: `bool` is an
+  `int` subclass, and `sorted([True, 0, 2]) == [0, 1, 2]`.
 - `ScoreResult` (in `game.py`) is not an HTTP response model — it's an internal transfer object
   between `game_service.calculate_score` and its caller. Don't assume every class in this
   directory is a route schema.

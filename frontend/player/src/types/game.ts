@@ -12,9 +12,9 @@ export interface QuestionPayload {
   questionId: number;
   questionNumber: number;
   totalQuestions: number;
-  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select';
+  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order';
   prompt: string;
-  config: { options?: string[]; maxLength?: number };
+  config: { options?: string[]; maxLength?: number; items?: string[] };
   timeLimitSeconds: number;
   pointsValue: number;
 }
@@ -31,13 +31,15 @@ export type PlayerAnswerReveal =
   | { type: 'multiple_choice'; correctIndices: number[] }
   | { type: 'true_false'; correctValue: boolean }
   | { type: 'fill_in_the_blank'; acceptedAnswers: string[]; editDistance: number }
-  | { type: 'completeness' }
-  | { type: 'multi_select'; answerPoints: number[] };
+  | { type: 'completeness'; correctOrder?: number[] }
+  | { type: 'multi_select'; answerPoints: number[] }
+  | { type: 'put_in_order'; correctOrder: number[] };
 
 export interface PlayerResultsPayload {
   questionId: number;
   answerReveal: PlayerAnswerReveal;
   yourPoints: number;
+  yourIsCorrect: boolean;
   yourScore: number;
   yourRank: number;
   playerCount: number;
@@ -46,14 +48,15 @@ export interface PlayerResultsPayload {
 export interface QuestionSummaryItem {
   questionId: number;
   prompt: string;
-  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select';
+  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order';
   gradingType: 'ACCURACY' | 'COMPLETENESS';
-  config: { options?: string[]; maxLength?: number };
+  config: { options?: string[]; maxLength?: number; items?: string[] };
   pointsAwarded: number;
   maxPoints: number;
   answerTimeMs: number | null;
-  playerAnswer: { selectedIndex?: number; selectedValue?: boolean; text?: string; selectedIndices?: number[] } | null;
+  playerAnswer: { selectedIndex?: number; selectedValue?: boolean; text?: string; selectedIndices?: number[]; orderedIndices?: number[] } | null;
   answerReveal: PlayerAnswerReveal;
+  isCorrect: boolean;
 }
 
 export interface PlayerGameOverPayload {

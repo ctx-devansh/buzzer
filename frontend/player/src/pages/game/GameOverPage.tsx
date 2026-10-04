@@ -2,11 +2,13 @@ import { useNavigate } from 'react-router-dom';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import type { PlayerAnswerReveal, QuestionSummaryItem } from '../../types/game';
+import { orderText } from '../../lib/putInOrder';
 
 function describePlayerAnswer(
-  playerAnswer: { selectedIndex?: number; selectedValue?: boolean; text?: string; selectedIndices?: number[] } | null,
+  playerAnswer: QuestionSummaryItem['playerAnswer'],
   type: string,
   options: string[] | undefined,
+  items: string[] | undefined,
 ): string {
   if (!playerAnswer) return 'No answer';
   if (type === 'multiple_choice') {
@@ -28,12 +30,16 @@ function describePlayerAnswer(
     if (options) return indices.map(i => `${String.fromCharCode(65 + i)} — ${options[i]}`).join(', ');
     return indices.map(i => String.fromCharCode(65 + i)).join(', ');
   }
+  if (type === 'put_in_order') {
+    return orderText(playerAnswer.orderedIndices, items) ?? '—';
+  }
   return '—';
 }
 
 function describeCorrectAnswer(
   answerReveal: PlayerAnswerReveal,
   options: string[] | undefined,
+  items: string[] | undefined,
 ): string {
   if (answerReveal.type === 'multiple_choice') {
     const indices = answerReveal.correctIndices;
@@ -56,19 +62,28 @@ function describeCorrectAnswer(
       .map(({ i }) => options ? `${String.fromCharCode(65 + i)} — ${options[i]}` : String.fromCharCode(65 + i));
     return correct.join(', ');
   }
+  if (answerReveal.type === 'put_in_order') {
+    return orderText(answerReveal.correctOrder, items) ?? '';
+  }
   return '';
 }
 
 function QuestionRow({ item, index }: { item: QuestionSummaryItem; index: number }) {
   const options = item.config.options;
+  const items = item.config.items;
   const isCompleteness = item.answerReveal.type === 'completeness';
   const noAnswer = !item.playerAnswer;
-  const isCorrect = !isCompleteness && !noAnswer && item.pointsAwarded > 0;
+  // put_in_order ACCURACY: correctness is the stored is_correct (perfect order only).
+  const isPioAccuracy = item.type === 'put_in_order' && item.answerReveal.type === 'put_in_order';
+  const isCorrect = isPioAccuracy
+    ? !noAnswer && item.isCorrect
+    : !isCompleteness && !noAnswer && item.pointsAwarded > 0;
+  const isPartial = isPioAccuracy && !noAnswer && !item.isCorrect && item.pointsAwarded > 0;
   const showCorrectAnswer = !isCompleteness && !isCorrect;
 
-  const playerAnswerLabel = describePlayerAnswer(item.playerAnswer, item.type, options);
+  const playerAnswerLabel = describePlayerAnswer(item.playerAnswer, item.type, options, items);
   const correctAnswerLabel = !isCompleteness
-    ? describeCorrectAnswer(item.answerReveal, options)
+    ? describeCorrectAnswer(item.answerReveal, options, items)
     : '';
 
   return (
@@ -86,13 +101,16 @@ function QuestionRow({ item, index }: { item: QuestionSummaryItem; index: number
               <span className="text-indigo-400 text-base">●</span>
             ) : isCorrect ? (
               <span className="text-green-400 text-base">✓</span>
+            ) : isPartial ? (
+              <span className="text-amber-400 text-base">◐</span>
             ) : (
               <span className="text-red-400 text-base">✗</span>
             )}
             <span className={`text-sm font-semibold truncate ${
               noAnswer ? 'text-slate-600' :
               isCompleteness ? 'text-indigo-300' :
-              isCorrect ? 'text-green-300' : 'text-red-300'
+              isCorrect ? 'text-green-300' :
+              isPartial ? 'text-amber-300' : 'text-red-300'
             }`}>
               {playerAnswerLabel}
             </span>
