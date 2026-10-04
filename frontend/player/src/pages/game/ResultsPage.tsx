@@ -18,6 +18,15 @@ function describeAnswer(
   if (type === 'fill_in_the_blank') {
     return typeof lastAnswerData.text === 'string' ? lastAnswerData.text : null;
   }
+  if (type === 'multi_select') {
+    const indices = lastAnswerData.selectedIndices;
+    if (Array.isArray(indices) && options) {
+      return indices
+        .filter((i): i is number => typeof i === 'number' && options[i] !== undefined)
+        .map(i => options[i])
+        .join(', ');
+    }
+  }
   return null;
 }
 
