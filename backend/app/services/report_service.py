@@ -45,6 +45,13 @@ def _levenshtein(a: str, b: str) -> int:
 
 def _answer_reveal(q: Question) -> dict:
     """Mirror of gateway._answer_reveal — derive correct-answer facts from answer_data."""
+    if q.type == "put_in_order":
+        correct_order = (q.answer_data or {}).get("correct_order")
+        if q.grading_type == "COMPLETENESS":
+            if correct_order is None:
+                return {"type": "completeness"}
+            return {"type": "completeness", "correctOrder": correct_order}
+        return {"type": "put_in_order", "correctOrder": correct_order or []}
     if q.grading_type == "COMPLETENESS":
         return {"type": "completeness"}
     if q.type == "multiple_choice":
@@ -82,6 +89,23 @@ def _extract_answer_key(q_type: str, answer_data: dict | None) -> str | None:
         text = answer_data.get("text", "").strip()
         return text.lower() if text else None
     return None
+
+
+def _is_permutation(value: object, n: int) -> bool:
+    return (
+        isinstance(value, list)
+        and all(type(x) is int for x in value)
+        and sorted(value) == list(range(n))
+    )
+
+
+def _pio_answer_keys(answer_data: dict | None, n_items: int) -> list[str]:
+    """put_in_order: one "item@position" key per item. Rows that are not a permutation of
+    the current items yield no keys (they still count as answered)."""
+    ordered = (answer_data or {}).get("orderedIndices")
+    if not _is_permutation(ordered, n_items):
+        return []
+    return [f"{item}@{pos}" for pos, item in enumerate(ordered)]
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +182,10 @@ def _render_bar_chart(
     else:
         bars = []
 
+    return _render_bars(bars)
+
+
+def _render_bars(bars: list[dict]) -> str:
     if not bars:
         return ""
 
@@ -194,6 +222,37 @@ def _render_bar_chart(
         )
 
     return '<div class="bar-chart">' + "".join(rows) + "</div>"
+
+
+PIO_CAPTION_ACCURACY = "Players who placed each item correctly"
+PIO_CAPTION_COMPLETENESS = "Players who placed each item at this position"
+
+
+def _render_put_in_order(q: Question, dist: dict[str, int], reveal: dict) -> str:
+    """One bar per correct position, counting players who put that item there (same
+    bars and captions as the host's buildPioBars). Green for ACCURACY, neutral for
+    COMPLETENESS, nothing without a correctOrder."""
+    items = (q.config or {}).get("items", [])
+    correct_order = reveal.get("correctOrder")
+    if not _is_permutation(correct_order, len(items)):
+        return ""
+    is_accuracy = reveal.get("type") == "put_in_order"
+    bars = [
+        {
+            "label": f"{p + 1}. {_esc(items[item])}",
+            "count": dist.get(f"{item}@{p}", 0),
+            "correct": True if is_accuracy else None,
+        }
+        for p, item in enumerate(correct_order)
+    ]
+    caption = PIO_CAPTION_ACCURACY if is_accuracy else PIO_CAPTION_COMPLETENESS
+    order_text = " → ".join(_esc(items[i]) for i in correct_order)
+    return (
+        f'<p class="pio-caption">{caption}</p>'
+        + _render_bars(bars)
+        + f'<p class="wc-answer-note pio-order">Correct order: '
+        f'<span class="wc-answer">{order_text}</span></p>'
+    )
 
 
 def _render_word_cloud(q: Question, dist: dict[str, int], reveal: dict) -> str:
@@ -310,6 +369,7 @@ body{
 .badge-mc{background:#1e3a5f;color:#93c5fd}
 .badge-tf{background:#1a3a2a;color:#86efac}
 .badge-fitb{background:#3b2f1e;color:#fbbf24}
+.badge-pio{background:#3b1e33;color:#f9a8d4}
 .badge-accuracy{background:#2e1b3d;color:#c084fc}
 .badge-completeness{background:#2d2d1a;color:#fde68a}
 .q-timing{margin-left:auto;color:#475569;font-size:0.78rem}
@@ -329,6 +389,8 @@ body{
 .bar-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:12px}
 .bar-count{font-size:0.85rem;font-weight:700;color:#fff}
 .bar-correct-mark{font-size:0.72rem;color:#4ade80;font-weight:700;width:68px;flex-shrink:0}
+.pio-caption{font-size:0.78rem;color:#64748b;margin-bottom:10px}
+.pio-order{margin-top:14px;margin-bottom:0}
 
 /* ── Word cloud ── */
 .wc-answer-note{text-align:center;color:#64748b;font-size:0.88rem;margin-bottom:14px}
@@ -428,10 +490,16 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
         correct_count = sum(1 for s in q_scores if s.is_correct)
 
         dist: dict[str, int] = defaultdict(int)
-        for s in q_scores:
-            key = _extract_answer_key(q.type, s.answer_data)
-            if key is not None:
-                dist[key] += 1
+        if q.type == "put_in_order":
+            n_items = len((q.config or {}).get("items", []))
+            for s in q_scores:
+                for key in _pio_answer_keys(s.answer_data, n_items):
+                    dist[key] += 1
+        else:
+            for s in q_scores:
+                key = _extract_answer_key(q.type, s.answer_data)
+                if key is not None:
+                    dist[key] += 1
 
         reveal = _answer_reveal(q)
         is_accuracy = q.grading_type == "ACCURACY"
@@ -440,6 +508,7 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
             "multiple_choice": ("Multiple Choice", "badge-mc"),
             "true_false": ("True / False", "badge-tf"),
             "fill_in_the_blank": ("Fill in the Blank", "badge-fitb"),
+            "put_in_order": ("Put in Order", "badge-pio"),
         }.get(q.type, (q.type, ""))
         type_label, type_class = type_badge
 
@@ -449,7 +518,11 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
         pts_val = f"{q.points_value:g}"
         pts_label = f"{pts_val} pt{'s' if q.points_value != 1 else ''}"
 
-        if q.type in ("multiple_choice", "true_false"):
+        # put_in_order first: a COMPLETENESS reveal is type "completeness", so the
+        # generic choice below must never see it.
+        if q.type == "put_in_order":
+            chart = _render_put_in_order(q, dict(dist), reveal)
+        elif q.type in ("multiple_choice", "true_false"):
             chart = _render_bar_chart(q, dict(dist), reveal, total_players)
         elif q.type == "fill_in_the_blank":
             chart = _render_word_cloud(q, dict(dist), reveal)
