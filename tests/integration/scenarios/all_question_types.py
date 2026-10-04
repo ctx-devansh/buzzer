@@ -285,4 +285,48 @@ FITB_TYPES = GameScenario(
 )
 
 
-SCENARIOS: list[GameScenario] = [ALL_TYPES, SINGLE_PLAYER, FITB_TYPES]
+# ---------------------------------------------------------------------------
+# Scenario — put_in_order (pairwise partial credit)
+# ---------------------------------------------------------------------------
+
+# Display order [C, A, D, B]; correct order A, B, C, D → correct_order [1, 3, 0, 2].
+# 4 items → t = 6 pairs; one adjacent swap leaves c = 5 → round_half_up(5/6) = 0.83.
+PIO_ACCURACY = QuestionSpec(
+    type="put_in_order",
+    grading_type="ACCURACY",
+    prompt="Put the letters in alphabetical order.",
+    config={"items": ["C", "A", "D", "B"]},
+    answer_data={"correct_order": [1, 3, 0, 2]},
+    points_value=1,
+)
+
+PIO_COMPLETENESS = QuestionSpec(
+    type="put_in_order",
+    grading_type="COMPLETENESS",
+    prompt="Put the letters in the order you like best.",
+    config={"items": ["C", "A", "D", "B"]},
+    answer_data={"correct_order": [1, 3, 0, 2]},
+    points_value=1,
+)
+
+PUT_IN_ORDER = GameScenario(
+    name="put_in_order_scoring",
+    description=(
+        "put_in_order under ACCURACY (pairwise partial credit) and COMPLETENESS. "
+        "Players: perfect order, one adjacent swap, reversed, no answer."
+    ),
+    questions=[PIO_ACCURACY, PIO_COMPLETENESS],
+    player_scripts=[
+        # Perfect — ACCURACY 1 (isCorrect), COMPLETENESS 1 → total 2
+        PlayerScript(responses=[{"orderedIndices": [1, 3, 0, 2]}] * 2),
+        # One adjacent swap (B, A, C, D) — ACCURACY 0.83, COMPLETENESS 1 → 1.83
+        PlayerScript(responses=[{"orderedIndices": [3, 1, 0, 2]}] * 2),
+        # Reversed (D, C, B, A) — ACCURACY 0, COMPLETENESS 1 → 1
+        PlayerScript(responses=[{"orderedIndices": [2, 0, 3, 1]}] * 2),
+        # No answer — 0 and 0
+        PlayerScript(responses=[None, None]),
+    ],
+)
+
+
+SCENARIOS: list[GameScenario] = [ALL_TYPES, SINGLE_PLAYER, FITB_TYPES, PUT_IN_ORDER]

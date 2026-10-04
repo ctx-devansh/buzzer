@@ -27,12 +27,18 @@ async def run_game(
     player_tokens: list[str],
     room_code: str,
     scenario: GameScenario,
+    *,
+    results_sink: list | None = None,
 ) -> list[dict]:
     """
     Drive a complete game session end-to-end.
 
     Returns a list of game_over payloads, one per player, in the same order
     as `player_tokens`.  Raises on any socket error or timeout.
+
+    When `results_sink` is given, each question's question_results payloads are
+    appended to it as {"host": <host payload>, "players": [<payload per player,
+    in player_tokens order>]}.
     """
     host = TestSocketClient(base_url, host_token, "host")
     players = [
@@ -103,10 +109,14 @@ async def run_game(
 
             # QUESTION → RESULTS
             await host.emit("host_advance", {})
-            await host.wait_for("question_results", _EVENT_TIMEOUT)
-            await asyncio.gather(*[
+            host_results = await host.wait_for("question_results", _EVENT_TIMEOUT)
+            player_results = await asyncio.gather(*[
                 p.wait_for("question_results", _EVENT_TIMEOUT) for p in players
             ])
+            if results_sink is not None:
+                results_sink.append(
+                    {"host": host_results, "players": list(player_results)}
+                )
 
             # RESULTS → next QUESTION (or GAME_OVER for the last question)
             await host.emit("host_advance", {})
