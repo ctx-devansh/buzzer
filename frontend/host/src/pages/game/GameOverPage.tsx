@@ -126,7 +126,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
             {gradingType === 'COMPLETENESS' ? 'Participation' : 'Accuracy'}
           </span>
           <span className="text-slate-600">·</span>
-          <span className="text-slate-400 text-xs">{pointsValue} {pointsValue === 1 ? 'pt' : 'pts'}</span>
+          <span className="text-slate-400 text-xs">{pointsValue.toLocaleString()} {pointsValue === 1 ? 'pt' : 'pts'}</span>
         </div>
         <div className="text-right text-xs text-slate-500 shrink-0">
           <span className="text-slate-300 font-semibold">{totalAnswered}</span>/{totalPlayers} answered
@@ -258,7 +258,7 @@ export default function GameOverPage() {
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
 
   const avg = scores.length > 0
-    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    ? scores.reduce((a, b) => a + b, 0) / scores.length
     : 0;
   const high = scores.length > 0 ? Math.max(...scores) : 0;
 
