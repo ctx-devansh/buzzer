@@ -507,6 +507,76 @@ async def get_leaderboard(db: AsyncSession, session_id: str) -> list[dict]:
     return [{"user_id": r.user_id, "score": float(r.total_score or 0)} for r in rows]
 
 
+def _player_summary_reveal(
+    q_type: str, grading_type: str, answer_data: dict, points_value: float
+) -> dict:
+    """Answer reveal for the player game-over recap. One of four reveal copies (with
+    gateway._answer_reveal and report_service._answer_reveal); a unit parity test
+    in tests/unit keeps them identical."""
+    answer_data = answer_data or {}
+    if grading_type == "COMPLETENESS":
+        reveal: dict = {"type": "completeness"}
+    elif q_type == "multiple_choice":
+        pts = answer_data.get("answer_points", [])
+        correct_indices = [i for i, p in enumerate(pts) if p >= points_value]
+        reveal = {"type": "multiple_choice", "correctIndices": correct_indices}
+    elif q_type == "true_false":
+        pts_map = answer_data.get("answer_points", {})
+        correct_true = pts_map.get("true", 0) >= points_value
+        reveal = {"type": "true_false", "correctValue": correct_true}
+    elif q_type == "fill_in_the_blank":
+        reveal = {
+            "type": "fill_in_the_blank",
+            "acceptedAnswers": answer_data.get("acceptedAnswers", []),
+            "editDistance": answer_data.get("editDistance", 0),
+        }
+    elif q_type == "multi_select":
+        reveal = {
+            "type": "multi_select",
+            "answerPoints": answer_data.get("answer_points", []),
+        }
+    else:
+        reveal = {}
+    return reveal
+
+
+def _host_summary_reveal(
+    q_type: str, grading_type: str, answer_data: dict, points_value: float
+) -> dict:
+    """Answer reveal for the host game-over screen. One of four reveal copies (with
+    gateway._answer_reveal and report_service._answer_reveal); a unit parity test
+    in tests/unit keeps them identical."""
+    answer_data = answer_data or {}
+    if grading_type == "COMPLETENESS":
+        reveal: dict = {"type": "completeness"}
+    elif q_type == "multiple_choice":
+        pts_list = answer_data.get("answer_points", [])
+        reveal = {
+            "type": "multiple_choice",
+            "correctIndices": [i for i, p in enumerate(pts_list) if p >= points_value],
+        }
+    elif q_type == "true_false":
+        pts_map = answer_data.get("answer_points", {})
+        reveal = {
+            "type": "true_false",
+            "correctValue": pts_map.get("true", 0) >= points_value,
+        }
+    elif q_type == "fill_in_the_blank":
+        reveal = {
+            "type": "fill_in_the_blank",
+            "acceptedAnswers": answer_data.get("acceptedAnswers", []),
+            "editDistance": answer_data.get("editDistance", 0),
+        }
+    elif q_type == "multi_select":
+        reveal = {
+            "type": "multi_select",
+            "answerPoints": answer_data.get("answer_points", []),
+        }
+    else:
+        reveal = {}
+    return reveal
+
+
 async def get_player_question_summary(
     db: AsyncSession, session_id: str, user_id: str
 ) -> list[dict]:
@@ -544,29 +614,7 @@ async def get_player_question_summary(
         q_ans = r.q_answer_data or {}
         pts_val = r.points_value
 
-        if grading_type == "COMPLETENESS":
-            reveal: dict = {"type": "completeness"}
-        elif q_type == "multiple_choice":
-            pts = q_ans.get("answer_points", [])
-            correct_indices = [i for i, p in enumerate(pts) if p >= pts_val]
-            reveal = {"type": "multiple_choice", "correctIndices": correct_indices}
-        elif q_type == "true_false":
-            pts_map = q_ans.get("answer_points", {})
-            correct_true = pts_map.get("true", 0) >= pts_val
-            reveal = {"type": "true_false", "correctValue": correct_true}
-        elif q_type == "fill_in_the_blank":
-            reveal = {
-                "type": "fill_in_the_blank",
-                "acceptedAnswers": q_ans.get("acceptedAnswers", []),
-                "editDistance": q_ans.get("editDistance", 0),
-            }
-        elif q_type == "multi_select":
-            reveal = {
-                "type": "multi_select",
-                "answerPoints": q_ans.get("answer_points", []),
-            }
-        else:
-            reveal = {}
+        reveal = _player_summary_reveal(q_type, grading_type, q_ans, pts_val)
 
         result.append(
             {
@@ -654,33 +702,7 @@ async def get_host_question_summary(
         pts_val = q["points_value"]
         grading_type = q["grading_type"]
 
-        if grading_type == "COMPLETENESS":
-            reveal: dict = {"type": "completeness"}
-        elif q_type == "multiple_choice":
-            pts_list = q_ans.get("answer_points", [])
-            reveal = {
-                "type": "multiple_choice",
-                "correctIndices": [i for i, p in enumerate(pts_list) if p >= pts_val],
-            }
-        elif q_type == "true_false":
-            pts_map = q_ans.get("answer_points", {})
-            reveal = {
-                "type": "true_false",
-                "correctValue": pts_map.get("true", 0) >= pts_val,
-            }
-        elif q_type == "fill_in_the_blank":
-            reveal = {
-                "type": "fill_in_the_blank",
-                "acceptedAnswers": q_ans.get("acceptedAnswers", []),
-                "editDistance": q_ans.get("editDistance", 0),
-            }
-        elif q_type == "multi_select":
-            reveal = {
-                "type": "multi_select",
-                "answerPoints": q_ans.get("answer_points", []),
-            }
-        else:
-            reveal = {}
+        reveal = _host_summary_reveal(q_type, grading_type, q_ans, pts_val)
 
         dist: dict[str, int] = {}
         correct_count = 0
