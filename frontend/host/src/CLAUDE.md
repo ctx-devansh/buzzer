@@ -11,8 +11,9 @@ drive a live game that is projected for the class.
   from the admin app and pointed at `/api/host/*`).
   `game/` is the live Socket.IO state machine (Lobby → Question → Results → Game Over), with
   `GameLayout` as the sole socket owner. See `pages/CLAUDE.md`.
-- `components/` — `HostShell` (management top nav + the shared course list), `ui/` primitives
-  (`Button`, `Card`, `Input`) and `TimerBar`. See `components/CLAUDE.md`.
+- `components/` — `HostShell` (management top nav + the shared course list), `PinBoard` (the
+  Pin the Spot canvas), `ui/` primitives (`Button`, `Card`, `Input`) and `TimerBar`. See
+  `components/CLAUDE.md`.
 - `lib/` — `auth.ts` (single token accessor, display-only `getRole`), `api.ts` (full client:
   put/patch/postForm/download, `ApiError` with status), `links.ts`, `cn`. See `lib/CLAUDE.md`.
 - `types/game.ts` — socket payload types mirroring `backend/app/websocket/gateway.py`
@@ -20,7 +21,8 @@ drive a live game that is projected for the class.
 - `App.tsx` — routes: `/login`; `RequireAuth` (token-presence only) → `HostShell` →
   `/home`, `/games`, `/games/:gameId/questions`, `/courses`, `/courses/:courseId/roster`,
   `/sessions`; `/game/:code/{lobby,question,results,gameover}` outside the shell; `*` → `/login`.
-- `main.tsx`, `index.css` — React root and Tailwind entry.
+- `main.tsx`, `index.css` — React root and Tailwind entry; `index.css` also defines the
+  `--pin-*` colour hooks the Pin the Spot board reads (T9).
 
 **How it fits in.** One of three sibling Vite apps under `frontend/` (see `../../CLAUDE.md`).
 REST goes to `/api/game/*`, `/api/host/*` and `/api/auth/*` (plus `/api/admin/games/{id}` for

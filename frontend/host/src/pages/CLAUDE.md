@@ -53,6 +53,7 @@ state machine that moves through Lobby → Question → Results → … → Game
   auto-advance toggle and Start Game (`emitAdvance`; disabled while there are 0 players).
 - `game/QuestionPage.tsx` — question metadata (number, type label, Accuracy/Participation, and a
   typo-tolerance label for fill-in-the-blank), `TimerBar`, the prompt (hidden while locked), the
+  Pin the Spot image (`PinBoard`, kept while locked, **no taps** until the reveal), the
   answered/total count, Lock/Unlock and Show Results. With auto-advance on, it calls
   `emitAdvance` 1.5 s after `answerPhaseEnded`.
 - `game/ResultsPage.tsx` — per-question results built from `question_results`:
@@ -60,12 +61,15 @@ state machine that moves through Lobby → Question → Results → … → Game
     green by a client-side Levenshtein check against `acceptedAnswers`/`editDistance`;
   - every other type shows a **bar chart** from `buildBars()` (MC uses `correctIndices`,
     multi-select uses `answerPoints[i] > 0`, true/false uses `correctValue`, completeness has no
-    correct marking).
+    correct marking);
+  - pin_the_spot shows a `PinBoard` with every tap and, when revealed, target and circles
+    (branched on the question type, before `buildBars`).
 
   Next Question or Show Final Results, plus a 10 s auto-advance countdown.
 - `game/GameOverPage.tsx` — final screen from `game_over`. Shows a score histogram (about 8
   buckets via `chooseWidth`/`buildBuckets` over `0..maxPossibleScore`), the average, high score
-  and player count, then a per-question breakdown (`QuestionCard`: distribution bars, accepted
+  and player count, then a per-question breakdown (`QuestionCard`: distribution bars or the
+  Pin the Spot board, accepted
   fill-in-the-blank answers, correct %/response %, average answer time), a New Game button, and
   Download summary (HTML) / scores (CSV) buttons — disabled while `sessionId` is null, no status
   gate.
@@ -97,8 +101,13 @@ on `../components/ui/` (see `../components/CLAUDE.md`). Socket payload types com
   and `buildBars`' completeness fallback would read `config.options`.
   The editor is a fourth: `manage/QuestionEditorPage.tsx` (`QuestionType` union, `typeLabel`,
   a `build*Payload` helper, `questionToForm`, `formToPayload` — which derives ACCURACY
-  `points_value` on the client except for `put_in_order`, where it is authored directly — and
-  the `QuestionForm` UI; reorder posts `{order: [ids]}`). `buildPioPayload` scrambles only when
+  `points_value` on the client except for `put_in_order` and `pin_the_spot`, where it is
+  authored directly — and the `QuestionForm` UI; reorder posts `{order: [ids]}`).
+  `pin_the_spot`: a file is downscaled to ≤ 1280 px on white and re-encoded as JPEG (0.85 → 0.7
+  → 0.5 while over 1,500,000 chars, else "Image too large"); an `https` URL is kept as-is. A new
+  image clears the target and clamps radii. `buildPinPayload` resends the stored `config` and,
+  unless the target or a slider was touched, the stored `answer_data` verbatim — a played
+  question's image is frozen (409), and imported off-grid radii must not be snapped. `buildPioPayload` scrambles only when
   the item list changed; otherwise it resends the stored `config.items`/`correct_order`
   verbatim, because past answers index into the stored scramble.
 - `ResultsPage`'s word-cloud colouring is an approximation. The backend grades fill-in-the-blank

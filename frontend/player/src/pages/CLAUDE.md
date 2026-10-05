@@ -42,13 +42,16 @@ Results → … → Game Over.
   - multi-select: toggle tiles plus a Submit button (`{selectedIndices}`);
   - put-in-order: numbered rows in `config.items` order, rearranged by pick-and-place (tap a row,
     then tap where it goes; insert semantics; tap it again to cancel), then Lock in
-    (`{orderedIndices}`). `order`/`picked` reset on remount like `submitted`.
+    (`{orderedIndices}`). `order`/`picked` reset on remount like `submitted`;
+  - pin-the-spot: the prompt (the only type that shows it), `PinCanvas`, then Lock in
+    (`{x, y}`), disabled until a pin exists; a placed but unlocked pin scores nothing at time-out.
 
   Answer time is measured from page mount. Locked questions disable input. **The prompt is
-  not shown**: players read it on the host's screen.
+  not shown** (except pin-the-spot): players read it on the host's screen.
 - `game/FeedbackPage.tsx` — static "Answer locked in!" spinner shown after `answer_received`.
   Correctness is deliberately not revealed until results.
-- `game/ResultsPage.tsx` — Correct / Incorrect / "Answer recorded!" (completeness), what you
+- `game/ResultsPage.tsx` — Correct / Incorrect / "Answer recorded!" (completeness), the
+  pin-the-spot board (the player's pin from `lastAnswerData` against the reveal), what you
   answered, the accepted answers for fill-in-the-blank, "Correct order: …" whenever the reveal
   has `correctOrder` (put-in-order, both grading types), points this question, running total,
   and rank of N.
@@ -81,6 +84,8 @@ through `../lib/api.ts` and build on `../components/ui/`. Socket payload types c
   `describeCorrectAnswer` in `GameOverPage`, and the `type` unions / `PlayerAnswerReveal` in
   `../types/game.ts` (which must match `gateway.py::_answer_reveal`). An unknown type renders
   "Unsupported question type."
+- `pin_the_spot` ACCURACY: ✓ from the server's flag, ◐ by distance (`pinVerdict`, D9) on both
+  ResultsPage and the recap (the summary keeps `image_width`/`image_height`, drops `image_url`).
 - `put_in_order` ACCURACY reads correctness from the server's flag (`yourIsCorrect` on
   ResultsPage, `item.isCorrect` in the recap), never from points: a non-perfect order scores
   "Partially correct" / ◐ (amber) when points > 0. Every other type still treats `points > 0`

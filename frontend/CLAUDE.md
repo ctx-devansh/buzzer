@@ -36,5 +36,7 @@ guard just checks that a token exists.
   `types/game.ts`, and the editor `pages/manage/QuestionEditorPage.tsx`) and player
   (`QuestionPage`, `ResultsPage`, `GameOverPage`, `types/game.ts`), on top of the four backend
   places listed in `backend/app/CLAUDE.md`. The admin app no longer has an editor.
+  `pin_the_spot` also has a canvas per app (`player/…/PinCanvas.tsx`, `host/…/PinBoard.tsx`)
+  and a geometry helper per app (`lib/pinTheSpot.ts`) — copies, not shared.
 - `npm run dev` at the repo root runs all three via `concurrently`. `npm run build` builds each
   into its own `dist/`, which docker-compose mounts into nginx.
