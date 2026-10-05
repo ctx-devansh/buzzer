@@ -23,6 +23,9 @@ All question types are handled automatically:
                       answers from --fitb-words
   put_in_order      — random permutation of the items; if --game-json supplied,
                       accurate players submit answer_data.correct_order
+  pin_the_spot      — random tap anywhere on the image; if --game-json supplied,
+                      accurate players tap near answer_data.target (scattered by about
+                      r_full, so the reveal shows full, partial and missed taps)
 
 Usage:
     # Basic — 20 players, default profile mix, default FITB word pool
@@ -269,6 +272,21 @@ class SimPlayer:
                 return None
             return {"orderedIndices": random.sample(range(n), n)}
 
+        if q_type == "pin_the_spot":
+            key = (jq or {}).get("answer_data", {})
+            target = key.get("target")
+            if target and random.random() < p.accuracy:
+                # Taps are fractions of the image; radii are fractions of its width, so
+                # the vertical scatter is divided by aspect (height / width).
+                config = q.get("config", {})
+                aspect = (config.get("image_height") or 1) / (config.get("image_width") or 1)
+                spread = key.get("r_full", 0.05)
+                x = random.gauss(target["x"], spread)
+                y = random.gauss(target["y"], spread / aspect)
+            else:
+                x, y = random.random(), random.random()
+            return {"x": round(min(1.0, max(0.0, x)), 4), "y": round(min(1.0, max(0.0, y)), 4)}
+
         return None  # unknown type
 
     def _answer_str(self, answer: dict) -> str:
@@ -282,6 +300,8 @@ class SimPlayer:
             return f"order {answer['orderedIndices']}"
         if "selectedValue" in answer:
             return str(answer["selectedValue"])
+        if "x" in answer:
+            return f"tap ({answer['x']:.2f}, {answer['y']:.2f})"
         return repr(answer)
 
     # ── per-question handler ──────────────────────────────────────────────────

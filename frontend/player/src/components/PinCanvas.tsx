@@ -222,6 +222,7 @@ export function PinCanvas({
       <canvas
         ref={canvasRef}
         data-testid="pin-canvas"
+        data-loaded={image ? 'true' : 'false'}
         role="img"
         aria-label={ariaLabel}
         tabIndex={interactive ? 0 : -1}

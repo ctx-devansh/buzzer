@@ -179,6 +179,7 @@ export function PinBoard({ imageUrl, aspect, taps, pinKey, onPick, maxHeight, ar
       <canvas
         ref={canvasRef}
         data-testid={testId}
+        data-loaded={image ? 'true' : 'false'}
         role="img"
         aria-label={ariaLabel}
         onPointerDown={handlePointerDown}
