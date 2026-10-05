@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import { TimerBar } from '../../components/ui/TimerBar';
+import { PinBoard } from '../../components/PinBoard';
+import type { PinConfig } from '../../lib/pinTheSpot';
 
 export default function QuestionPage() {
   const { currentQuestion, answeredCount, playerCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, autoAdvance, emitAdvance, emitLockQuestion } = useGame();
@@ -26,6 +28,7 @@ export default function QuestionPage() {
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
     put_in_order: 'Put in Order',
+    pin_the_spot: 'Pin the Spot',
   };
 
   function editDistanceLabel(d: number): string {
@@ -76,6 +79,17 @@ export default function QuestionPage() {
           <h2 className="text-4xl font-bold text-slate-100 text-center max-w-3xl leading-tight">
             {currentQuestion.prompt}
           </h2>
+          {/* The image only — never the taps while answering is open (design A4) */}
+          {currentQuestion.type === 'pin_the_spot' && currentQuestion.config.image_url && (
+            <div className="w-full max-w-4xl">
+              <PinBoard
+                config={currentQuestion.config as PinConfig}
+                maxHeight={Math.round(window.innerHeight * 0.5)}
+                ariaLabel={currentQuestion.prompt}
+                testId="host-pin-question"
+              />
+            </div>
+          )}
           {/* Scrambled display order, lettered (not numbered) so it doesn't read as positions */}
           {currentQuestion.type === 'put_in_order' && (
             <ul className="w-full max-w-2xl flex flex-col gap-3">

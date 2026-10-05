@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
+import { PinBoard } from '../../components/PinBoard';
+import { parseTaps, revealTarget, tapTotal } from '../../lib/pinTheSpot';
+import type { PinConfig } from '../../lib/pinTheSpot';
 
 const RESULTS_DISPLAY_SECONDS = 10;
 
@@ -251,8 +254,16 @@ export default function ResultsPage() {
   // Branch on the question type, not reveal.type: a COMPLETENESS put_in_order reveal is
   // type 'completeness', and buildBars' completeness fallback reads config.options.
   const isPio = currentQuestion?.type === 'put_in_order';
+  const isPin = currentQuestion?.type === 'pin_the_spot';
+  const pinTaps = useMemo(
+    () => (isPin && questionResults ? parseTaps(questionResults.answerDistribution) : []),
+    [isPin, questionResults],
+  );
+  const pinTarget = isPin && questionResults
+    ? revealTarget(questionResults.answerReveal as Parameters<typeof revealTarget>[0])
+    : null;
 
-  const bars = !questionResults
+  const bars = !questionResults || isPin
     ? []
     : isPio
       ? buildPioBars(
@@ -288,7 +299,26 @@ export default function ResultsPage() {
         <p className="text-slate-400 text-base -mb-4">{pioCaption(questionResults.answerReveal)}</p>
       )}
 
-      {questionResults && isFitb ? (
+      {questionResults && isPin && currentQuestion?.config.image_url ? (
+        <div className="w-full max-w-4xl flex flex-col gap-3">
+          <p className="text-slate-400 text-base text-center">
+            {pinTarget
+              ? 'Every tap, with the full-credit (green) and zero-credit (dashed) circles'
+              : 'Every tap'}
+          </p>
+          <PinBoard
+            config={currentQuestion.config as PinConfig}
+            taps={pinTaps}
+            reveal={pinTarget}
+            maxHeight={Math.round(window.innerHeight * 0.55)}
+            ariaLabel={`${tapTotal(pinTaps)} taps on the question image`}
+            testId="host-pin-results"
+          />
+          <p className="text-slate-500 text-sm text-right">
+            {questionResults.totalAnswered} / {questionResults.totalPlayers} answered
+          </p>
+        </div>
+      ) : questionResults && isFitb ? (
         <WordCloud
           distribution={questionResults.answerDistribution}
           answerReveal={questionResults.answerReveal}
