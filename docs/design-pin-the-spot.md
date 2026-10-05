@@ -7,7 +7,7 @@
 | Setting | Party |
 | Owner | Satvik Utkoori (utkoori) |
 | Reviewer / Goldfish | Devansh Gupta (dgupta57) |
-| Status | Draft, before Goldfish review |
+| Status | Revised for implementation (before Goldfish review) |
 
 ## 1. Problem
 
@@ -24,7 +24,7 @@ The idea comes from MapTap: the interaction is the subject. You point at where s
 ### Goals
 
 - A player taps a point on an image on their phone and is scored by how close they were.
-- Admins **and** hosts can create and edit Pin the Spot questions.
+- Admins **and** hosts can create and edit Pin the Spot questions. Both use the host app's question editor (`/host/games/:id/questions`): since T4 the admin app has no question editor and links there.
 - The type works with both grading modes, ACCURACY and COMPLETENESS.
 - Questions survive export and import.
 - The host screen shows answer progress during the question and every tap at reveal.
@@ -39,8 +39,8 @@ The idea comes from MapTap: the interaction is the subject. You point at where s
 
 ### Player flow
 
-1. The question opens. The player's phone shows the prompt and the image drawn on a canvas, scaled to fit the screen with the full image visible.
-2. Tapping the image drops a marker. Tapping again moves it. Taps outside the image area (the letterbox bars) are ignored.
+1. The question opens. The player's phone shows the prompt and the image drawn on a canvas, scaled to fit the screen with the full image visible. (Other types hide the prompt on phones; this one shows it because the player is looking down at the image, not up at the screen.)
+2. Tapping the image drops a pin. Tapping again, or dragging, moves it. Taps outside the image area (the letterbox bars) are ignored.
 3. The player presses **Lock in** to submit. The submission is final, matching the existing one-answer-per-question rule.
 4. If the timer ends before the player locks in, no answer is recorded. This matches how the existing types handle a player who doesn't answer.
 
@@ -49,9 +49,9 @@ The idea comes from MapTap: the interaction is the subject. You point at where s
 - **While the question is open:** the host screen shows the image, the prompt and an answer count ("31 of 40 answered"). It does **not** show where people tapped, because players in the room would copy the crowd (see A4).
 - **At reveal:** every tap is drawn as a dot. The target is marked, with the full-credit circle (r_full) and the zero-credit circle (r_zero) around it.
 
-### Author flow (admin and host editors)
+### Author flow (host app question editor)
 
-1. Pick an uploaded image or upload a new one, using the T8 image picker.
+1. Choose a local image file, or paste an image URL. A file is downscaled in the browser (longest side at most 1280 px, JPEG) and stored as a `data:` URL. The editor measures the image's width and height.
 2. Click the image to place the target. Click again to move it.
 3. Set the full-credit radius and the zero-credit radius with two sliders. Both circles are drawn on the image as live previews.
 4. Save. The server runs the same validation on create and on update (see section 4).
@@ -62,15 +62,23 @@ Positions and radii are fractions of the image, not pixels, so scoring is the sa
 
 - `x` and `y` run from 0 to 1 across the image's width and height, with (0, 0) at the top left.
 - Radii are fractions of the image **width**.
-- Distance is measured with the vertical difference scaled by the image's aspect ratio, so the circles stay round on wide or tall images (see A6). This needs the image's width and height, which the T8 image record stores.
+- Distance is measured with the vertical difference scaled by the image's aspect ratio, so the circles stay round on wide or tall images (see A6). The width and height are stored **in the question's `config`**, not looked up from an image record, so a question's scores can't change if an image is later replaced.
 
 ### Question `config` (sent to players)
 
 ```json
-{ "image_id": 17 }
+{
+  "image_url": "data:image/jpeg;base64,/9j/4AAQ…",
+  "image_width": 1280,
+  "image_height": 853
+}
 ```
 
+T8 (image storage) does not exist yet, so the image is referenced by `image_url`, decided on 2026-10-05: either an `http(s)://` URL or a `data:image/{png,jpeg,gif,webp};base64,` URL. When T8 lands, `image_id` can be added as an alternative to `image_url` without changing scoring (it only needs the stored width and height).
+
 ### Question `answer_data` (never sent to players)
+
+Required for ACCURACY. Optional for COMPLETENESS: either `{}` (an opinion question, e.g. "tap where you grew up", with no target) or all three fields.
 
 ```json
 {
@@ -88,20 +96,24 @@ Positions and radii are fractions of the image, not pixels, so scoring is the sa
 
 ### Database
 
-No new table is needed. The type uses the existing question `config` and `answer_data` JSON columns. If the question type is a database enum rather than a string, add `pin_the_spot` to it with a migration. **Check this in the models during the Elephant session.**
+No new table and no migration. `questions.type` is a `String(50)`, not an enum, and the type uses the existing `config` and `answer_data` JSON columns.
+
+Images are inside `config`, so a question can be large. The server caps `image_url` at 1,500,000 characters, and nginx's request-body limit is raised from the 1 MB default to 10 MB so that creating a question or importing a game with images works through `:8080`.
 
 ## 4. Validation
 
-Question validation is a single shared function, called by **both** the create path and the update path. The T7 instructions warn that these two paths may not validate the same way, so the plan checks the current update path explicitly and adds a test for it.
+Question validation is a single shared function, `validate_pin_the_spot` in `schemas/admin.py`, called by **both** the create path (`QuestionCreate.validate_structure`, which also covers import) and the update path (`authoring_service.update_question`, on the merged stored + requested values). This was checked: before this change `QuestionUpdate` had no structural validation at all, and only `put_in_order` was re-validated on update.
 
 The validator rejects a question unless:
 
-- `config.image_id` refers to an existing image the author is allowed to use.
-- `answer_data.target.x` and `answer_data.target.y` are numbers from 0 to 1.
-- `answer_data.r_full` and `answer_data.r_zero` are numbers with 0 < r_full < r_zero ≤ 1.5. The upper limit stops a radius larger than the image from making every tap full credit.
-- No extra or missing fields.
+- `config` has exactly `image_url`, `image_width` and `image_height`. The URL is `http(s)://` or a `data:image/{png,jpeg,gif,webp};base64,` URL (no SVG, no `javascript:`), at most 1,500,000 characters. Width and height are integers from 1 to 20,000.
+- `answer_data` (when present; see section 3) has exactly `target`, `r_full` and `r_zero`. `target` has exactly `x` and `y`, numbers from 0 to 1.
+- 0 < r_full < r_zero ≤ the image's diagonal in width units, √(1 + aspect²). A circle larger than the diagonal can't add anything. This does **not** stop a generous author from giving most taps full credit; that is the author's choice, not a data error.
+- Booleans are rejected where numbers are expected (`True` is an `int` in Python).
 
-The server rejects a submission unless `x` and `y` are finite numbers from 0 to 1. Anything else returns an error and is not scored.
+On update, a question that already has recorded answers can't change its `type` or `config` (the image), because the recorded taps are positions on that image (409, same rule as `put_in_order`).
+
+The server rejects a submission unless it is exactly `{x, y}` with finite numbers (not booleans) from 0 to 1. Python's `json` accepts `NaN`, so finiteness is checked explicitly. Anything else returns an error and is not scored.
 
 ## 5. Scoring
 
@@ -116,8 +128,11 @@ d  = sqrt(dx² + dy²)
 
 if d ≤ r_full:            score = points_value
 else if d ≥ r_zero:       score = 0
-else:                     score = round(points_value × (r_zero − d) ÷ (r_zero − r_full))
+else:                     score = points_value × (r_zero − d) ÷ (r_zero − r_full),
+                                  rounded half-up to 2 decimal places
 ```
+
+Rounding is to 2 decimal places, as `put_in_order` does, not to whole points: the editor's default `points_value` is 1, and whole-point rounding would turn every partial score into 0 or 1. A tap counts as **correct** (`is_correct`) only inside the full-credit circle.
 
 Worked examples with points_value = 1000, r_full = 0.05, r_zero = 0.20 on a square image:
 
@@ -133,59 +148,60 @@ Scoring is a pure function that takes the submission, `answer_data`, the image's
 
 ### COMPLETENESS
 
-Any valid tap earns full points.
+Any valid tap earns full points. If a target is set, it is still drawn at reveal.
 
 ## 6. Canvas rendering (player app)
 
 - **Fit:** draw the image to fit the canvas without cropping, and record the drawn image's offset and size so taps can be converted to image coordinates.
 - **Sharp on phones:** size the canvas backing store by `devicePixelRatio`, and redraw on resize and orientation change.
 - **Input:** use pointer events, which cover touch and mouse. Convert the tap position to canvas coordinates, then to image coordinates from 0 to 1. Ignore taps outside the drawn image.
-- **Marker:** a filled circle with a contrasting outline, large enough to see under a thumb. Draw it slightly above the tap point, or show a magnified view, so the finger doesn't hide it. **Decide which during implementation.**
-- **Theming (T9):** canvas drawing can't use CSS classes, so read token colors with `getComputedStyle` and redraw when the theme changes.
+- **Marker:** a map pin whose **tip** is the chosen point and whose head sits above it, so a thumb doesn't hide the head. The player can drag to fine-tune, and the pin follows the finger. (This settles the open question; no magnifier.)
+- **Theming (T9):** canvas drawing can't use CSS classes. The drawing helpers read colors from CSS custom properties (`--pin-marker`, `--pin-target`, …) with `getComputedStyle`, falling back to fixed colors. T9 defines the properties; until then the fallbacks are used.
 - **Accessibility:** the canvas gets an `aria-label` with the prompt. As a nice-to-have, arrow keys nudge the marker and Enter locks it in.
 
 ## 7. Real-time and host view
 
-- On each valid submission the server stores the point with the player's answer in MySQL, as it does for other types, and adds it to the question's answer data in Redis so the host's answer count updates live.
-- The full list of points is sent to the host **only at reveal**. At the 250-player limit that is 250 pairs of numbers, which is small enough to send as-is without grouping into bins.
+- On each valid submission the server stores the point with the player's answer in MySQL, as it does for other types, and increments the question's existing Redis answer-distribution hash under the key `"x,y"` (each rounded to 4 decimal places). The host's answer count already updates live through `answer_status`.
+- The distribution hash is sent to the host **only at reveal**, as the existing `answerDistribution` field of `question_results`. At the 250-player limit that is at most 250 keys, small enough to send without binning.
+- Reveal payload, identical in all four reveal builders: ACCURACY → `{type: "pin_the_spot", target, rFull, rZero}`; COMPLETENESS → `{type: "completeness"}`, plus `target`, `rFull` and `rZero` when a target is set.
+- The HTML session report draws the image, the circles and every tap as an inline SVG.
 - The host canvas uses the same drawing code as the player canvas, plus dots for every tap and the two target circles.
 
 ## 8. Export and import
 
-- Export writes the question's `config` and `answer_data` as they are.
-- `image_id` means nothing in another Buzzer instance, so a portable export must carry the image itself. This depends on the T8 decision to embed images in the export file and move to `"version": 2`. **Agree on the format with Devansh before building this step.**
-- Importing a Pin the Spot question whose image is missing fails with a clear error naming the question. It never creates a question without its image.
-- Unmodified version 1 files keep importing, as T6 requires.
+- Export writes the question's `config` and `answer_data` as they are. Because the image is inside `config` (a `data:` URL, or a public URL), a version 1 export is already portable; no format change is needed.
+- Importing a Pin the Spot question whose image is missing or invalid fails with the existing "Question N invalid: …" error. It never creates a question without its image.
+- Unmodified version 1 files keep importing, as T6 requires. If T8 later moves images to `image_id` and bumps to version 2, `image_url` questions must keep importing.
 
 ## 9. Files touched
 
-The locations below come from the repository layout in the README. **Confirm every path in the Elephant session and correct this table before implementation.**
+Confirmed against the code on 2026-10-05.
 
-| Area | Likely file(s) | Change |
+| Area | File(s) | Change |
 |---|---|---|
-| Question type list | `backend/app/models/` (question model) | Add `pin_the_spot`; migration if the type is a database enum |
-| Request schemas | `backend/app/schemas/` (question schemas) | Config, answer_data and submission shapes |
-| Validation | `backend/app/services/` (game or question service) | Shared validator used by create and update |
-| Scoring | `backend/app/services/` (game service scoring) | Pure distance-based scoring function |
-| Submission and live state | `backend/app/websocket/`, `backend/app/services/` (state service) | Accept and validate the point; store it in Redis; send points at reveal |
-| Export / import | `backend/app/services/` (export service) | Round-trip the type; image handling per section 8 |
-| Player question view | `frontend/player/src/components/` | New canvas component and Lock in button |
-| Host question view | `frontend/host/src/components/` | Answer count while open; dots and circles at reveal |
-| Shared canvas drawing | one helper per app in `src/lib/` | Fit, coordinate conversion and drawing |
-| Editors | `frontend/admin/src/components/`, plus the host's game management editor from T4 | Image picker, target placement, radius sliders |
-| Simulated players | `scripts/simulate_players.py` | Generate taps for the new type |
-| Tests | `tests/integration/` (new `test_pin_the_spot.py`) | See section 11 |
-| Sample games | `sample_games/` | Both members' games include this type |
+| Question type list | `backend/app/schemas/admin.py` | `pin_the_spot` in the `type` pattern of `QuestionCreate` and `QuestionUpdate`; no migration (`type` is a string) |
+| Validation | `backend/app/schemas/admin.py` (`validate_pin_the_spot`), `backend/app/services/authoring_service.py` (`update_question`) | Shared validator on create, import and update; played-question guard |
+| Scoring and recording | `backend/app/services/game_service.py` | `_score_pin_the_spot`, `"x,y"` distribution keys, reveal in both summary builders, host summary distribution |
+| Submission and reveal | `backend/app/websocket/gateway.py` | Submission validation; `_answer_reveal` branch |
+| Session report | `backend/app/services/report_service.py` | Reveal branch, tap keys, SVG chart, type badge |
+| Body size | `nginx/nginx.dev.conf` | `client_max_body_size 10m` |
+| Player | `frontend/player/src/lib/pinTheSpot.ts`, `frontend/player/src/components/PinCanvas.tsx`, `pages/game/{QuestionPage,ResultsPage,GameOverPage}.tsx`, `types/game.ts` | Canvas, pin, Lock in; result view |
+| Host live game | `frontend/host/src/lib/pinTheSpot.ts`, `frontend/host/src/components/PinBoard.tsx`, `pages/game/{QuestionPage,ResultsPage,GameOverPage}.tsx`, `types/game.ts` | Image while open; taps and circles at reveal and in the game-over card |
+| Editor | `frontend/host/src/pages/manage/QuestionEditorPage.tsx` | Image picker, target placement, radius sliders |
+| Simulated players | `scripts/simulate_players.py` | Tap near the target with `--game-json`, at random otherwise |
+| Tests | `tests/unit/test_pin_the_spot.py`, `tests/integration/test_pin_the_spot.py`, `tests/integration/engine/scoring.py` | See section 11 |
+| Context docs | nested `CLAUDE.md` files for each directory above | New type listed alongside `put_in_order` |
 
 ## 10. Dependencies
 
-- **T8 image API (Devansh).** This type needs image upload, retrieval and width/height. Interface to agree on now: an image id, a URL or method the player app can use to load the image, and the image's width and height in the image record. Until that API merges, build the canvas and scoring against a fixed test image so this work isn't blocked.
-- **T8 image loading on players' phones.** How the player app fetches a protected image is decided in the T8 design doc. This doc follows that decision.
-- **T4 host game management.** The host-side editor plugs into the editor that T4 adds.
+- **T8 image API (Devansh).** No longer blocking: images live in `config.image_url`. When T8 lands, its picker can fill `image_url` (or a new `image_id`) plus the width and height.
+- **T4 host game management.** Done; the editor lives in the host app's `QuestionEditorPage`.
 
 ## 11. Test plan (T5)
 
-Integration tests against the live stack:
+Unit tests (`tests/unit/test_pin_the_spot.py`, no stack needed): the scoring table, aspect ratio, rounding, create/update validator verdicts, submission edge cases, and reveal parity across the four builders.
+
+Integration tests against the live stack (`tests/integration/test_pin_the_spot.py`):
 
 - **Scoring:** a tap inside r_full gets full points, a tap halfway between the circles gets half, a tap beyond r_zero gets 0, and a tap exactly on each edge matches the table in section 5.
 - **Aspect ratio:** on a 2:1 image, taps the same visual distance from the target horizontally and vertically score the same.
@@ -193,7 +209,8 @@ Integration tests against the live stack:
 - **Create validation:** rejected for a missing image, coordinates outside 0–1, r_full ≥ r_zero, or a negative radius.
 - **Update validation:** the same invalid payloads are also rejected on **update**. This is the test that catches the create/update asymmetry.
 - **Submission validation:** rejected for a missing x, a string value, NaN, or a value outside 0–1.
-- **Access:** a host from another course can't create or edit the question, and a player outside the course can't answer it.
+- **Access:** a host from another course can't create or edit the question. (Player access is decided per room by `authorise_player`, the same for every type, so it isn't retested here.)
+- **Played-question guard:** once answered, the image and type can't change (409); the target and radii can.
 - **Export/import:** a game containing the type round-trips with the same target, radii and image.
 - **Clean-up:** deleting the game removes its rows in MySQL and its keys in Redis.
 
@@ -201,13 +218,13 @@ Integration tests against the live stack:
 
 Each step is one or more atomic commits on `feature/pin-the-spot`. This document is the branch's first commit.
 
-1. Add the type key and schemas, plus a migration if needed.
+1. Add the type key and schemas (no migration needed).
 2. Add the shared validator and wire it into create **and** update. Add the validation tests.
 3. Add the scoring function and the scoring tests.
 4. Accept submissions over the socket, store them, update the Redis answer count, and send points at reveal.
 5. Build the player canvas: fit, coordinate conversion, marker, Lock in.
 6. Build the host view: answer count while open, dots and circles at reveal.
-7. Build the admin editor, then plug the same editor into the host's game management.
+7. Build the editor in the host app's `QuestionEditorPage` (used by hosts and admins).
 8. Add export/import support and its round-trip test.
 9. Teach `simulate_players.py` to tap near the target when given `--game-json`, and at random otherwise. Play a full round with simulated players at `localhost:8080`.
 10. Apply theme tokens to all new screens and check both themes.
@@ -226,10 +243,11 @@ If implementation shows this plan is wrong, update this document in its own comm
 
 ## 14. Open questions
 
-- Should the marker sit above the finger, or should a magnified view appear while tapping?
-- Should a player who placed a marker but didn't lock in before the timer ended get scored on that marker? This draft says no, to match the other types.
-- Which export format for images does T8 settle on (section 8)?
-- Should r_zero have a default the author can adjust, such as 0.20? A default would make authoring faster.
+- ~~Should the marker sit above the finger, or should a magnified view appear?~~ Pin with its tip at the point, drag to adjust (section 6).
+- Should a player who placed a marker but didn't lock in before the timer ended get scored on that marker? Still no, to match the other types.
+- ~~Which export format for images does T8 settle on?~~ Not needed for now (section 8).
+- ~~Should r_zero have a default?~~ Yes: the editor starts at r_full = 0.05 and r_zero = 0.20.
+- Images sent over the socket: every `new_question` carries the `data:` URL to every player (about 100–300 KB after downscaling). Fine for a class; worth revisiting with T8 (send a URL instead).
 
 ## 15. Goldfish review findings
 
@@ -239,4 +257,5 @@ If implementation shows this plan is wrong, update this document in its own comm
 
 | Date | Change |
 |---|---|
-| | First draft |
+| 2026-10-05 | First draft |
+| 2026-10-05 | Revised before implementation: `image_url` in config (T8 not built), 2-dp rounding, diagonal radius bound, optional COMPLETENESS target, host-app editor, pin marker, played-question guard, confirmed file list |
