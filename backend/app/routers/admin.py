@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..common.dependencies import require_admin
 from ..common.exceptions import ConflictError, NotFoundError
 from ..database import get_db
+from ..redis_client import get_redis
 from ..models.course import Course, CourseRoster, UserCourseAccess
 from ..models.game import Game, Question, UserGameAccess
 from ..models.session import GameSession
@@ -42,6 +43,7 @@ from ..schemas.admin import (
 )
 from ..services import authoring_service as authoring
 from ..services import roster_service
+from ..services import state_service as state
 from ..services.auth_service import hash_password
 from ..services.export_service import build_canvas_csv, build_session_csv
 from ..services.report_service import build_session_report
@@ -269,6 +271,7 @@ async def delete_game(
     game_id: int,
     _: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis=Depends(get_redis),
 ) -> None:
     game = await db.get(Game, game_id)
     if not game:
@@ -278,15 +281,19 @@ async def delete_game(
     from sqlalchemy import delete as sa_delete, select as sa_select
     from ..models.session import GameSession as _GS, SessionScore as _SS
 
-    session_ids = (
-        (await db.execute(sa_select(_GS.id).where(_GS.game_id == game_id)))
-        .scalars()
-        .all()
-    )
+    # (id, room_code) pairs are read before the deletes: after the flush the rows are gone.
+    sessions = (
+        await db.execute(sa_select(_GS.id, _GS.room_code).where(_GS.game_id == game_id))
+    ).all()
+    session_ids = [sid for sid, _code in sessions]
     if session_ids:
         await db.execute(sa_delete(_SS).where(_SS.session_id.in_(session_ids)))
     await db.execute(sa_delete(_GS).where(_GS.game_id == game_id))
     await db.delete(game)
+    await db.flush()
+    # Same clean-up as DELETE /game/sessions/{id}; otherwise these keys outlive the game.
+    for sid, room_code in sessions:
+        await state.delete_room_state(redis, room_code, sid)
 
 
 # ---------------------------------------------------------------------------
