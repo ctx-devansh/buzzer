@@ -222,7 +222,8 @@ def validate_pin_the_spot(grading_type: str, config: dict, answer_data: dict) ->
         )
     url = config["image_url"]
     if not isinstance(url, str) or not (
-        url.startswith(("http://", "https://")) or url.startswith(_PTS_DATA_URL_PREFIXES)
+        url.startswith(("http://", "https://"))
+        or url.startswith(_PTS_DATA_URL_PREFIXES)
     ):
         raise ValueError(
             "Image must be an http(s) URL or a PNG, JPEG, GIF or WebP data URL"
@@ -232,11 +233,15 @@ def validate_pin_the_spot(grading_type: str, config: dict, answer_data: dict) ->
     for key in ("image_width", "image_height"):
         side = config[key]
         if type(side) is not int or not (1 <= side <= PTS_MAX_IMAGE_SIDE):
-            raise ValueError("Image width and height must be whole numbers from 1 to 20000")
+            raise ValueError(
+                "Image width and height must be whole numbers from 1 to 20000"
+            )
 
     if not answer_data:
         if grading_type == "ACCURACY":
-            raise ValueError("Pin the Spot needs a target and radii for ACCURACY grading")
+            raise ValueError(
+                "Pin the Spot needs a target and radii for ACCURACY grading"
+            )
         return
     if set(answer_data) != {"target", "r_full", "r_zero"}:
         raise ValueError(

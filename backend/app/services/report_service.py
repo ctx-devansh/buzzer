@@ -298,9 +298,7 @@ def _render_pin_the_spot(q: Question, dist: dict[str, int], reveal: dict) -> str
             f"<title>{count} tap{'s' if count != 1 else ''}</title></circle>"
         )
     if target:
-        parts.append(
-            f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="9" class="pin-target"/>'
-        )
+        parts.append(f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="9" class="pin-target"/>')
     caption = PIN_CAPTION if target else "Every tap"
     return (
         f'<p class="pio-caption">{caption}</p>'
