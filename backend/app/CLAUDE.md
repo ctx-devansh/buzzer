@@ -40,8 +40,10 @@ share one business-logic layer (`services/`) and one persistence layer (`models/
 - Scoring/answer-reveal logic for each question type is defined in several places that must
   stay in sync: `services/game_service.py::calculate_score`, and **four** reveal builders —
   `websocket/gateway.py::_answer_reveal`, `services/report_service.py::_answer_reveal`, and
-  `_player_summary_reveal` / `_host_summary_reveal` in `services/game_service.py` (a unit parity
-  test in `tests/unit/test_put_in_order.py` covers `put_in_order`) — plus the structural
+  `_player_summary_reveal` / `_host_summary_reveal` in `services/game_service.py` (unit parity
+  tests in `tests/unit/test_put_in_order.py` and `tests/unit/test_pin_the_spot.py` cover those
+  types; `pin_the_spot` keeps its rules in one pure module, `services/pin_the_spot.py`, that all
+  four call) — plus the structural
   validation in `schemas/admin.py::QuestionCreate.validate_structure`. A new question type
   touches all of them.
   See the gotchas in `services/CLAUDE.md`, `websocket/CLAUDE.md`, and `schemas/CLAUDE.md`.

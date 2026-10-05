@@ -6,6 +6,9 @@ import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal, HostQuestionSummaryItem } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
+import { PinBoard } from '../../components/PinBoard';
+import { parseTaps, revealTarget } from '../../lib/pinTheSpot';
+import type { PinConfig } from '../../lib/pinTheSpot';
 
 const TARGET_BUCKETS = 8;
 
@@ -92,6 +95,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
     put_in_order: 'Put in Order',
+    pin_the_spot: 'Pin the Spot',
   };
 
   const answeredPct = totalPlayers > 0 ? Math.round((totalAnswered / totalPlayers) * 100) : 0;
@@ -171,6 +175,16 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
           <p className="text-slate-400 text-sm">
             Correct order: <span className="text-green-300 font-medium">{pioOrderText}</span>
           </p>
+        )}
+
+        {type === 'pin_the_spot' && config.image_url && (
+          <PinBoard
+            config={config as PinConfig}
+            taps={parseTaps(answerDistribution)}
+            reveal={revealTarget(reveal as Parameters<typeof revealTarget>[0])}
+            maxHeight={320}
+            ariaLabel="Every tap on the question image"
+          />
         )}
 
         {(type === 'multiple_choice' || type === 'multi_select') && (config.options ?? []).map((opt, i) => {

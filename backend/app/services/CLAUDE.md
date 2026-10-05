@@ -29,18 +29,29 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   (`assert_host_can_use_course/game`, plus `visible_games_query`, its list-side twin), session lifecycle (create/start/complete/abandon),
   player authorization against the course roster (`authorise_player`), answer scoring
   (`calculate_score` — one branch per question type × grading type; `put_in_order` scores
-  pairwise, half-up to 2 dp, clamped to `points_value`), `record_answer` (persists
-  to MySQL + updates Redis in one call; `put_in_order` writes one `"{item}@{position}"`
-  distribution key per item, under both grading types), and leaderboard/summary builders for
+  pairwise, half-up to 2 dp, clamped to `points_value`; `pin_the_spot` by distance via
+  `pin_the_spot.py`, checked before the COMPLETENESS short-circuit so an invalid tap scores 0),
+  `record_answer` (persists to MySQL + updates Redis in one call; `put_in_order` writes one
+  `"{item}@{position}"` distribution key per item and `pin_the_spot` one `"x,y"` key per tap,
+  under both grading types), and leaderboard/summary builders for
   GAME_OVER payloads (their reveals are `_player_summary_reveal` / `_host_summary_reveal`; the
   player summary also carries `isCorrect`).
 - `authoring_service.py` `update_question` — for `put_in_order` (stored or requested type) it
   checks the *merged* values before assigning anything: a question with `session_scores` rows
   can't change `type`, `config.items` or `correct_order` (409, `ConflictError`), then
-  `validate_put_in_order` must pass (422, `ValidationFailedError`). Other types keep the
+  `validate_put_in_order` must pass (422, `ValidationFailedError`). `pin_the_spot` follows the
+  same pattern: a played question's `type` and `config` (the image) are frozen (409; target and
+  radii may change), then `validate_pin_the_spot` must pass (422). Other types keep the
   unvalidated update path.
+- `pin_the_spot.py` — pure helpers for the `pin_the_spot` type: `is_valid_tap`, `tap_key`
+  (`"x,y"` at 4 dp — the Redis/host distribution key), `tap_distance` (vertical difference ×
+  height/width), `score` (full within `r_full`, 0 from `r_zero`, linear between, half-up to 2 dp,
+  edges compared with a 1e-9 tolerance) and `reveal`. Called by `game_service`, `report_service`
+  and `../websocket/gateway.py` so the type's rules exist once.
 - `report_service.py` — generates a standalone, self-contained HTML session report (aggregate
-  stats only, no PII) with inline CSS and hand-rolled bar-chart/word-cloud/histogram renderers.
+  stats only, no PII) with inline CSS and hand-rolled bar-chart/word-cloud/histogram renderers,
+  plus `_render_pin_the_spot` (the question image, both circles and every tap as inline SVG,
+  rebuilt from `session_scores`).
   Duplicates `_answer_reveal` logic from `../websocket/gateway.py` by design (no player-request
   dependency at report-generation time) — keep both in sync if scoring/reveal rules change.
 - `roster_service.py` — parses Canvas gradebook CSV exports (and a pre-mapped row list from the
@@ -71,7 +82,8 @@ score state, so this is the one place that logic should be edited.
 - `game_service.calculate_score` and the four reveal builders (`report_service._answer_reveal`,
   `websocket/gateway.py::_answer_reveal`, `game_service._player_summary_reveal` and
   `_host_summary_reveal`) independently encode "what counts as correct" per question type —
-  there is no single source of truth. A new question type needs updates in all of them (plus
+  there is no single source of truth (except for `pin_the_spot`, whose branches all delegate to
+  `pin_the_spot.py`). A new question type needs updates in all of them (plus
   the Pydantic validators in `../schemas/admin.py`).
 - This is not just a future risk — it's already out of sync for `multi_select`:
   `report_service.py::_answer_reveal` has no `multi_select` branch (falls through to `{}`), and

@@ -23,6 +23,9 @@ All question types are handled automatically:
                       answers from --fitb-words
   put_in_order      — random permutation of the items; if --game-json supplied,
                       accurate players submit answer_data.correct_order
+  pin_the_spot      — a random point on the image; if --game-json supplied and
+                      the question has a target, accurate players tap near it
+                      (scattered so some land in the partial-credit ring)
 
 Usage:
     # Basic — 20 players, default profile mix, default FITB word pool
@@ -269,6 +272,21 @@ class SimPlayer:
                 return None
             return {"orderedIndices": random.sample(range(n), n)}
 
+        if q_type == "pin_the_spot":
+            ans = (jq or {}).get("answer_data", {})
+            target = ans.get("target")
+            if target and random.random() < p.accuracy:
+                # Scatter up to about r_zero from the target; the vertical spread is
+                # divided by the aspect ratio so the scatter is round on the image.
+                cfg = q.get("config", {})
+                aspect = cfg.get("image_height", 1) / max(cfg.get("image_width", 1), 1)
+                spread = ans.get("r_zero", 0.2) * 0.6
+                return {
+                    "x": min(1.0, max(0.0, random.gauss(target["x"], spread))),
+                    "y": min(1.0, max(0.0, random.gauss(target["y"], spread / aspect))),
+                }
+            return {"x": random.random(), "y": random.random()}
+
         return None  # unknown type
 
     def _answer_str(self, answer: dict) -> str:
@@ -280,6 +298,8 @@ class SimPlayer:
             return f"options {answer['selectedIndices']}"
         if "orderedIndices" in answer:
             return f"order {answer['orderedIndices']}"
+        if "x" in answer and "y" in answer:
+            return f"tap ({answer['x']:.2f}, {answer['y']:.2f})"
         if "selectedValue" in answer:
             return str(answer["selectedValue"])
         return repr(answer)

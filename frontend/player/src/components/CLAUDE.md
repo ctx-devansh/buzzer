@@ -14,6 +14,12 @@ hand-written shadcn-style components (Tailwind + `cn`), and none of them holds g
   against a wall-clock end time, green → yellow → red, freezing while `paused` and resuming from
   the frozen value. Display only, because the server decides when answering ends.
 
+**`PinCanvas.tsx`** (outside `ui/`, it is a game widget) — the `pin_the_spot` canvas: sized to
+the image's aspect ratio (capped at 60% of the viewport, or `maxHeight`), redraws on resize and
+theme changes. With `onChange` it is interactive: tap or drag places the pin (pointer capture;
+`touch-action: none`), arrow keys nudge (Shift = 5%), Enter calls `onSubmit`. Without it, it is
+the read-only result view (`value` = your pin, `reveal` = target and circles).
+
 **How it fits in.** `../pages/JoinPage.tsx` and `NamePage.tsx` use `Button`/`Card`/`Input`.
 `../pages/game/QuestionPage.tsx` uses `TimerBar` (with `paused={questionLocked}`).
 `game/GameOverPage.tsx` uses `Button`. Note that `QuestionPage` renders its answer buttons

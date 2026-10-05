@@ -88,6 +88,11 @@ on `../components/ui/` (see `../components/CLAUDE.md`). Socket payload types com
   emit `host_advance` and wait for the server's next event (`new_question`, `question_results`
   or `game_over`), which `GameLayout` turns into a route change. Typing a phase URL by hand
   doesn't change server state.
+- `pin_the_spot` uses `../components/PinBoard.tsx` in `QuestionPage` (image only), `ResultsPage`
+  (every tap from `answerDistribution` — sent only at reveal — plus the circles; skips
+  `buildBars`) and the `GameOverPage` card. In the editor, a file is downscaled to ≤ 1280 px and
+  re-encoded as a JPEG `data:` URL (an http(s) URL is kept as-is); `image_width`/`image_height`
+  are measured client-side; `points_value` is authored directly, as for `put_in_order`.
 - **Adding a question type touches the host in three places:** the `typeLabel` maps in
   `QuestionPage` and `GameOverPage`, `buildBars()` in `ResultsPage`, and `QuestionCard` in
   `GameOverPage`. The `AnswerReveal` union in `../types/game.ts` must also match

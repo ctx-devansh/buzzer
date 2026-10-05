@@ -23,6 +23,11 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   without `correctOrder`), `pioCaption(reveal)` and `correctOrderText(reveal, items)`. Used by
   `ResultsPage` and `GameOverPage` so the live and game-over charts can't drift.
 
+- `pinTheSpot.ts` — `pin_the_spot` canvas helpers (a copy of the player's drawing code, minus
+  the pin) plus `parseTaps` (`"x,y"` distribution keys → `{x, y, count}`, bad keys skipped),
+  `tapTotal`, `drawTaps` (bigger dot for repeated spots) and `revealTarget` (reveal → target and
+  radii, or null — works for both grading types). Used by `../components/PinBoard.tsx`.
+
 **How it fits in.** `../pages/` and `../components/HostShell.tsx` call `api` for everything
 outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/GameLayout.tsx`
 (which takes its socket token from `getToken()`). `../components/ui/` imports `cn`.

@@ -17,6 +17,7 @@ from ..models.course import Course, CourseRoster, UserCourseAccess
 from ..models.game import Game, Question, UserGameAccess
 from ..models.session import GameSession
 from ..models.user import User
+from ..redis_client import get_redis
 from ..schemas.admin import (
     AdminSessionItem,
     CourseAccessGrant,
@@ -41,7 +42,7 @@ from ..schemas.admin import (
     UserWithAccessResponse,
 )
 from ..services import authoring_service as authoring
-from ..services import roster_service
+from ..services import roster_service, state_service
 from ..services.auth_service import hash_password
 from ..services.export_service import build_canvas_csv, build_session_csv
 from ..services.report_service import build_session_report
@@ -269,6 +270,7 @@ async def delete_game(
     game_id: int,
     _: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis=Depends(get_redis),
 ) -> None:
     game = await db.get(Game, game_id)
     if not game:
@@ -278,15 +280,22 @@ async def delete_game(
     from sqlalchemy import delete as sa_delete, select as sa_select
     from ..models.session import GameSession as _GS, SessionScore as _SS
 
-    session_ids = (
-        (await db.execute(sa_select(_GS.id).where(_GS.game_id == game_id)))
-        .scalars()
-        .all()
-    )
+    sessions = (
+        await db.execute(sa_select(_GS.id, _GS.room_code).where(_GS.game_id == game_id))
+    ).all()
+    session_ids = [row.id for row in sessions]
     if session_ids:
         await db.execute(sa_delete(_SS).where(_SS.session_id.in_(session_ids)))
     await db.execute(sa_delete(_GS).where(_GS.game_id == game_id))
     await db.delete(game)
+    # Flush before touching Redis: get_db commits only after the 204 is sent, so a failed
+    # delete must surface here rather than leave Redis cleared for rows that still exist.
+    await db.flush()
+    # Per-session keys (players, answered sets, answer distributions, current question)
+    # have no TTL, and a COMPLETED session never clears them, so the game's deletion path
+    # must — the same cleanup DELETE /game/sessions/{id} does.
+    for row in sessions:
+        await state_service.delete_room_state(redis, row.room_code, row.id)
 
 
 # ---------------------------------------------------------------------------

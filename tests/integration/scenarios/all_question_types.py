@@ -329,4 +329,72 @@ PUT_IN_ORDER = GameScenario(
 )
 
 
-SCENARIOS: list[GameScenario] = [ALL_TYPES, SINGLE_PLAYER, FITB_TYPES, PUT_IN_ORDER]
+# ---------------------------------------------------------------------------
+# Scenario — pin_the_spot (distance-based partial credit)
+# ---------------------------------------------------------------------------
+
+# A tiny valid PNG; scoring only reads the stored width and height.
+PIN_IMAGE_URL = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4"
+    "nGNgYPj/HwADAgH/eL9GtQAAAABJRU5ErkJggg=="
+)
+# 2:1 image (aspect 0.5): 0.25 of the height is 0.125 image widths.
+PIN_CONFIG = {"image_url": PIN_IMAGE_URL, "image_width": 1000, "image_height": 500}
+
+PIN_ACCURACY = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="ACCURACY",
+    prompt="Tap the centre of the picture.",
+    config=PIN_CONFIG,
+    answer_data={"target": {"x": 0.5, "y": 0.5}, "r_full": 0.05, "r_zero": 0.2},
+    points_value=1000,
+)
+
+PIN_COMPLETENESS = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="COMPLETENESS",
+    prompt="Tap your favourite spot.",
+    config=PIN_CONFIG,
+    answer_data={},
+    points_value=10,
+)
+
+PIN_COMPLETENESS_TARGET = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="COMPLETENESS",
+    prompt="Where would you put the stage? (a suggested spot is revealed after)",
+    config=PIN_CONFIG,
+    answer_data={"target": {"x": 0.2, "y": 0.2}, "r_full": 0.05, "r_zero": 0.2},
+    points_value=5,
+)
+
+PIN_THE_SPOT = GameScenario(
+    name="pin_the_spot_scoring",
+    description=(
+        "pin_the_spot on a 2:1 image under ACCURACY (linear falloff) and COMPLETENESS "
+        "(no target) and COMPLETENESS with a target (revealed, but never scored). Players: "
+        "on target, halfway horizontally, halfway vertically (same visual distance), "
+        "outside, no answer."
+    ),
+    questions=[PIN_ACCURACY, PIN_COMPLETENESS, PIN_COMPLETENESS_TARGET],
+    player_scripts=[
+        # Inside r_full — 1000 (isCorrect) + 10 + 5
+        PlayerScript(responses=[{"x": 0.52, "y": 0.5}, {"x": 0.1, "y": 0.9}, {"x": 0.2, "y": 0.2}]),
+        # d = 0.125 horizontally — 500 + 10 + 5
+        PlayerScript(responses=[{"x": 0.625, "y": 0.5}, {"x": 0.1, "y": 0.9}, {"x": 0.9, "y": 0.9}]),
+        # d = 0.125 vertically (0.25 × aspect 0.5) — 500 + 10 + 5
+        PlayerScript(responses=[{"x": 0.5, "y": 0.75}, {"x": 0.3, "y": 0.2}, {"x": 0.9, "y": 0.9}]),
+        # Beyond r_zero — 0 + 10 + 5 (far from the COMPLETENESS target, still full points)
+        PlayerScript(responses=[{"x": 0.0, "y": 0.0}, {"x": 1, "y": 1}, {"x": 1, "y": 1}]),
+        # No answer — 0, 0 and 0
+        PlayerScript(responses=[None, None, None]),
+    ],
+)
+
+SCENARIOS: list[GameScenario] = [
+    ALL_TYPES,
+    SINGLE_PLAYER,
+    FITB_TYPES,
+    PUT_IN_ORDER,
+    PIN_THE_SPOT,
+]

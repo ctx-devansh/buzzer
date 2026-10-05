@@ -5,8 +5,11 @@ import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
+import { PinBoard } from '../../components/PinBoard';
+import type { PinConfig, Point } from '../../lib/pinTheSpot';
 
-type QuestionType = 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order';
+type QuestionType =
+  | 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order' | 'pin_the_spot';
 type GradingType = 'ACCURACY' | 'COMPLETENESS';
 
 interface Question {
@@ -141,6 +144,85 @@ function pioItemsError(pioItems: string[]): string | null {
   return null;
 }
 
+// ---- pin_the_spot ----
+
+/** Longest side of an uploaded image after downscaling (docs/design-pin-the-spot.md §2). */
+const PIN_MAX_SIDE = 1280;
+/** Aim well under the server's 1,500,000-character image_url cap. */
+const PIN_TARGET_URL_LEN = 700_000;
+const PIN_MAX_URL_LEN = 1_500_000;
+const PIN_DEFAULT_R_FULL = 0.05;
+const PIN_DEFAULT_R_ZERO = 0.2;
+
+function loadImg(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not load that image'));
+    img.src = src;
+  });
+}
+
+/** Downscale a local file and re-encode it as a JPEG data: URL (white behind transparency). */
+async function fileToPinImage(file: File): Promise<PinConfig> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await loadImg(objectUrl);
+    const scale = Math.min(1, PIN_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const width = Math.max(1, Math.round(img.naturalWidth * scale));
+    const height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas is not available in this browser');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    let quality = 0.85;
+    let url = canvas.toDataURL('image/jpeg', quality);
+    while (url.length > PIN_TARGET_URL_LEN && quality > 0.4) {
+      quality -= 0.15;
+      url = canvas.toDataURL('image/jpeg', quality);
+    }
+    if (url.length > PIN_MAX_URL_LEN) throw new Error('That image is too large, even after compression');
+    return { image_url: url, image_width: width, image_height: height };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/** An http(s) image URL is kept as-is; only its size is measured. */
+async function urlToPinImage(url: string): Promise<PinConfig> {
+  if (!/^https?:\/\//i.test(url)) throw new Error('Image URL must start with http:// or https://');
+  const img = await loadImg(url);
+  return { image_url: url, image_width: img.naturalWidth, image_height: img.naturalHeight };
+}
+
+function pinDiagonal(width: number, height: number): number {
+  return width > 0 ? Math.hypot(1, height / width) : Math.SQRT2;
+}
+
+function buildPinPayload(form: FormState) {
+  return {
+    config: { image_url: form.pinImageUrl, image_width: form.pinImageWidth, image_height: form.pinImageHeight },
+    // COMPLETENESS may have no target (an opinion question); ACCURACY always has one.
+    answer_data: form.pinTarget
+      ? { target: form.pinTarget, r_full: form.pinRFull, r_zero: form.pinRZero }
+      : {},
+  };
+}
+
+/** Client-side mirror of the server's commonest pin_the_spot 422s. */
+function pinError(form: FormState): string | null {
+  if (!form.pinImageUrl) return 'Choose an image';
+  if (form.grading === 'ACCURACY' && !form.pinTarget) return 'Click the image to place the target';
+  if (form.pinTarget && !(0 < form.pinRFull && form.pinRFull < form.pinRZero)) {
+    return 'The full-credit circle must be smaller than the zero-credit circle';
+  }
+  return null;
+}
+
 // ---- QuestionForm subcomponent ----
 
 interface FormState {
@@ -162,6 +244,13 @@ interface FormState {
   // put_in_order: items in the CORRECT order; pioStored is the loaded scramble (null if new)
   pioItems: string[];
   pioStored: PioStored | null;
+  // pin_the_spot: the image (config) and, when set, the target and radii (answer_data)
+  pinImageUrl: string;
+  pinImageWidth: number;
+  pinImageHeight: number;
+  pinTarget: Point | null;
+  pinRFull: number;
+  pinRZero: number;
 }
 
 const defaultForm = (): FormState => ({
@@ -178,6 +267,12 @@ const defaultForm = (): FormState => ({
   msOptions: [{ text: '', points: 1 }, { text: '', points: 1 }],
   pioItems: ['', '', ''],
   pioStored: null,
+  pinImageUrl: '',
+  pinImageWidth: 0,
+  pinImageHeight: 0,
+  pinTarget: null,
+  pinRFull: PIN_DEFAULT_R_FULL,
+  pinRZero: PIN_DEFAULT_R_ZERO,
 });
 
 function questionToForm(q: Question): FormState {
@@ -217,6 +312,14 @@ function questionToForm(q: Question): FormState {
     // Without a correct_order (imported COMPLETENESS only) the display order is all we have.
     base.pioItems = correctOrder ? correctOrder.map((i) => items[i] ?? '') : [...items];
     base.pioStored = correctOrder ? { items, correct_order: correctOrder } : { items };
+  } else if (q.type === 'pin_the_spot') {
+    base.pinImageUrl = (q.config['image_url'] as string) ?? '';
+    base.pinImageWidth = (q.config['image_width'] as number) ?? 0;
+    base.pinImageHeight = (q.config['image_height'] as number) ?? 0;
+    const target = q.answer_data['target'] as Point | undefined;
+    base.pinTarget = target ?? null;
+    base.pinRFull = (q.answer_data['r_full'] as number) ?? PIN_DEFAULT_R_FULL;
+    base.pinRZero = (q.answer_data['r_zero'] as number) ?? PIN_DEFAULT_R_ZERO;
   }
   return base;
 }
@@ -240,14 +343,18 @@ function formToPayload(form: FormState) {
     const p = buildPioPayload(form.pioItems, form.pioStored, form.grading);
     config = p.config;
     answer_data = p.answer_data;
+  } else if (form.type === 'pin_the_spot') {
+    const p = buildPinPayload(form);
+    config = p.config;
+    answer_data = p.answer_data;
   } else {
     const p = buildFibPayload(form.fibAnswers.filter((a) => a.text.trim()), form.fibEditDistance);
     config = p.config;
     answer_data = p.answer_data;
   }
-  // put_in_order's points_value is authored directly under both grading types.
+  // put_in_order's and pin_the_spot's points_value is authored directly under both grading types.
   const points_value =
-    form.grading === 'COMPLETENESS' || form.type === 'put_in_order'
+    form.grading === 'COMPLETENESS' || form.type === 'put_in_order' || form.type === 'pin_the_spot'
       ? form.pointsValue
       : form.type === 'multiple_choice'
       ? Math.max(0, ...form.mcOptions.map((o) => o.points))
@@ -285,6 +392,40 @@ function QuestionForm({
   }
 
   const pioError = form.type === 'put_in_order' ? pioItemsError(form.pioItems) : null;
+  const pinFormError = form.type === 'pin_the_spot' ? pinError(form) : null;
+  const [pinUrlInput, setPinUrlInput] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinLoadError, setPinLoadError] = useState<string | null>(null);
+
+  async function choosePinImage(load: () => Promise<PinConfig>) {
+    setPinLoading(true);
+    setPinLoadError(null);
+    try {
+      const image = await load();
+      setForm((prev) => ({
+        ...prev,
+        pinImageUrl: image.image_url,
+        pinImageWidth: image.image_width,
+        pinImageHeight: image.image_height,
+        // Keep the radii valid for the new image's diagonal.
+        pinRZero: Math.min(prev.pinRZero, pinDiagonal(image.image_width, image.image_height)),
+      }));
+    } catch (err) {
+      setPinLoadError(err instanceof Error ? err.message : 'Could not load that image');
+    } finally {
+      setPinLoading(false);
+    }
+  }
+
+  function setPinRadius(which: 'full' | 'zero', value: number) {
+    setForm((prev) => {
+      // Keep 0 < full < zero by nudging the other slider.
+      if (which === 'full') {
+        return { ...prev, pinRFull: value, pinRZero: Math.max(prev.pinRZero, value + 0.01) };
+      }
+      return { ...prev, pinRZero: value, pinRFull: Math.min(prev.pinRFull, Math.max(0.005, value - 0.01)) };
+    });
+  }
 
   function movePioItem(i: number, direction: -1 | 1) {
     const target = i + direction;
@@ -310,6 +451,7 @@ function QuestionForm({
             <option value="fill_in_the_blank">Fill in the Blank</option>
             <option value="multi_select">Multi-Select (Select All That Apply)</option>
             <option value="put_in_order">Put in Order</option>
+            <option value="pin_the_spot">Pin the Spot</option>
           </select>
         </div>
         <div className="flex-1">
@@ -536,6 +678,118 @@ function QuestionForm({
         </div>
       )}
 
+      {form.type === 'pin_the_spot' && (() => {
+        const hasImage = !!form.pinImageUrl && form.pinImageWidth > 0;
+        const diagonal = pinDiagonal(form.pinImageWidth, form.pinImageHeight);
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-2">Image</label>
+              <div className="flex flex-wrap gap-2 items-center">
+                <label className="inline-flex items-center rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 cursor-pointer">
+                  {hasImage ? 'Replace with a file…' : 'Choose a file…'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    data-testid="pin-file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void choosePinImage(() => fileToPinImage(file));
+                    }}
+                  />
+                </label>
+                <span className="text-slate-500 text-xs">or</span>
+                <Input
+                  placeholder="https://… image URL"
+                  value={pinUrlInput}
+                  onChange={(e) => setPinUrlInput(e.target.value)}
+                  className="flex-1 min-w-48 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!pinUrlInput.trim() || pinLoading}
+                  onClick={() => void choosePinImage(() => urlToPinImage(pinUrlInput.trim()))}
+                >
+                  Use URL
+                </Button>
+              </div>
+              {pinLoading && <p className="text-slate-400 text-xs mt-1">Loading image…</p>}
+              {pinLoadError && <p className="text-red-400 text-xs mt-1">{pinLoadError}</p>}
+              {hasImage && (
+                <p className="text-slate-500 text-xs mt-1">
+                  {form.pinImageWidth} × {form.pinImageHeight} px
+                  {form.pinImageUrl.startsWith('data:') && ` · ${Math.round(form.pinImageUrl.length / 1024)} KB stored with the question`}
+                </p>
+              )}
+            </div>
+
+            {hasImage && (
+              <>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-2">
+                    {form.pinTarget ? 'Target (click or drag to move it)' : 'Click the image to place the target'}
+                  </label>
+                  <PinBoard
+                    config={{ image_url: form.pinImageUrl, image_width: form.pinImageWidth, image_height: form.pinImageHeight }}
+                    reveal={form.pinTarget ? { target: form.pinTarget, rFull: form.pinRFull, rZero: form.pinRZero } : null}
+                    onPick={(p) => set('pinTarget', p)}
+                    maxHeight={420}
+                    ariaLabel="Question image; click to place the target"
+                    testId="pin-editor-board"
+                  />
+                </div>
+                {form.pinTarget && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-xs text-slate-400">
+                      Full-credit radius: {Math.round(form.pinRFull * 100)}% of the image width
+                      <input
+                        type="range"
+                        min={0.005}
+                        max={0.5}
+                        step={0.005}
+                        value={form.pinRFull}
+                        onChange={(e) => setPinRadius('full', Number(e.target.value))}
+                        className="w-full accent-green-500"
+                        data-testid="pin-r-full"
+                      />
+                    </label>
+                    <label className="block text-xs text-slate-400">
+                      Zero-credit radius: {Math.round(form.pinRZero * 100)}% of the image width
+                      <input
+                        type="range"
+                        min={0.02}
+                        max={Math.floor(diagonal * 100) / 100}
+                        step={0.01}
+                        value={form.pinRZero}
+                        onChange={(e) => setPinRadius('zero', Number(e.target.value))}
+                        className="w-full accent-amber-500"
+                        data-testid="pin-r-zero"
+                      />
+                    </label>
+                    <p className="text-slate-500 text-xs sm:col-span-2">
+                      Full points inside the green circle, nothing outside the dashed one, and a
+                      straight-line share in between.
+                    </p>
+                    {form.grading === 'COMPLETENESS' && (
+                      <div className="sm:col-span-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => set('pinTarget', null)}>
+                          Remove target (an opinion question with no right spot)
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+            {pinFormError && hasImage && <p className="text-red-400 text-xs">{pinFormError}</p>}
+          </div>
+        );
+      })()}
+
       {form.type === 'true_false' && form.grading === 'ACCURACY' && (
         <div>
           <label className="block text-xs text-slate-400 mb-2">Points per answer</label>
@@ -649,7 +903,7 @@ function QuestionForm({
             max="300"
           />
         </div>
-        {(form.grading === 'COMPLETENESS' || form.type === 'put_in_order') && (
+        {(form.grading === 'COMPLETENESS' || form.type === 'put_in_order' || form.type === 'pin_the_spot') && (
           <div>
             <label className="block text-xs text-slate-400 mb-1">Points value</label>
             <Input
@@ -666,7 +920,7 @@ function QuestionForm({
       </div>
 
       <div className="flex gap-3">
-        <Button type="button" onClick={() => onSave(formToPayload(form))} disabled={saving || pioError !== null}>
+        <Button type="button" onClick={() => onSave(formToPayload(form))} disabled={saving || pioError !== null || pinFormError !== null}>
           {saving ? 'Saving\u2026' : 'Save Question'}
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
@@ -780,6 +1034,7 @@ export default function QuestionEditorPage() {
     fill_in_the_blank: 'Fill',
     multi_select: 'Multi',
     put_in_order: 'Order',
+    pin_the_spot: 'Pin',
   };
 
   if (loading) return <div className="p-8 text-slate-400">Loading…</div>;
@@ -948,6 +1203,29 @@ export default function QuestionEditorPage() {
                       <div className="mt-2 text-xs text-slate-400">
                         {ordered ? 'Correct order: ' : 'Items: '}
                         <span className="text-slate-200">{(ordered ?? items).join(' \u2192 ')}</span>
+                      </div>
+                    );
+                  })()}
+
+                  {q.type === 'pin_the_spot' && typeof q.config['image_url'] === 'string' && (() => {
+                    const target = q.answer_data['target'] as Point | undefined;
+                    const rFull = q.answer_data['r_full'] as number | undefined;
+                    const rZero = q.answer_data['r_zero'] as number | undefined;
+                    return (
+                      <div className="mt-2 flex items-start gap-3 text-xs text-slate-400">
+                        <div className="w-40 shrink-0">
+                          <PinBoard
+                            config={q.config as unknown as PinConfig}
+                            reveal={target && rFull !== undefined && rZero !== undefined ? { target, rFull, rZero } : null}
+                            maxHeight={110}
+                            ariaLabel="Question image and target"
+                          />
+                        </div>
+                        <span>
+                          {target
+                            ? `Target (${Math.round(target.x * 100)}%, ${Math.round(target.y * 100)}%) · full credit within ${Math.round((rFull ?? 0) * 100)}%, none beyond ${Math.round((rZero ?? 0) * 100)}% of the width`
+                            : 'No target: any tap earns the points'}
+                        </span>
                       </div>
                     );
                   })()}

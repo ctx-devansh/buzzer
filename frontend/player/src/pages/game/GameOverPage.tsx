@@ -33,6 +33,9 @@ function describePlayerAnswer(
   if (type === 'put_in_order') {
     return orderText(playerAnswer.orderedIndices, items) ?? '—';
   }
+  if (type === 'pin_the_spot') {
+    return 'Pin placed';
+  }
   return '—';
 }
 
@@ -73,12 +76,15 @@ function QuestionRow({ item, index }: { item: QuestionSummaryItem; index: number
   const items = item.config.items;
   const isCompleteness = item.answerReveal.type === 'completeness';
   const noAnswer = !item.playerAnswer;
-  // put_in_order ACCURACY: correctness is the stored is_correct (perfect order only).
-  const isPioAccuracy = item.type === 'put_in_order' && item.answerReveal.type === 'put_in_order';
-  const isCorrect = isPioAccuracy
+  // put_in_order / pin_the_spot ACCURACY: correctness is the stored is_correct (perfect
+  // order / inside the full-credit circle); other positive scores are partial.
+  const usesServerFlag =
+    (item.type === 'put_in_order' && item.answerReveal.type === 'put_in_order') ||
+    (item.type === 'pin_the_spot' && item.answerReveal.type === 'pin_the_spot');
+  const isCorrect = usesServerFlag
     ? !noAnswer && item.isCorrect
     : !isCompleteness && !noAnswer && item.pointsAwarded > 0;
-  const isPartial = isPioAccuracy && !noAnswer && !item.isCorrect && item.pointsAwarded > 0;
+  const isPartial = usesServerFlag && !noAnswer && !item.isCorrect && item.pointsAwarded > 0;
   const showCorrectAnswer = !isCompleteness && !isCorrect;
 
   const playerAnswerLabel = describePlayerAnswer(item.playerAnswer, item.type, options, items);

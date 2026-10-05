@@ -29,7 +29,7 @@ from ..database import AsyncSessionLocal
 from ..models.game import Question
 from ..models.session import GameSession
 from ..redis_client import get_redis
-from ..services import game_service
+from ..services import game_service, pin_the_spot
 from ..services import state_service as state
 from ..services.auth_service import get_user_by_id
 from . import events as E
@@ -139,6 +139,8 @@ def _answer_reveal(q: Question) -> dict:
     Derive a client-safe correct-answer reveal from answer_data.
     answer_data is NEVER forwarded directly — only derived facts are sent.
     """
+    if q.type == "pin_the_spot":
+        return pin_the_spot.reveal(q.grading_type, q.answer_data)
     if q.type == "put_in_order":
         correct_order = (q.answer_data or {}).get("correct_order")
         if q.grading_type == "COMPLETENESS":
@@ -1177,6 +1179,15 @@ async def on_submit_answer(sid: str, data: dict) -> None:
                     "put_in_order answer must include orderedIndices as a permutation of the item indices",
                 )
                 return
+
+        if question.type == "pin_the_spot" and not pin_the_spot.is_valid_tap(
+            answer_data
+        ):
+            await _emit_error(
+                sid,
+                "pin_the_spot answer must be {x, y} with numbers from 0 to 1",
+            )
+            return
 
         result = await game_service.record_answer(
             db, redis, session_id, user_id, question, answer_data, answer_time_ms

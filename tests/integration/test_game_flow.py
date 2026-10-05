@@ -80,7 +80,7 @@ async def test_game_scenario(scenario, game_setup, base_url, admin_token, fast_m
             scenario=scenario,
             results_sink=results_sink,
         )
-        _assert_put_in_order_live_results(scenario, results_sink)
+        _assert_partial_credit_live_results(scenario, results_sink)
 
     # ── Assert outcomes ───────────────────────────────────────────────────────
     assert len(payloads) == len(scenario.player_scripts), (
@@ -200,6 +200,10 @@ def _assert_answer_matches(label: str, submitted: dict, actual: dict):
             f"{label}: stored text {actual.get('text')!r} "
             f"≠ submitted {submitted['text']!r}"
         )
+    if "x" in submitted:
+        assert (actual.get("x"), actual.get("y")) == (submitted["x"], submitted["y"]), (
+            f"{label}: stored tap {actual} ≠ submitted {submitted}"
+        )
     if "orderedIndices" in submitted:
         assert actual.get("orderedIndices") == submitted["orderedIndices"], (
             f"{label}: stored orderedIndices {actual.get('orderedIndices')} "
@@ -207,15 +211,15 @@ def _assert_answer_matches(label: str, submitted: dict, actual: dict):
         )
 
 
-def _assert_put_in_order_live_results(scenario, results_sink: list[dict]):
+def _assert_partial_credit_live_results(scenario, results_sink: list[dict]):
     """
-    Check the live question_results payloads for every put_in_order question: each
-    player's yourPoints / yourIsCorrect, the host's "item@position" distribution, and
-    the host reveal. Other types are not checked here.
+    Check the live question_results payloads for every put_in_order and pin_the_spot
+    question: each player's yourPoints / yourIsCorrect, the host's distribution
+    ("item@position" or "x,y" keys), and the host reveal. Other types are not checked here.
     """
     assert len(results_sink) == len(scenario.questions)
     for q_idx, q_spec in enumerate(scenario.questions):
-        if q_spec.type != "put_in_order":
+        if q_spec.type not in ("put_in_order", "pin_the_spot"):
             continue
         label = f"Scenario '{scenario.name}', Q{q_idx + 1} live results"
         results = results_sink[q_idx]
@@ -272,6 +276,12 @@ def _assert_ranking_order(scenario, payloads: list[dict]):
 def _assert_reveal_content(label: str, q_spec, actual_reveal: dict, expected_reveal: dict):
     """Check reveal payload content matches our locally-computed expectation."""
     kind = expected_reveal.get("type")
+    if q_spec.type == "pin_the_spot":
+        # Both grading types: the whole reveal (target and radii, or none) must match.
+        assert actual_reveal == expected_reveal, (
+            f"{label}: reveal {actual_reveal} ≠ expected {expected_reveal}"
+        )
+        return
     if kind == "completeness":
         # Only put_in_order adds content (an optional correctOrder); None == None otherwise.
         assert actual_reveal.get("correctOrder") == expected_reveal.get("correctOrder"), (

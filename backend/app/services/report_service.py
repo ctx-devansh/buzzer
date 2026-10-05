@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.course import Course
 from ..models.game import Game, Question
 from ..models.session import GameSession, SessionScore
+from . import pin_the_spot
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,8 @@ def _levenshtein(a: str, b: str) -> int:
 
 def _answer_reveal(q: Question) -> dict:
     """Mirror of gateway._answer_reveal — derive correct-answer facts from answer_data."""
+    if q.type == "pin_the_spot":
+        return pin_the_spot.reveal(q.grading_type, q.answer_data)
     if q.type == "put_in_order":
         correct_order = (q.answer_data or {}).get("correct_order")
         if q.grading_type == "COMPLETENESS":
@@ -255,6 +258,55 @@ def _render_put_in_order(q: Question, dist: dict[str, int], reveal: dict) -> str
     )
 
 
+PIN_CAPTION = "Every tap, with the full-credit and zero-credit circles"
+
+
+def _render_pin_the_spot(q: Question, dist: dict[str, int], reveal: dict) -> str:
+    """The image with every tap as a dot and, when a target is set, the two circles —
+    the same picture as the host's PinBoard, drawn as inline SVG. The viewBox is 1000
+    units wide and 1000 × aspect tall, so a radius (in image widths) × 1000 stays round."""
+    config = q.config or {}
+    try:
+        aspect = config["image_height"] / config["image_width"]
+        url = config["image_url"]
+    except (KeyError, TypeError, ZeroDivisionError):
+        return ""
+    w, h = 1000, 1000 * aspect
+    parts = [
+        (
+            f'<image href="{_esc(url)}" x="0" y="0" width="{w}" height="{h:.1f}" '
+            f'preserveAspectRatio="none"/>'
+        )
+    ]
+    target = reveal.get("target")
+    if target:
+        tx, ty = target["x"] * w, target["y"] * h
+        parts.append(
+            f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="{reveal["rZero"] * w:.1f}" '
+            f'class="pin-zero"/>'
+            f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="{reveal["rFull"] * w:.1f}" '
+            f'class="pin-full"/>'
+        )
+    for key, count in dist.items():
+        try:
+            x, y = (float(v) for v in key.split(","))
+        except ValueError:
+            continue
+        r = 7 + 3 * min(count - 1, 4)
+        parts.append(
+            f'<circle cx="{x * w:.1f}" cy="{y * h:.1f}" r="{r}" class="pin-tap">'
+            f"<title>{count} tap{'s' if count != 1 else ''}</title></circle>"
+        )
+    if target:
+        parts.append(f'<circle cx="{tx:.1f}" cy="{ty:.1f}" r="9" class="pin-target"/>')
+    caption = PIN_CAPTION if target else "Every tap"
+    return (
+        f'<p class="pio-caption">{caption}</p>'
+        f'<svg class="pin-board" viewBox="0 0 {w} {h:.1f}" role="img" '
+        f'aria-label="Player taps on the question image">' + "".join(parts) + "</svg>"
+    )
+
+
 def _render_word_cloud(q: Question, dist: dict[str, int], reveal: dict) -> str:
     entries = sorted(dist.items(), key=lambda kv: -kv[1])
     accepted = [a.lower() for a in reveal.get("acceptedAnswers", [])]
@@ -392,6 +444,14 @@ body{
 .pio-caption{font-size:0.78rem;color:#64748b;margin-bottom:10px}
 .pio-order{margin-top:14px;margin-bottom:0}
 
+/* ── Pin the Spot ── */
+.badge-pin{background:#1e3b3a;color:#5eead4}
+.pin-board{display:block;width:100%;height:auto;border-radius:12px;background:#0f172a}
+.pin-tap{fill:#f472b6;fill-opacity:.75;stroke:#fff;stroke-width:2}
+.pin-full{fill:#22c55e;fill-opacity:.18;stroke:#22c55e;stroke-width:4}
+.pin-zero{fill:none;stroke:#f59e0b;stroke-width:3;stroke-dasharray:14 10}
+.pin-target{fill:#22c55e;stroke:#fff;stroke-width:3}
+
 /* ── Word cloud ── */
 .wc-answer-note{text-align:center;color:#64748b;font-size:0.88rem;margin-bottom:14px}
 .wc-answer{color:#4ade80;font-weight:700}
@@ -490,7 +550,11 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
         correct_count = sum(1 for s in q_scores if s.is_correct)
 
         dist: dict[str, int] = defaultdict(int)
-        if q.type == "put_in_order":
+        if q.type == "pin_the_spot":
+            for s in q_scores:
+                if pin_the_spot.is_valid_tap(s.answer_data):
+                    dist[pin_the_spot.tap_key(s.answer_data)] += 1
+        elif q.type == "put_in_order":
             n_items = len((q.config or {}).get("items", []))
             for s in q_scores:
                 for key in _pio_answer_keys(s.answer_data, n_items):
@@ -509,6 +573,7 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
             "true_false": ("True / False", "badge-tf"),
             "fill_in_the_blank": ("Fill in the Blank", "badge-fitb"),
             "put_in_order": ("Put in Order", "badge-pio"),
+            "pin_the_spot": ("Pin the Spot", "badge-pin"),
         }.get(q.type, (q.type, ""))
         type_label, type_class = type_badge
 
@@ -520,7 +585,9 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
 
         # put_in_order first: a COMPLETENESS reveal is type "completeness", so the
         # generic choice below must never see it.
-        if q.type == "put_in_order":
+        if q.type == "pin_the_spot":
+            chart = _render_pin_the_spot(q, dict(dist), reveal)
+        elif q.type == "put_in_order":
             chart = _render_put_in_order(q, dict(dist), reveal)
         elif q.type in ("multiple_choice", "true_false"):
             chart = _render_bar_chart(q, dict(dist), reveal, total_players)

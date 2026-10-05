@@ -18,6 +18,7 @@ from ..models.game import Game, Question, UserGameAccess
 from ..models.session import GameSession, SessionScore
 from ..models.user import User
 from ..schemas.game import ScoreResult
+from . import pin_the_spot
 from . import state_service as state
 
 logger = structlog.get_logger()
@@ -356,9 +357,15 @@ def calculate_score(question: Question, answer_data: dict) -> ScoreResult:
                   rounded half-up to 2 dp and clamped to points_value, where c is the
                   number of item pairs in the correct relative order and t = n(n-1)/2.
                   A perfect order scores points_value exactly.
+                  pin_the_spot scores by distance (services/pin_the_spot.py): full within
+                  r_full, 0 beyond r_zero, linear in between, half-up to 2 dp.
     """
     if not answer_data:
         return ScoreResult(points_awarded=0, is_correct=False)
+
+    # Before the COMPLETENESS short-circuit, so an invalid tap isn't credited.
+    if question.type == "pin_the_spot":
+        return _score_pin_the_spot(question, answer_data)
 
     if question.grading_type == "COMPLETENESS":
         return ScoreResult(points_awarded=question.points_value, is_correct=True)
@@ -464,6 +471,23 @@ def _score_put_in_order(question: Question, answer_data: dict) -> ScoreResult:
     return ScoreResult(points_awarded=min(float(raw), pv), is_correct=False)
 
 
+def _score_pin_the_spot(question: Question, answer_data: dict) -> ScoreResult:
+    if not pin_the_spot.is_valid_tap(answer_data):
+        return ScoreResult(points_awarded=0, is_correct=False)
+    if question.grading_type == "COMPLETENESS":
+        return ScoreResult(points_awarded=question.points_value, is_correct=True)
+    config = question.config or {}
+    try:
+        aspect = config["image_height"] / config["image_width"]
+        points, correct = pin_the_spot.score(
+            answer_data, question.answer_data, aspect, question.points_value
+        )
+    except (KeyError, TypeError, ZeroDivisionError):
+        # Only reachable for a question stored before validation existed.
+        return ScoreResult(points_awarded=0, is_correct=False)
+    return ScoreResult(points_awarded=points, is_correct=correct)
+
+
 async def record_answer(
     db: AsyncSession,
     redis: Redis,
@@ -526,6 +550,10 @@ async def record_answer(
                 await state.increment_answer_dist(
                     redis, session_id, question.id, f"{item}@{pos}"
                 )
+    elif question.type == "pin_the_spot":
+        # One "x,y" key per tap; written under both grading types.
+        if pin_the_spot.is_valid_tap(answer_data):
+            dist_key = pin_the_spot.tap_key(answer_data)
     if dist_key is not None:
         await state.increment_answer_dist(redis, session_id, question.id, dist_key)
 
@@ -563,6 +591,8 @@ def _player_summary_reveal(
     gateway._answer_reveal and report_service._answer_reveal); a unit parity test
     in tests/unit/test_put_in_order.py keeps them identical."""
     answer_data = answer_data or {}
+    if q_type == "pin_the_spot":
+        return pin_the_spot.reveal(grading_type, answer_data)
     if q_type == "put_in_order":
         correct_order = answer_data.get("correct_order")
         if grading_type == "COMPLETENESS":
@@ -603,6 +633,8 @@ def _host_summary_reveal(
     gateway._answer_reveal and report_service._answer_reveal); a unit parity test
     in tests/unit/test_put_in_order.py keeps them identical."""
     answer_data = answer_data or {}
+    if q_type == "pin_the_spot":
+        return pin_the_spot.reveal(grading_type, answer_data)
     if q_type == "put_in_order":
         correct_order = answer_data.get("correct_order")
         if grading_type == "COMPLETENESS":
@@ -797,6 +829,10 @@ async def get_host_question_summary(
                             if isinstance(idx, int):
                                 k = str(idx)
                                 dist[k] = dist.get(k, 0) + 1
+                elif q_type == "pin_the_spot":
+                    if pin_the_spot.is_valid_tap(ans):
+                        k = pin_the_spot.tap_key(ans)
+                        dist[k] = dist.get(k, 0) + 1
                 elif q_type == "put_in_order":
                     # Keyed on type alone: COMPLETENESS charts read the same counts.
                     # Rows that aren't a permutation of the current items are skipped.
