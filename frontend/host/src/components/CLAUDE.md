@@ -28,6 +28,12 @@ Sessions, an **Admin console** link (only when `getRole() === 'ADMIN'`), Sign ou
   runs out, and freezes while `paused` (resuming continues from the frozen value). Display only:
   the server, not this bar, decides when the answer phase ends.
 
+**`PinBoard.tsx`** — the host's `pin_the_spot` canvas: the image sized to its aspect ratio, plus
+optional `taps` and `reveal` (target, filled full-credit circle, dashed zero-credit circle).
+Used read-only by `game/QuestionPage` (image only, never taps while open), `ResultsPage` and
+the `GameOverPage` card; with `onPick` it is the editor's click/drag target picker. Redraws on
+resize and theme changes.
+
 **How it fits in.** `HostShell` wraps the management routes in `../App.tsx`. `ui/` is imported by `../pages/` (Login and Home use Button/Card/Input; the in-game
 pages use Button, and `game/QuestionPage.tsx` uses `TimerBar`). Class merging comes from
 `../lib/utils.ts`.

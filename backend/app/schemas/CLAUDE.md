@@ -9,7 +9,10 @@ directly to clients and so player-facing responses can omit fields (answer keys,
   games, questions (only `QuestionCreate` carries a `model_validator` — `validate_structure`
   — that enforces per-question-type shape of `config`/`answer_data`, e.g. `multiple_choice` needs
   `answer_points` matching `options` length; `QuestionUpdate` has **no** validator, since it sees
-  only a partial body. `put_in_order` rules live in the module-level `validate_put_in_order`,
+  only a partial body. `put_in_order` rules live in the module-level `validate_put_in_order`
+  (and `pin_the_spot` rules in `validate_pin_the_spot`: exact config/answer_data keys, http(s)
+  or PNG/JPEG/GIF/WebP data URL ≤ 1,500,000 chars, 0 < r_full < r_zero ≤ image diagonal;
+  COMPLETENESS may omit the target),
   called from `validate_structure` and, on the merged values, from
   `../services/authoring_service.py::update_question`. `../models/game.py` stores question data
   as untyped JSON, so these are the only structural checks), users, access grants, and the admin

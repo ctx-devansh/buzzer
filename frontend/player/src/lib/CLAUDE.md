@@ -11,6 +11,11 @@ client-side JWT expiry check.
   `HTTP <status>`). An empty response body resolves to `{}`.
 - `putInOrder.ts` — `isPermutation(value, n)` and `orderText(indices, items)` ("A → B → C",
   or null for an invalid order), used by `ResultsPage` and `GameOverPage`.
+- `pinTheSpot.ts` — canvas helpers for `pin_the_spot` (used by `../components/PinCanvas.tsx`):
+  `fitRect`/`toImagePoint` (CSS px ↔ image fractions; taps in letterbox bars → null),
+  `prepareCanvas` (devicePixelRatio backing store), `drawImage`/`drawTarget`/`drawPin` (pin tip on
+  the point, head above it, flipped below near the top edge), `readPinColors` (CSS custom
+  properties `--pin-*` with fallbacks, for T9), `loadImage`. The host has its own copy.
 - `utils.ts` — `cn(...classes)` (`clsx` + `tailwind-merge`), plus
   `isTokenExpired(token)`: base64url-decodes the JWT payload **without verifying it** and
   returns true if the token is missing, malformed, or past `exp`.

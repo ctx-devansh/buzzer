@@ -42,7 +42,9 @@ Results → … → Game Over.
   - multi-select: toggle tiles plus a Submit button (`{selectedIndices}`);
   - put-in-order: numbered rows in `config.items` order, rearranged by pick-and-place (tap a row,
     then tap where it goes; insert semantics; tap it again to cancel), then Lock in
-    (`{orderedIndices}`). `order`/`picked` reset on remount like `submitted`.
+    (`{orderedIndices}`). `order`/`picked` reset on remount like `submitted`;
+  - pin-the-spot: the prompt (shown for this type only), `PinCanvas`, then Lock in
+    (`{x, y}` as image fractions). `pin` resets on remount like `submitted`.
 
   Answer time is measured from page mount. Locked questions disable input. **The prompt is
   not shown**: players read it on the host's screen.
@@ -50,7 +52,8 @@ Results → … → Game Over.
   Correctness is deliberately not revealed until results.
 - `game/ResultsPage.tsx` — Correct / Incorrect / "Answer recorded!" (completeness), what you
   answered, the accepted answers for fill-in-the-blank, "Correct order: …" whenever the reveal
-  has `correctOrder` (put-in-order, both grading types), points this question, running total,
+  has `correctOrder` (put-in-order, both grading types), for pin-the-spot a read-only
+  `PinCanvas` with your pin over the revealed target, points this question, running total,
   and rank of N.
 - `game/GameOverPage.tsx` — final rank and score, plus a per-question recap (`QuestionRow`:
   your answer ✓/✗/●, correct answer when you missed, points). "Play Again" clears the token and
@@ -81,10 +84,10 @@ through `../lib/api.ts` and build on `../components/ui/`. Socket payload types c
   `describeCorrectAnswer` in `GameOverPage`, and the `type` unions / `PlayerAnswerReveal` in
   `../types/game.ts` (which must match `gateway.py::_answer_reveal`). An unknown type renders
   "Unsupported question type."
-- `put_in_order` ACCURACY reads correctness from the server's flag (`yourIsCorrect` on
+- `put_in_order` and `pin_the_spot` ACCURACY read correctness from the server's flag (`yourIsCorrect` on
   ResultsPage, `item.isCorrect` in the recap), never from points: a non-perfect order scores
-  "Partially correct" / ◐ (amber) when points > 0. Every other type still treats `points > 0`
-  as correct. The two pages show the correct order under different rules on purpose: ResultsPage
+  "Partially correct" / ◐ (amber) when points > 0 (for a pin: between the two circles). Every
+  other type still treats `points > 0` as correct. The pin recap reads "Pin placed". The two pages show the correct order under different rules on purpose: ResultsPage
   whenever `correctOrder` is present, the recap only for partial/incorrect answers.
 - `../lib/putInOrder.ts` has the shared `isPermutation`/`orderText` helpers; readers skip a
   stored order that isn't a permutation of the current items.

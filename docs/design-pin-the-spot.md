@@ -189,7 +189,7 @@ Confirmed against the code on 2026-10-05.
 | Host live game | `frontend/host/src/lib/pinTheSpot.ts`, `frontend/host/src/components/PinBoard.tsx`, `pages/game/{QuestionPage,ResultsPage,GameOverPage}.tsx`, `types/game.ts` | Image while open; taps and circles at reveal and in the game-over card |
 | Editor | `frontend/host/src/pages/manage/QuestionEditorPage.tsx` | Image picker, target placement, radius sliders |
 | Simulated players | `scripts/simulate_players.py` | Tap near the target with `--game-json`, at random otherwise |
-| Tests | `tests/unit/test_pin_the_spot.py`, `tests/integration/test_pin_the_spot.py`, `tests/integration/engine/scoring.py` | See section 11 |
+| Tests | `tests/unit/test_pin_the_spot.py`, `tests/integration/test_pin_the_spot.py`, `tests/integration/engine/scoring.py`, `tests/e2e/test_pin_the_spot_ui.py` | See section 11 |
 | Context docs | nested `CLAUDE.md` files for each directory above | New type listed alongside `put_in_order` |
 
 ## 10. Dependencies
@@ -212,7 +212,9 @@ Integration tests against the live stack (`tests/integration/test_pin_the_spot.p
 - **Access:** a host from another course can't create or edit the question. (Player access is decided per room by `authorise_player`, the same for every type, so it isn't retested here.)
 - **Played-question guard:** once answered, the image and type can't change (409); the target and radii can.
 - **Export/import:** a game containing the type round-trips with the same target, radii and image.
-- **Clean-up:** deleting the game removes its rows in MySQL and its keys in Redis.
+- **Clean-up:** deleting the game removes its rows in MySQL and its keys in Redis. (Unchanged generic path: the type adds no tables and only uses the existing `session:{id}:dist:{qid}` hash.)
+
+Browser tests (`tests/e2e/test_pin_the_spot_ui.py`, Playwright against `:8080`): authoring in the host editor (file upload, click to place the target, prompt-only edit keeps the image) and a play-through (tap, move, Lock in, partial credit, host boards, game-over recap).
 
 ## 12. Implementation steps
 
@@ -259,3 +261,4 @@ If implementation shows this plan is wrong, update this document in its own comm
 |---|---|
 | 2026-10-05 | First draft |
 | 2026-10-05 | Revised before implementation: `image_url` in config (T8 not built), 2-dp rounding, diagonal radius bound, optional COMPLETENESS target, host-app editor, pin marker, played-question guard, confirmed file list |
+| 2026-10-05 | Implemented (steps 1–10 except sample games, which are left to each member's T6 files) |
