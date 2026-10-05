@@ -1,5 +1,7 @@
 import { useGame } from './GameLayout';
 import { orderText } from '../../lib/putInOrder';
+import { PinCanvas } from '../../components/PinCanvas';
+import type { PinConfig, PinTarget } from '../../lib/pinTheSpot';
 
 function describeAnswer(
   lastAnswerData: Record<string, unknown> | null,
@@ -56,12 +58,23 @@ export default function ResultsPage() {
   );
   const isCompleteness = answerReveal.type === 'completeness';
   const isFitb = answerReveal.type === 'fill_in_the_blank';
-  // put_in_order ACCURACY reads the server's is_correct (perfect order only); partial
-  // scores are "Partially correct". Points can equal pointsValue without a perfect order.
+  // put_in_order and pin_the_spot ACCURACY read the server's is_correct (perfect order /
+  // inside the full-credit circle); other positive scores are "Partially correct".
   const isPioAccuracy =
     currentQuestion?.type === 'put_in_order' && answerReveal.type === 'put_in_order';
-  const isCorrect = isPioAccuracy ? yourIsCorrect : !isCompleteness && yourPoints > 0;
-  const isPartial = isPioAccuracy && !yourIsCorrect && yourPoints > 0;
+  const isPin = currentQuestion?.type === 'pin_the_spot';
+  const isPinAccuracy = isPin && answerReveal.type === 'pin_the_spot';
+  const usesServerFlag = isPioAccuracy || isPinAccuracy;
+  const isCorrect = usesServerFlag ? yourIsCorrect : !isCompleteness && yourPoints > 0;
+  const isPartial = usesServerFlag && !yourIsCorrect && yourPoints > 0;
+  const pinReveal: PinTarget | null =
+    isPin && 'target' in answerReveal && answerReveal.target
+      ? { target: answerReveal.target, rFull: answerReveal.rFull!, rZero: answerReveal.rZero! }
+      : null;
+  const myPin =
+    isPin && typeof lastAnswerData?.x === 'number' && typeof lastAnswerData?.y === 'number'
+      ? { x: lastAnswerData.x, y: lastAnswerData.y }
+      : null;
   const correctOrderLabel =
     'correctOrder' in answerReveal ? orderText(answerReveal.correctOrder, items) : null;
 
@@ -101,6 +114,19 @@ export default function ResultsPage() {
         <p className="text-slate-400 text-base">
           Correct order: <span className="text-green-400 font-semibold">{correctOrderLabel}</span>
         </p>
+      )}
+
+      {/* pin_the_spot: your pin over the target and circles */}
+      {isPin && currentQuestion?.config.image_url && (myPin || pinReveal) && (
+        <div className="w-full max-w-md">
+          <PinCanvas
+            config={currentQuestion.config as PinConfig}
+            value={myPin}
+            reveal={pinReveal}
+            maxHeight={Math.round(window.innerHeight * 0.4)}
+            ariaLabel={myPin ? 'Your pin and the target' : 'The target'}
+          />
+        </div>
       )}
 
       {/* Points for this question */}

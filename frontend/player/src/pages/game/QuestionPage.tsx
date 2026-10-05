@@ -1,6 +1,8 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { TimerBar } from '../../components/ui/TimerBar';
+import { PinCanvas } from '../../components/PinCanvas';
+import type { PinConfig, Point } from '../../lib/pinTheSpot';
 
 const OPTION_COLORS = [
   'bg-red-600 hover:bg-red-500 border-red-500',
@@ -30,6 +32,8 @@ export default function QuestionPage() {
   );
   const [picked, setPicked] = useState<number | null>(null);
   const [movedPos, setMovedPos] = useState<number | null>(null);
+  // pin_the_spot: the player's pin (image fractions); resets on remount like `submitted`.
+  const [pin, setPin] = useState<Point | null>(null);
 
   useEffect(() => {
     if (questionLocked) setPicked(null);
@@ -287,6 +291,48 @@ export default function QuestionPage() {
             data-testid="pio-lock-in"
             disabled={inactive}
             onClick={() => submit({ orderedIndices: order })}
+            className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+          >
+            Lock in
+          </button>
+        )}
+        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {!submitted && questionLocked && lockedMsg}
+      </div>
+    );
+  }
+
+  if (currentQuestion.type === 'pin_the_spot' && currentQuestion.config.image_url) {
+    const config = currentQuestion.config as PinConfig;
+    const inactive = submitted || questionLocked;
+    return (
+      <div className="py-6 px-4 flex flex-col gap-3">
+        <div className="pb-2">
+          {questionLabel}
+          <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
+        </div>
+        {/* Unlike other types the prompt is shown here: the player is looking at the image. */}
+        <p className="text-center text-slate-100 text-lg font-semibold leading-snug">
+          {currentQuestion.prompt}
+        </p>
+        {!inactive && (
+          <p className="text-center text-slate-400 text-sm">
+            {pin ? 'Drag or tap again to move your pin' : 'Tap the picture to drop a pin'}
+          </p>
+        )}
+        <PinCanvas
+          config={config}
+          value={pin}
+          onChange={setPin}
+          onSubmit={() => pin && submit({ x: pin.x, y: pin.y })}
+          disabled={inactive}
+          ariaLabel={`${currentQuestion.prompt}. Tap to place a pin; arrow keys move it, Enter locks it in.`}
+        />
+        {!inactive && (
+          <button
+            data-testid="pin-lock-in"
+            disabled={!pin}
+            onClick={() => pin && submit({ x: pin.x, y: pin.y })}
             className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
           >
             Lock in
