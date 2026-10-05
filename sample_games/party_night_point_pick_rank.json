@@ -1,0 +1,258 @@
+{
+  "format": "buzzer/game",
+  "version": 1,
+  "game": {
+    "title": "Party Night: Point, Pick & Rank",
+    "description": "A fast party quiz for any crowd: trivia warm-ups, pin-the-spot guessing on a rainbow, a clock and a number line, ranking rounds, and a few no-wrong-answer hot takes.",
+    "max_players": 150
+  },
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "Warm-up! Which planet has the most known moons?",
+      "config": {
+        "options": [
+          "Jupiter",
+          "Saturn",
+          "Uranus",
+          "Neptune"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          1000,
+          0,
+          0
+        ]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1000
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "A group of flamingos is called a \"flamboyance\".",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1000,
+          "false": 0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1000
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "ACCURACY",
+      "prompt": "Pin the colour: tap pure YELLOW on the rainbow.",
+      "config": {
+        "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAtAAAAC0CAIAAAAyz4yuAAAD+0lEQVR42u3WPQ5EYBCA4bHuQb1ncH5nUDuIjWi+QqHwl7GepxASQTEmb9V8uwAAuFIlOAAAwQEACA4AAMEBAAgOAEBwAAAIDgBAcAAACA4AQHAAAIIDAEBwAACCAwAQHAAAggMAEBwAAIIDABAcAIDgAAAQHACA4AAABAcAgOAAAAQHAIDgAAAEBwAgOAAABAcAIDgAAMEBACA4AADBAQAgOAAAwQEACA4AAMEBAAgOAEBwAAAIDgBAcAAACA4AQHAAAIIDAEBwAACCAwAQHAAAggMAEBwAAIIDABAcAIDgAAAQHACA4AAABAcAgOAAAAQHAIDgAAAEBwAgOAAABAcAIDgAAMEBACA4AADBAQAgOAAAwQEACA4AAMEBAAgOAEBwAAAIDgBAcAAACA4AQHAAAIIDACB5cIxDH5+IOpZjOVldbpxkuCHBo34RUyzHcrK63HHDiY96xLvSD8cT3pV8OO6cs70fYwqPv8vCO/4x7V0ZIDgEh+Cw6gWH4BAcgkNwCA7BITgEh+AwhYJDcAgOwSE4BIfgEByCQ3AIDsEhOASH4BAcgkNwCA7BITgEh+AQHKZQcAgOwSE4BIdVLzgEh+AQHIJDcAgOwSE4BIfgsPAEh+AQHIJDcAgOwSE4BIfgEByCw6oXHIJDcAgOwSE4BIfgEByCwxQKDsEhOASH4BAcgkNwCA7BITgEh+AQHIJDcAgOwSE4BIfgEByCQ3CYQsEhOASH4BAcVr3gEByCQ3AIDsEhOASH4BAcgsPCExyCQ3AIDsEhOASH4BAcgkNwCA6rXnAIDsEhOASH4BAcgkNwCA5TKDgEh+AQHIJDcAgOwSE4BIfgEByCQ3AIDsEhOASH4BAcgkNwCA7BYQoFh+AQHIJDcFj1gkNwCA7BITgEh+AQHIJDcAgOC09wCA7BITgEh+AQHIJDcAgOwSE4rHrBITgEh+AQHIJDcAgOwSE4TKHgEByCQ3AIDsEhOASH4BAcgkNw+P8Eh+AQHIJDcLwyOACAdxIcAIDgAAAEBwCA4AAABAcAIDgAAAQHACA4AAAEBwAgOAAAwQEAIDgAAMEBAAgOAADBAQAIDgAAwQEACA4AQHAAAAgOAEBwAACCAwBAcAAAggMAQHAAAIIDABAcAACCAwAQHACA4AAAEBwAgOAAABAcAIDgAAAEBwCA4AAABAcAIDgAAAQHACA4AAAEBwAgOAAAwQEAIDgAAMEBAAgOAADBAQAIDgAAwQEACA4AQHAAAAgOAEBwAACCAwBAcAAAggMAQHAAAIIDABAcAACCAwAQHACA4AAAEBwAgOAAABAcAIDgAAAEBwCA4AAABAcAIDgAAAQHACA4AAAEBwAgOACAfzQDhR1pSKcvm5AAAAAASUVORK5CYII=",
+        "image_width": 720,
+        "image_height": 180
+      },
+      "answer_data": {
+        "target": {
+          "x": 0.2,
+          "y": 0.5
+        },
+        "r_full": 0.03,
+        "r_zero": 0.1
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1000
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "Name the sweet food that, sealed in a jar, basically never spoils. (one word)",
+      "config": {
+        "maxLength": 30
+      },
+      "answer_data": {
+        "acceptedAnswers": [
+          "honey"
+        ],
+        "answerPoints": [
+          1000
+        ],
+        "editDistance": 1
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1000
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Botanically speaking, which of these are FRUITS? Wrong picks cost you!",
+      "config": {
+        "options": [
+          "Tomato",
+          "Carrot",
+          "Cucumber",
+          "Potato",
+          "Avocado"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          300,
+          -300,
+          300,
+          -300,
+          300
+        ]
+      },
+      "time_limit_seconds": 25,
+      "points_value": 900
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "ACCURACY",
+      "prompt": "Line them up from SMALLEST to LARGEST.",
+      "config": {
+        "items": [
+          "Horse",
+          "Blue whale",
+          "Hummingbird",
+          "Elephant",
+          "House cat"
+        ]
+      },
+      "answer_data": {
+        "correct_order": [
+          2,
+          4,
+          0,
+          3,
+          1
+        ]
+      },
+      "time_limit_seconds": 30,
+      "points_value": 1000
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "ACCURACY",
+      "prompt": "The hands fell off! At quarter past, which hour mark does the MINUTE hand point at? Tap it.",
+      "config": {
+        "image_url": "data:image/png;base64,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",
+        "image_width": 480,
+        "image_height": 480
+      },
+      "answer_data": {
+        "target": {
+          "x": 0.875,
+          "y": 0.5
+        },
+        "r_full": 0.05,
+        "r_zero": 0.2
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1000
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "ACCURACY",
+      "prompt": "Eyeball it: the line runs from 0 (left end) to 100 (right end), with a tick at 50. Tap where 73 is.",
+      "config": {
+        "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAyAAAACgCAIAAAB7Sp96AAADI0lEQVR42u3coQ3AIBRF0bJIJQmKASo6e0fAMk1tUw3m5Rz3NcnLVZSzXQcAAOsUgQUAILAAAAQWAIDAAgBAYAEACCwAAIEFAIDAAgAQWAAAAgsAAIEFACCwAAAEFgCAwAIAQGABAAgsAACBBQCAwAIAEFgAAAILAACBBQAgsAAABBYAAAILAEBgAQAILAAAgQUAgMACABBYAAACCwAAgQUAILAAAAQWAAACCwBAYAEACCwAAAQWAIDAAgAQWAAAAgsAAIEFACCwAAAEFgAAAgsAQGABAAgsAAAEFgCAwAIAEFgAAAgsAACBBQAgsH7meL5n7bdnAOwGkLQbAgswlIDdEFiAobQbgMAylIDdAASWoQQMJWA3BBZgKAEElqEE7AYgsAwlILAAuyGwAEMJ2A2BBWA3AIFlKAG7AdgNgQUYSsBuCCwAuwEILEMJ2A1AYBlKwFACdkNgAYYSQGAZSsBuAALLUAKGErAbAgswlAACy1ACdgMQWIYSEFiA3RBYgKEE7IbAArAbgMAylIDdAOyGwAIMJWA3kgMLAGA3gQUAILAEFgAgsAQWACCwBBYAgMASWACAwBJYAIDACgks/9kAdgMI2w2BBRhKwG4ILMBQ2g1AYBlKwG4AAstQAoYSsBsCCzCUAALLUAJ2AxBYhhIQWIDdEFiAoQTshsACsBuAwDKUgN0A7IbAAgwlYDcEFoDdAASWoQTsBiCwDCVgKAG7IbAAQwkgsAwlYDcAgWUoAUMJ2A2BBRhKAIFlKAG7AQgsQwkILMBuCCzAUAJ2Q2AB2A1AYBlKwG4AdkNgAYYSsBtRgQUAkE1gAQAILAAAgQUAILAAABBYAAACCwBAYAEAILAAAAQWAIDAAgBAYAEACCwAAIEFACCwAAAQWAAAAgsAQGABACCwAAAEFgCAwAIAQGABAAgsAACBBQCAwAIAEFgAAAILAEBgAQAgsAAABBYAgMACAEBgAQAILAAAgQUAgMACABBYAAACCwAAgQUAILAAAAQWAIDAAgBAYAEACCwAAIEFAIDAAgAQWAAAAgsAAIEFACCwAAAEFgAAAgsAYLUXXtso/3L9S3AAAAAASUVORK5CYII=",
+        "image_width": 800,
+        "image_height": 160
+      },
+      "answer_data": {
+        "target": {
+          "x": 0.707,
+          "y": 0.5
+        },
+        "r_full": 0.02,
+        "r_zero": 0.12
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1000
+    },
+    {
+      "type": "true_false",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Hot take: pineapple belongs on pizza.",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 15,
+      "points_value": 250
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Settle it: the undisputed best party snack is…",
+      "config": {
+        "options": [
+          "Chips & salsa",
+          "Pizza rolls",
+          "Popcorn",
+          "Cookies"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 15,
+      "points_value": 250
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "COMPLETENESS",
+      "prompt": "No wrong answers: tap your favourite colour on the rainbow.",
+      "config": {
+        "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAtAAAAC0CAIAAAAyz4yuAAAD+0lEQVR42u3WPQ5EYBCA4bHuQb1ncH5nUDuIjWi+QqHwl7GepxASQTEmb9V8uwAAuFIlOAAAwQEACA4AAMEBAAgOAEBwAAAIDgBAcAAACA4AQHAAAIIDAEBwAACCAwAQHAAAggMAEBwAAIIDABAcAIDgAAAQHACA4AAABAcAgOAAAAQHAIDgAAAEBwAgOAAABAcAIDgAAMEBACA4AADBAQAgOAAAwQEACA4AAMEBAAgOAEBwAAAIDgBAcAAACA4AQHAAAIIDAEBwAACCAwAQHAAAggMAEBwAAIIDABAcAIDgAAAQHACA4AAABAcAgOAAAAQHAIDgAAAEBwAgOAAABAcAIDgAAMEBACA4AADBAQAgOAAAwQEACA4AAMEBAAgOAEBwAAAIDgBAcAAACA4AQHAAAIIDACB5cIxDH5+IOpZjOVldbpxkuCHBo34RUyzHcrK63HHDiY96xLvSD8cT3pV8OO6cs70fYwqPv8vCO/4x7V0ZIDgEh+Cw6gWH4BAcgkNwCA7BITgEh+AwhYJDcAgOwSE4BIfgEByCQ3AIDsEhOASH4BAcgkNwCA7BITgEh+AQHKZQcAgOwSE4BIdVLzgEh+AQHIJDcAgOwSE4BIfgsPAEh+AQHIJDcAgOwSE4BIfgEByCw6oXHIJDcAgOwSE4BIfgEByCwxQKDsEhOASH4BAcgkNwCA7BITgEh+AQHIJDcAgOwSE4BIfgEByCQ3CYQsEhOASH4BAcVr3gEByCQ3AIDsEhOASH4BAcgsPCExyCQ3AIDsEhOASH4BAcgkNwCA6rXnAIDsEhOASH4BAcgkNwCA5TKDgEh+AQHIJDcAgOwSE4BIfgEByCQ3AIDsEhOASH4BAcgkNwCA7BYQoFh+AQHIJDcFj1gkNwCA7BITgEh+AQHIJDcAgOC09wCA7BITgEh+AQHIJDcAgOwSE4rHrBITgEh+AQHIJDcAgOwSE4TKHgEByCQ3AIDsEhOASH4BAcgkNw+P8Eh+AQHIJDcLwyOACAdxIcAIDgAAAEBwCA4AAABAcAIDgAAAQHACA4AAAEBwAgOAAAwQEAIDgAAMEBAAgOAADBAQAIDgAAwQEACA4AQHAAAAgOAEBwAACCAwBAcAAAggMAQHAAAIIDABAcAACCAwAQHACA4AAAEBwAgOAAABAcAIDgAAAEBwCA4AAABAcAIDgAAAQHACA4AAAEBwAgOAAAwQEAIDgAAMEBAAgOAADBAQAIDgAAwQEACA4AQHAAAAgOAEBwAACCAwBAcAAAggMAQHAAAIIDABAcAACCAwAQHACA4AAAEBwAgOAAABAcAIDgAAAEBwCA4AAABAcAIDgAAAQHACA4AAAEBwAgOACAfzQDhR1pSKcvm5AAAAAASUVORK5CYII=",
+        "image_width": 720,
+        "image_height": 180
+      },
+      "answer_data": {},
+      "time_limit_seconds": 15,
+      "points_value": 250
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Rank your ideal Friday night, favourite first.",
+      "config": {
+        "items": [
+          "Movie marathon",
+          "Board games",
+          "Dancing",
+          "Karaoke"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 30,
+      "points_value": 250
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Which of these have you done this year? Pick all that apply.",
+      "config": {
+        "options": [
+          "Sung karaoke",
+          "Tried a new cuisine",
+          "Pulled an all-nighter",
+          "Learned a dance"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 250
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Last one! Describe tonight's vibe in ONE word.",
+      "config": {
+        "maxLength": 20
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 250
+    }
+  ]
+}
