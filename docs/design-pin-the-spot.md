@@ -7,7 +7,7 @@
 | Setting | Party |
 | Owner | Satvik Utkoori (utkoori) |
 | Reviewer / Goldfish | Devansh Gupta (dgupta57) |
-| Status | Revised for implementation (before Goldfish review) |
+| Status | Implemented; revised after Goldfish review (section 15) |
 
 ## 1. Problem
 
@@ -43,18 +43,31 @@ The idea comes from MapTap: the interaction is the subject. You point at where s
 2. Tapping the image drops a pin. Tapping again, or dragging, moves it. Taps outside the image area (the letterbox bars) are ignored.
 3. The player presses **Lock in** to submit. The submission is final, matching the existing one-answer-per-question rule.
 4. If the timer ends before the player locks in, no answer is recorded. This matches how the existing types handle a player who doesn't answer.
+5. If the image can't be loaded (for example, a linked image that has gone), the canvas shows "Image failed to load" and the player can't place a pin or lock in. Like a player who doesn't answer, they score nothing.
+6. **Results screen.** The player sees the same canvas, read-only, with their own pin and the revealed target and circles. The pin comes from the answer the phone sent (`lastAnswerData` in the player's `GameLayout`), not from the server, so after a page reload it is missing and only the target is drawn. The verdict depends on the grading type:
+   - **ACCURACY:** the verdict comes from the server's `is_correct` flag, never from the points. Inside `r_full` shows "Correct". Between the two circles (points > 0, not correct) shows "Partially correct" in amber (◐). Beyond `r_zero` shows "Incorrect".
+   - **COMPLETENESS:** the screen shows "Answer recorded!".
+7. **Game-over recap.** Each Pin the Spot row shows "Pin placed", the points and the same ✓/◐/✗ marking, taken from the stored `isCorrect` (the player summary also carries `playerAnswer`).
 
 ### Host flow
 
 - **While the question is open:** the host screen shows the image, the prompt and an answer count ("31 of 40 answered"). It does **not** show where people tapped, because players in the room would copy the crowd (see A4).
 - **At reveal:** every tap is drawn as a dot. The target is marked, with the full-credit circle (r_full) and the zero-credit circle (r_zero) around it.
+- **Game-over card:** the same board (every tap plus the circles), built from the per-question distribution in the host summary. That distribution is rebuilt from MySQL, not Redis. The card's shared "correct %" counts only taps inside `r_full`, so it can be low while the average points are high. This is intended: "correct" means a full-credit tap.
 
 ### Author flow (host app question editor)
 
-1. Choose a local image file, or paste an image URL. A file is downscaled in the browser (longest side at most 1280 px, JPEG) and stored as a `data:` URL. The editor measures the image's width and height.
+1. Choose a local image file, or paste an image URL. A file is downscaled in the browser (longest side at most 1280 px, JPEG) and stored as a `data:` URL. An `http(s)` URL is kept as-is. Either way, the editor measures the image's width and height, and the server trusts those numbers.
 2. Click the image to place the target. Click again to move it.
 3. Set the full-credit radius and the zero-credit radius with two sliders. Both circles are drawn on the image as live previews.
-4. Save. The server runs the same validation on create and on update (see section 4).
+   - The sliders start at r_full = 0.05 and r_zero = 0.20.
+   - r_full ranges from 0.005 to 0.5. r_zero ranges from 0.02 to the image's diagonal, √(1 + aspect²), rounded down to 2 decimal places.
+   - Moving one slider pushes the other so that r_full < r_zero always holds (a gap of at least 0.01). The editor therefore can't produce the server's "r_full ≥ r_zero" 422.
+   - Choosing a new image clamps the radii to the new diagonal.
+4. **COMPLETENESS with no target.** When grading is COMPLETENESS, a **Remove target** button clears the target, and the editor then saves `answer_data: {}`. While there is no target, the sliders are hidden. Clicking the image places a target again. ACCURACY can't be saved without a target ("Click the image to place the target").
+5. **Editing an existing question.** The editor loads the stored `image_url`, width and height into the form and sends them back **unchanged**, byte for byte, unless the author picks a new image. It never re-downscales or re-encodes a stored image. This is what lets a prompt-only edit of a played question pass the guard in section 4.
+6. `points_value` is entered directly, as for `put_in_order`. It is not derived from the answer data.
+7. Save. The server runs the same validation on create and on update (see section 4).
 
 ## 3. Data model
 
@@ -75,6 +88,15 @@ Positions and radii are fractions of the image, not pixels, so scoring is the sa
 ```
 
 T8 (image storage) does not exist yet, so the image is referenced by `image_url`, decided on 2026-10-05: either an `http(s)://` URL or a `data:image/{png,jpeg,gif,webp};base64,` URL. When T8 lands, `image_id` can be added as an alternative to `image_url` without changing scoring (it only needs the stored width and height).
+
+**`data:` URLs are the recommended form.** An `http(s)` URL is accepted but weaker in four ways:
+
+- The linked image can disappear, which leaves the question unplayable (see section 2, player flow step 5).
+- The image can be replaced by one with a different shape. Scores still use the stored width and height, so they stay stable, but the drawing would no longer line up with them.
+- Browsers block an `http://` image on a page served over `https`, as mixed content.
+- An export holding a URL is only as portable as that URL.
+
+The guarantee that "scores can't change" covers scores only; for a URL image it doesn't cover what is drawn.
 
 ### Question `answer_data` (never sent to players)
 
@@ -98,7 +120,10 @@ Required for ACCURACY. Optional for COMPLETENESS: either `{}` (an opinion questi
 
 No new table and no migration. `questions.type` is a `String(50)`, not an enum, and the type uses the existing `config` and `answer_data` JSON columns.
 
-Images are inside `config`, so a question can be large. The server caps `image_url` at 1,500,000 characters, and nginx's request-body limit is raised from the 1 MB default to 10 MB so that creating a question or importing a game with images works through `:8080`.
+Images are inside `config`, so a question can be large. The server caps `image_url` at 1,500,000 characters, and nginx's request-body limit (`client_max_body_size` in `nginx/nginx.dev.conf`) is raised from the 1 MB default to 10 MB.
+
+- **Creating or updating one question** always fits: one image is at most about 1.5 MB.
+- **Importing a game** is one request, so the 10 MB limit is shared by every image in the game. At the 1.5M-character cap, about six images fit. An editor-downscaled JPEG is typically 100–300 KB as a `data:` URL, so a normal game holds a few dozen. A file over the limit gets nginx's 413, not the "Question N invalid" error. This limit is accepted for a class-sized deployment. Raise `client_max_body_size` if games with many large images are needed.
 
 ## 4. Validation
 
@@ -112,6 +137,9 @@ The validator rejects a question unless:
 - Booleans are rejected where numbers are expected (`True` is an `int` in Python).
 
 On update, a question that already has recorded answers can't change its `type` or `config` (the image), because the recorded taps are positions on that image (409, same rule as `put_in_order`).
+
+- **"Change" means "not equal".** The merged `config` (the stored value, overridden by the request's `config` if one is sent) is compared with the stored `config` by value. Resending an identical `config`, which the editor does on every save, is allowed. Only a different image URL, width or height counts as a change. This check runs before validation, so the 409 wins over a 422.
+- **Target and radii stay editable after play, with no rescoring.** Recorded `session_scores` keep the points they were given. From then on, the game-over card and the HTML report for **past** sessions draw the **current** target and circles over taps that were scored against the old ones, so a tap can look misplaced against its points. This is accepted. Fixing a wrong target for future sessions matters more than an exact historical picture. An author who wants both should create a new question.
 
 The server rejects a submission unless it is exactly `{x, y}` with finite numbers (not booleans) from 0 to 1. Python's `json` accepts `NaN`, so finiteness is checked explicitly. Anything else returns an error and is not scored.
 
@@ -132,7 +160,9 @@ else:                     score = points_value × (r_zero − d) ÷ (r_zero − 
                                   rounded half-up to 2 decimal places
 ```
 
-Rounding is to 2 decimal places, as `put_in_order` does, not to whole points: the editor's default `points_value` is 1, and whole-point rounding would turn every partial score into 0 or 1. A tap counts as **correct** (`is_correct`) only inside the full-credit circle.
+Rounding is to 2 decimal places, as `put_in_order` does, not to whole points: the editor's default `points_value` is 1, and whole-point rounding would turn every partial score into 0 or 1. The result is clamped to `points_value`. A tap counts as **correct** (`is_correct`) only inside the full-credit circle.
+
+**Edge tolerance.** Both edge tests compare with a tolerance of `EDGE_EPSILON = 1e-9`: `d ≤ r_full + ε` is full credit, and `d ≥ r_zero − ε` is zero. Without it, float subtraction puts a tap exactly on a circle a hair outside it (`0.55 − 0.5` is `0.05000000000000004`), and the "exactly on the edge" rows below would fail. The partial-credit step is done in `Decimal` (half-up), after stripping single-precision read-back noise from `points_value` with `round(points_value, 6)`.
 
 Worked examples with points_value = 1000, r_full = 0.05, r_zero = 0.20 on a square image:
 
@@ -144,11 +174,11 @@ Worked examples with points_value = 1000, r_full = 0.05, r_zero = 0.20 on a squa
 | 0.20 | 0 | On the zero-credit edge |
 | 0.40 | 0 | Outside the zero-credit circle |
 
-Scoring is a pure function that takes the submission, `answer_data`, the image's aspect ratio and the points value, and returns an integer. It reads no database or Redis state, so it can be unit tested directly.
+Scoring is a pure function, `score(tap, answer_data, aspect, points_value)` in `backend/app/services/pin_the_spot.py`. It returns `(points, is_correct)`, where `points` is a float with at most 2 decimal places, not an integer. It reads no database or Redis state, so it can be unit tested directly. `game_service._score_pin_the_spot` is a thin wrapper around it: it checks the tap, works out the aspect from `config`, handles COMPLETENESS, and turns a malformed legacy question into 0.
 
 ### COMPLETENESS
 
-Any valid tap earns full points. If a target is set, it is still drawn at reveal.
+Any valid tap earns full points, and `is_correct` is **true**, as with every other type under COMPLETENESS. A target, if set, has no effect on scoring and is only drawn at reveal. An invalid tap still scores 0 with `is_correct` false: validity is checked before the COMPLETENESS short-circuit. This applies as a backstop, because the gateway rejects invalid taps before scoring.
 
 ## 6. Canvas rendering (player app)
 
@@ -162,7 +192,8 @@ Any valid tap earns full points. If a target is set, it is still drawn at reveal
 ## 7. Real-time and host view
 
 - On each valid submission the server stores the point with the player's answer in MySQL, as it does for other types, and increments the question's existing Redis answer-distribution hash under the key `"x,y"` (each rounded to 4 decimal places). The host's answer count already updates live through `answer_status`.
-- The distribution hash is sent to the host **only at reveal**, as the existing `answerDistribution` field of `question_results`. At the 250-player limit that is at most 250 keys, small enough to send without binning.
+- The distribution hash is sent to the host **only at reveal**, as the existing `answerDistribution` field of `question_results`. At the 250-player limit that is at most 250 keys, small enough to send without binning. Two taps that round to the same key are counted together, and the host draws a bigger dot for a repeated spot.
+- **After a Redis restart:** `state_service.restore_from_mysql` does **not** rebuild distribution hashes, for any question type. That limitation already existed and this type doesn't change it. A reveal straight after a Redis flush can therefore show fewer taps on the live host board. The game-over card and the HTML report don't depend on Redis: they rebuild the taps from `session_scores` in MySQL (`tap_key` over each stored answer), so they are always complete.
 - Reveal payload, identical in all four reveal builders: ACCURACY → `{type: "pin_the_spot", target, rFull, rZero}`; COMPLETENESS → `{type: "completeness"}`, plus `target`, `rFull` and `rZero` when a target is set.
 - The HTML session report draws the image, the circles and every tap as an inline SVG.
 - The host canvas uses the same drawing code as the player canvas, plus dots for every tap and the two target circles.
@@ -181,7 +212,8 @@ Confirmed against the code on 2026-10-05.
 |---|---|---|
 | Question type list | `backend/app/schemas/admin.py` | `pin_the_spot` in the `type` pattern of `QuestionCreate` and `QuestionUpdate`; no migration (`type` is a string) |
 | Validation | `backend/app/schemas/admin.py` (`validate_pin_the_spot`), `backend/app/services/authoring_service.py` (`update_question`) | Shared validator on create, import and update; played-question guard |
-| Scoring and recording | `backend/app/services/game_service.py` | `_score_pin_the_spot`, `"x,y"` distribution keys, reveal in both summary builders, host summary distribution |
+| Type rules (single source) | `backend/app/services/pin_the_spot.py` (new) | Pure, no I/O: `is_valid_tap`, `tap_key`, `tap_distance`, `score`, `reveal`, `EDGE_EPSILON`. Every other backend file below calls these instead of copying the rules |
+| Scoring and recording | `backend/app/services/game_service.py` | `_score_pin_the_spot` (wraps `pin_the_spot.score`), `"x,y"` distribution keys, reveal in both summary builders, host summary distribution rebuilt from MySQL |
 | Submission and reveal | `backend/app/websocket/gateway.py` | Submission validation; `_answer_reveal` branch |
 | Session report | `backend/app/services/report_service.py` | Reveal branch, tap keys, SVG chart, type badge |
 | Body size | `nginx/nginx.dev.conf` | `client_max_body_size 10m` |
@@ -191,6 +223,7 @@ Confirmed against the code on 2026-10-05.
 | Simulated players | `scripts/simulate_players.py` | Tap near the target with `--game-json`, at random otherwise |
 | Tests | `tests/unit/test_pin_the_spot.py`, `tests/integration/test_pin_the_spot.py`, `tests/integration/engine/scoring.py`, `tests/e2e/test_pin_the_spot_ui.py` | See section 11 |
 | Context docs | nested `CLAUDE.md` files for each directory above | New type listed alongside `put_in_order` |
+| Not touched | `backend/app/services/state_service.py` | Reuses the existing `session:{id}:dist:{qid}` hash. `restore_from_mysql` is deliberately left alone (see section 7) |
 
 ## 10. Dependencies
 
@@ -253,7 +286,33 @@ If implementation shows this plan is wrong, update this document in its own comm
 
 ## 15. Goldfish review findings
 
-*To fill in after the Goldfish session: what the fresh session misunderstood or found missing, and what changed in this document as a result. Commit the revision as "Revise pin-the-spot design after Goldfish review".*
+The Goldfish review was a fresh Claude Code session (after `/clear`) on 2026-10-05, using the `goldfish-test` skill. It read only this document and the nested `CLAUDE.md` context docs for the backend schemas, services, websocket code and models, and for the host and player frontends. It read no source code and had no access to the design discussion.
+
+**Timing.** The review ran **after** implementation, not before it as the process intends. The revision history already said "Implemented". As a result, several findings were places where the code had moved past this document, not decisions still to make. Each gap below was settled by checking what the code does and recording that here. Where that behaviour is a deliberate trade-off, the trade-off is now stated. No code was changed in this revision.
+
+**Comprehension.** The reader's explanation matched the intended feature: the tap-and-drag pin, Lock in, aspect-corrected linear falloff, 2-dp rounding, `is_correct` only inside `r_full`, the image in `config`, the shared create/update validator, the played-question guard, and taps hidden from the host until reveal. Nothing was misunderstood at that level.
+
+**Holes found, and how they were resolved:**
+
+| # | Finding | Resolution |
+|---|---|---|
+| 1 | §5 said scoring "returns an integer", which contradicts 2-dp rounding | §5: returns `(points, is_correct)` with a 2-dp float, clamped to `points_value` |
+| 2 | §9 put scoring in `game_service`, but the rules live in the pure module `services/pin_the_spot.py` that all four reveal builders call | §5 and §9 name the module and its functions. `_score_pin_the_spot` is described as a wrapper |
+| 3 | The "exactly on the edge" rows in the §5 table need a float tolerance that wasn't specified | §5: `EDGE_EPSILON = 1e-9` on both edges, with the reason |
+| 4 | The played-question guard didn't say what "change" means. The editor resends the whole question, and might re-encode the image | §4: compared by value, so an identical resend is allowed. §2 author flow step 5: the editor resends the stored image unchanged |
+| 5 | Editing the target or radii after play redraws old taps against new circles | §4: accepted on purpose, with no rescoring. A new question is the way to keep both |
+| 6 | `is_correct` under COMPLETENESS was unstated | §5: true for any valid tap. An invalid tap is false (backstop only) |
+| 7 | Where the player's own pin comes from at results was unstated | §2 player flow step 6: from client state (`lastAnswerData`), so it is lost on reload. The game-over recap uses the server's `playerAnswer` |
+| 8 | The player result screens weren't specified | §2 player flow steps 6–7: Correct / Partially correct ◐ / Incorrect from `is_correct`, "Answer recorded!" for COMPLETENESS, "Pin placed" in the recap |
+| 9 | There was no editor flow for a COMPLETENESS question without a target | §2 author flow step 4: a **Remove target** button for COMPLETENESS only, saving `{}` with the sliders hidden |
+| 10 | `restore_from_mysql` wasn't mentioned | §7 and §9: it rebuilds no distribution hash for any type (an existing limitation, kept). The game-over card and the report rebuild taps from MySQL |
+| 11 | The host's game-over card and its "correct %" weren't described | §2 host flow: the board comes from the MySQL-built distribution, and "correct %" counts only full-credit taps, on purpose |
+| 12 | How `points_value` is set was unclear | §2 author flow step 6: entered directly, as for `put_in_order` |
+| 13 | "Importing a game with images works" overstated the 10 MB limit | §3: about six maximum-size images per import (a few dozen typical ones), and an oversized import gets a 413 |
+| 14 | §3 and §8 over-stated how safe `http(s)` images are, and didn't say what happens when an image fails to load | §3 lists the four weaknesses and recommends `data:` URLs. §2 player flow step 5: "Image failed to load", with no way to submit |
+| 15 | Strict `r_full < r_zero` with free sliders could produce a 422, and the slider ranges weren't given | §2 author flow step 3: slider ranges, the sliders push each other apart, and the radii are clamped to the diagonal on an image change |
+
+**Process note.** Running the Goldfish test before implementation would have turned findings 4, 5, 7, 9 and 15 into design decisions made up front. In this order they could only be written down after the code already existed.
 
 ## 16. Revision history
 
@@ -262,3 +321,4 @@ If implementation shows this plan is wrong, update this document in its own comm
 | 2026-10-05 | First draft |
 | 2026-10-05 | Revised before implementation: `image_url` in config (T8 not built), 2-dp rounding, diagonal radius bound, optional COMPLETENESS target, host-app editor, pin marker, played-question guard, confirmed file list |
 | 2026-10-05 | Implemented (steps 1–10 except sample games, which are left to each member's T6 files) |
+| 2026-10-05 | Revised after Goldfish review: 15 findings resolved (section 15). Covers the `pin_the_spot.py` module, edge tolerance, the guard's equality rule, COMPLETENESS `is_correct`, player result views, the no-target editor flow, slider bounds, the Redis-restore limitation, the import size limit and `http(s)` image caveats. No code changes |
