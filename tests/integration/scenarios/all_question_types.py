@@ -359,25 +359,35 @@ PIN_COMPLETENESS = QuestionSpec(
     points_value=10,
 )
 
+PIN_COMPLETENESS_TARGET = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="COMPLETENESS",
+    prompt="Where would you put the stage? (a suggested spot is revealed after)",
+    config=PIN_CONFIG,
+    answer_data={"target": {"x": 0.2, "y": 0.2}, "r_full": 0.05, "r_zero": 0.2},
+    points_value=5,
+)
+
 PIN_THE_SPOT = GameScenario(
     name="pin_the_spot_scoring",
     description=(
         "pin_the_spot on a 2:1 image under ACCURACY (linear falloff) and COMPLETENESS "
-        "(no target). Players: on target, halfway horizontally, halfway vertically "
-        "(same visual distance), outside, no answer."
+        "(no target) and COMPLETENESS with a target (revealed, but never scored). Players: "
+        "on target, halfway horizontally, halfway vertically (same visual distance), "
+        "outside, no answer."
     ),
-    questions=[PIN_ACCURACY, PIN_COMPLETENESS],
+    questions=[PIN_ACCURACY, PIN_COMPLETENESS, PIN_COMPLETENESS_TARGET],
     player_scripts=[
-        # Inside r_full — 1000 (isCorrect) + 10
-        PlayerScript(responses=[{"x": 0.52, "y": 0.5}, {"x": 0.1, "y": 0.9}]),
-        # d = 0.125 horizontally — 500 + 10
-        PlayerScript(responses=[{"x": 0.625, "y": 0.5}, {"x": 0.1, "y": 0.9}]),
-        # d = 0.125 vertically (0.25 × aspect 0.5) — 500 + 10
-        PlayerScript(responses=[{"x": 0.5, "y": 0.75}, {"x": 0.3, "y": 0.2}]),
-        # Beyond r_zero — 0 + 10
-        PlayerScript(responses=[{"x": 0.0, "y": 0.0}, {"x": 1, "y": 1}]),
-        # No answer — 0 and 0
-        PlayerScript(responses=[None, None]),
+        # Inside r_full — 1000 (isCorrect) + 10 + 5
+        PlayerScript(responses=[{"x": 0.52, "y": 0.5}, {"x": 0.1, "y": 0.9}, {"x": 0.2, "y": 0.2}]),
+        # d = 0.125 horizontally — 500 + 10 + 5
+        PlayerScript(responses=[{"x": 0.625, "y": 0.5}, {"x": 0.1, "y": 0.9}, {"x": 0.9, "y": 0.9}]),
+        # d = 0.125 vertically (0.25 × aspect 0.5) — 500 + 10 + 5
+        PlayerScript(responses=[{"x": 0.5, "y": 0.75}, {"x": 0.3, "y": 0.2}, {"x": 0.9, "y": 0.9}]),
+        # Beyond r_zero — 0 + 10 + 5 (far from the COMPLETENESS target, still full points)
+        PlayerScript(responses=[{"x": 0.0, "y": 0.0}, {"x": 1, "y": 1}, {"x": 1, "y": 1}]),
+        # No answer — 0, 0 and 0
+        PlayerScript(responses=[None, None, None]),
     ],
 )
 

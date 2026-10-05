@@ -8,6 +8,9 @@ and COMPLETENESS run as the `pin_the_spot_scoring` scenario in test_game_flow.py
   * Authoring REST rules: create/update/import validation (422), the played-question
     guard (409), and host access across courses (403).
   * Export → import round trip and the HTML session report.
+  * Clean-up: deleting a session or a game removes what playing created, in MySQL (via the
+    API) and in Redis (via `docker compose exec redis redis-cli`, as conftest already
+    drives docker).
 
 Runs against the Docker stack on :8000.
 """
@@ -17,12 +20,14 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import shutil
+import subprocess
 import uuid
 from collections.abc import Iterator
 
 import pytest
 
-from .conftest import create_guest_tokens, create_questions, create_room
+from .conftest import _REPO_ROOT, create_guest_tokens, create_questions, create_room
 from .engine.orchestrator import run_game
 from .engine.scoring import GameScenario, PlayerScript, QuestionSpec
 from .engine.socket_client import TestSocketClient as SocketClient
@@ -611,3 +616,252 @@ def test_session_report_draws_taps(api: Api, admin_token: str, played_game: dict
     assert 'class="pin-board"' in html
     assert html.count('class="pin-tap"') == 1
     assert 'class="pin-full"' in html and 'class="pin-zero"' in html
+
+
+# ---------------------------------------------------------------------------
+# More access control
+# ---------------------------------------------------------------------------
+
+
+def test_host_in_same_course_without_game_grant_cannot_edit(api: Api, admin_token: str):
+    """HOST on the game's course is not enough: the game must also be granted (403)."""
+    cleanup = Cleanup(api, admin_token)
+    try:
+        tag = uuid.uuid4().hex[:6]
+        r = api.post(
+            "/admin/courses",
+            admin_token,
+            json={"name": f"PTS same {tag}", "semester": "Test"},
+        )
+        assert r.status_code == 201, r.text
+        course_id = r.json()["id"]
+        granted = _make_user(api, admin_token, cleanup, "pts_granted")
+        ungranted = _make_user(api, admin_token, cleanup, "pts_ungranted")
+        for host in (granted, ungranted):
+            _grant_course(api, admin_token, host, course_id, "HOST")
+        game = _admin_game(api, admin_token, cleanup, f"PTS same {tag}", course_id)
+        _grant_game(api, admin_token, granted, game["id"])
+        gid = game["id"]
+
+        body = _question_body(PIN_ACCURACY)
+        r = api.post(f"/host/games/{gid}/questions", granted.token, json=body)
+        assert r.status_code == 201, r.text
+        qid = r.json()["id"]
+
+        assert (
+            api.post(
+                f"/host/games/{gid}/questions", ungranted.token, json=body
+            ).status_code
+            == 403
+        )
+        moved = {
+            "answer_data": {"target": {"x": 0, "y": 0}, "r_full": 0.1, "r_zero": 0.2}
+        }
+        r = api.put(f"/host/games/{gid}/questions/{qid}", ungranted.token, json=moved)
+        assert r.status_code == 403
+        assert api.get(f"/host/games/{gid}/export", ungranted.token).status_code == 403
+        assert (
+            _get_question(api, admin_token, gid, qid)["answer_data"]
+            == PIN_ACCURACY.answer_data
+        )
+        assert len(api.get(f"/host/games/{gid}/questions", admin_token).json()) == 1
+    finally:
+        cleanup.run()
+
+
+def test_admin_question_routes_validate_the_same(api: Api, admin_token: str):
+    """/admin/games/{id}/questions shares the service, so create and update reject alike."""
+    cleanup = Cleanup(api, admin_token)
+    try:
+        _, gid = _new_course_and_game(api, admin_token, cleanup, "admin")
+        bad_radii = {"target": {"x": 0.5, "y": 0.5}, "r_full": 0.3, "r_zero": 0.2}
+        r = api.post(
+            f"/admin/games/{gid}/questions",
+            admin_token,
+            json=_question_body(PIN_ACCURACY, answer_data=bad_radii),
+        )
+        assert r.status_code == 422, r.text
+
+        r = api.post(
+            f"/admin/games/{gid}/questions",
+            admin_token,
+            json=_question_body(PIN_ACCURACY),
+        )
+        assert r.status_code == 201, r.text
+        qid = r.json()["id"]
+        r = api.put(
+            f"/admin/games/{gid}/questions/{qid}",
+            admin_token,
+            json={"answer_data": bad_radii},
+        )
+        assert r.status_code == 422, r.text
+        assert (
+            _get_question(api, admin_token, gid, qid)["answer_data"]
+            == PIN_ACCURACY.answer_data
+        )
+
+        good = {"target": {"x": 0.2, "y": 0.8}, "r_full": 0.1, "r_zero": 0.4}
+        r = api.put(
+            f"/admin/games/{gid}/questions/{qid}",
+            admin_token,
+            json={"answer_data": good},
+        )
+        assert r.status_code == 200, r.text
+        assert _get_question(api, admin_token, gid, qid)["answer_data"] == good
+    finally:
+        cleanup.run()
+
+
+# ---------------------------------------------------------------------------
+# Clean-up in both datastores
+# ---------------------------------------------------------------------------
+
+
+def _redis_keys(pattern: str) -> list[str]:
+    """Keys matching `pattern` in the stack's Redis (not published to the host)."""
+    if not shutil.which("docker"):
+        pytest.skip("docker CLI not available to inspect Redis")
+    out = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "redis",
+            "redis-cli",
+            "--scan",
+            "--pattern",
+            pattern,
+        ],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,  # a failure is a skip, decided below
+    )
+    if out.returncode != 0:
+        pytest.skip(f"cannot reach Redis through docker compose: {out.stderr.strip()}")
+    return [k for k in out.stdout.split() if k]
+
+
+def _redis_hgetall(key: str) -> dict[str, str]:
+    out = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "redis",
+            "redis-cli",
+            "--raw",
+            "hgetall",
+            key,
+        ],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    vals = out.stdout.split()
+    return dict(zip(vals[::2], vals[1::2]))
+
+
+def _play_fresh_session(
+    base_url: str, admin_token: str, api: Api, cleanup: Cleanup
+) -> dict:
+    """A new game with one pin question, played to COMPLETED by two guests."""
+    course_id, game_id = _new_course_and_game(api, admin_token, cleanup, "cleanup")
+    scenario = GameScenario(
+        name="pts_cleanup",
+        questions=[PIN_ACCURACY],
+        player_scripts=[
+            PlayerScript(responses=[{"x": 0.5, "y": 0.5}]),
+            PlayerScript(responses=[{"x": 0.25, "y": 0.75}]),
+        ],
+    )
+    (qid,) = create_questions(base_url, admin_token, game_id, scenario, False)
+    room_code = create_room(base_url, admin_token, course_id, game_id)
+    tokens = create_guest_tokens(base_url, room_code, 2)
+    cleanup.users.extend(_jwt_sub(t) for t in tokens)
+    asyncio.run(
+        run_game(
+            base_url=base_url,
+            host_token=admin_token,
+            player_tokens=tokens,
+            room_code=room_code,
+            scenario=scenario,
+        )
+    )
+    r = api.get(f"/game/rooms/{room_code}", admin_token)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "COMPLETED"
+    sid = r.json()["session_id"]
+
+    # The creation path really did write per-session state, including the tap hash.
+    keys = set(_redis_keys(f"session:{sid}:*"))
+    assert f"session:{sid}:dist:{qid}" in keys, keys
+    assert _redis_hgetall(f"session:{sid}:dist:{qid}") == {
+        "0.5000,0.5000": "1",
+        "0.2500,0.7500": "1",
+    }
+    assert f"session:{sid}:answered:{qid}" in keys, keys
+    return {
+        "game_id": game_id,
+        "question_id": qid,
+        "session_id": sid,
+        "room_code": room_code,
+    }
+
+
+def test_deleting_session_removes_its_taps_everywhere(
+    base_url: str, admin_token: str, api: Api
+):
+    cleanup = Cleanup(api, admin_token)
+    try:
+        played = _play_fresh_session(base_url, admin_token, api, cleanup)
+        gid, qid, sid = played["game_id"], played["question_id"], played["session_id"]
+        # While the scores exist the question is protected.
+        assert (
+            api.delete(f"/host/games/{gid}/questions/{qid}", admin_token).status_code
+            == 409
+        )
+
+        assert api.delete(f"/game/sessions/{sid}", admin_token).status_code == 204
+
+        # Redis: every per-session key and the room key are gone.
+        assert _redis_keys(f"session:{sid}:*") == []
+        assert _redis_keys(f"room:{played['room_code']}") == []
+        # MySQL: the session and its scores are gone, the game and question stay.
+        assert api.get(f"/host/sessions/{sid}/report", admin_token).status_code == 404
+        assert _get_question(api, admin_token, gid, qid)["type"] == "pin_the_spot"
+        # No session_scores rows left → the question is deletable again.
+        assert (
+            api.delete(f"/host/games/{gid}/questions/{qid}", admin_token).status_code
+            == 204
+        )
+    finally:
+        cleanup.run()
+
+
+def test_deleting_game_removes_its_sessions_everywhere(
+    base_url: str, admin_token: str, api: Api
+):
+    cleanup = Cleanup(api, admin_token)
+    try:
+        played = _play_fresh_session(base_url, admin_token, api, cleanup)
+        gid, sid = played["game_id"], played["session_id"]
+
+        assert api.delete(f"/admin/games/{gid}", admin_token).status_code == 204
+
+        # MySQL: game, questions, session and scores are gone.
+        assert api.get(f"/host/games/{gid}", admin_token).status_code == 404
+        assert api.get(f"/host/games/{gid}/questions", admin_token).status_code == 404
+        assert api.get(f"/host/sessions/{sid}/report", admin_token).status_code == 404
+        listed = api.get("/admin/sessions", admin_token).json()
+        assert sid not in {row["session_id"] for row in listed}
+        # Redis: the deleted sessions' keys went with them (no orphaned tap hashes).
+        assert _redis_keys(f"session:{sid}:*") == []
+        assert _redis_keys(f"room:{played['room_code']}") == []
+    finally:
+        cleanup.run()
