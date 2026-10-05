@@ -135,10 +135,60 @@ class GameResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+PIO_MIN_ITEMS = 3
+PIO_MAX_ITEMS = 6
+PIO_MAX_ITEM_LEN = 200
+
+
+def _is_int_permutation(value: object, n: int) -> bool:
+    """True if value is a list of real ints (bools excluded) forming a permutation of 0..n-1."""
+    return (
+        isinstance(value, list)
+        and all(type(x) is int for x in value)
+        and sorted(value) == list(range(n))
+    )
+
+
+def validate_put_in_order(grading_type: str, config: dict, answer_data: dict) -> None:
+    """Structural checks for a put_in_order question; raises ValueError on the first failure.
+
+    Shared by QuestionCreate.validate_structure and authoring_service.update_question (which
+    validates the merged values, since QuestionUpdate only sees a partial body).
+    """
+    config = config or {}
+    answer_data = answer_data or {}
+    if set(config) != {"items"}:
+        raise ValueError('Put in Order config may only contain "items"')
+    items = config.get("items")
+    if not isinstance(items, list) or not (
+        PIO_MIN_ITEMS <= len(items) <= PIO_MAX_ITEMS
+    ):
+        raise ValueError("Put in Order needs between 3 and 6 items")
+    if any(not isinstance(item, str) for item in items):
+        raise ValueError("Every item must be text")
+    stripped = [item.strip() for item in items]
+    if any(not item for item in stripped):
+        raise ValueError("Every item needs text")
+    if any(len(item) > PIO_MAX_ITEM_LEN for item in stripped):
+        raise ValueError("Each item must be at most 200 characters")
+    if len({item.lower() for item in stripped}) != len(stripped):
+        raise ValueError("Items must be different")
+    has_order = "correct_order" in answer_data
+    if grading_type == "ACCURACY" or has_order:
+        order = answer_data.get("correct_order")
+        if not _is_int_permutation(order, len(items)):
+            raise ValueError(
+                "Correct order is missing or invalid: it must list each item index exactly once"
+            )
+        if grading_type == "ACCURACY" and order == list(range(len(items))):
+            raise ValueError("Display order must differ from the correct order")
+
+
 class QuestionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: str = Field(
-        ..., pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select)$"
+        ...,
+        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order)$",
     )
     grading_type: str = Field(..., pattern="^(ACCURACY|COMPLETENESS)$")
     prompt: str = Field(..., min_length=1, max_length=2000)
@@ -204,13 +254,16 @@ class QuestionCreate(BaseModel):
                     )
                 if any(not isinstance(p, (int, float)) for p in pts):
                     raise ValueError("answer_points values must be numbers")
+        if self.type == "put_in_order":
+            validate_put_in_order(self.grading_type, self.config, self.answer_data)
         return self
 
 
 class QuestionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: str | None = Field(
-        None, pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select)$"
+        None,
+        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order)$",
     )
     grading_type: str | None = Field(None, pattern="^(ACCURACY|COMPLETENESS)$")
     prompt: str | None = Field(None, min_length=1, max_length=2000)

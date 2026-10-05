@@ -28,10 +28,10 @@ export interface QuestionPayload {
   questionId: number;
   questionNumber: number;
   totalQuestions: number;
-  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select';
+  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order';
   gradingType: 'ACCURACY' | 'COMPLETENESS';
   prompt: string;
-  config: { options?: string[]; maxLength?: number };
+  config: { options?: string[]; maxLength?: number; items?: string[] };
   timeLimitSeconds: number;
   pointsValue: number;
   editDistance?: number;
@@ -64,8 +64,9 @@ export type AnswerReveal =
   | { type: 'multiple_choice'; correctIndices: number[] }
   | { type: 'true_false'; correctValue: boolean }
   | { type: 'fill_in_the_blank'; acceptedAnswers: string[]; editDistance: number }
-  | { type: 'completeness' }
+  | { type: 'completeness'; correctOrder?: number[] }
   | { type: 'multi_select'; answerPoints: number[] }
+  | { type: 'put_in_order'; correctOrder: number[] }
   | Record<string, never>;
 
 export interface HostResultsPayload {
@@ -80,9 +81,9 @@ export interface HostQuestionSummaryItem {
   questionId: number;
   questionNumber: number;
   prompt: string;
-  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select';
+  type: 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'multi_select' | 'put_in_order';
   gradingType: 'ACCURACY' | 'COMPLETENESS';
-  config: { options?: string[]; maxLength?: number };
+  config: { options?: string[]; maxLength?: number; items?: string[] };
   pointsValue: number;
   answerReveal: AnswerReveal;
   answerDistribution: Record<string, number>;

@@ -27,5 +27,5 @@ app has no course logic of its own.
 **Gotchas.**
 - The player never sees the question prompt; it is shown only on the host screen.
 - Adding a question type touches four player spots (`QuestionPage`, `ResultsPage`,
-  `GameOverPage`, `types/game.ts`). `ResultsPage` already lacks `multi_select`.
+  `GameOverPage`, `types/game.ts`).
 - "Play Again" clears `localStorage.token`, which is shared with host/admin on the same origin.

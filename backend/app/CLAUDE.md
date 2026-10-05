@@ -37,10 +37,13 @@ share one business-logic layer (`services/`) and one persistence layer (`models/
 `common/` are the shared contract/infrastructure layer both transports depend on.
 
 **Gotchas.**
-- Scoring/answer-reveal logic for each question type is defined in **three** places that must
-  stay in sync: `services/game_service.py::calculate_score`, `services/report_service.py::_answer_reveal`,
-  and `websocket/gateway.py::_answer_reveal` — plus the structural validation in
-  `schemas/admin.py::QuestionCreate.validate_structure`. A new question type touches all four.
+- Scoring/answer-reveal logic for each question type is defined in several places that must
+  stay in sync: `services/game_service.py::calculate_score`, and **four** reveal builders —
+  `websocket/gateway.py::_answer_reveal`, `services/report_service.py::_answer_reveal`, and
+  `_player_summary_reveal` / `_host_summary_reveal` in `services/game_service.py` (a unit parity
+  test in `tests/unit/test_put_in_order.py` covers `put_in_order`) — plus the structural
+  validation in `schemas/admin.py::QuestionCreate.validate_structure`. A new question type
+  touches all of them.
   See the gotchas in `services/CLAUDE.md`, `websocket/CLAUDE.md`, and `schemas/CLAUDE.md`.
 - Several FKs are `NOT NULL` without cascade delete (`game_sessions.game_id`,
   `session_scores.user_id`) — `routers/admin.py`'s `delete_game`/`delete_user` manually delete

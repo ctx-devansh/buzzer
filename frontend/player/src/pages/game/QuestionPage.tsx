@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { TimerBar } from '../../components/ui/TimerBar';
 
@@ -23,6 +23,23 @@ export default function QuestionPage() {
   const [submitted, setSubmitted] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  // put_in_order: `order` holds indices into config.items in on-screen order; `picked` is
+  // the position tapped first. Both reset on remount, like `submitted`.
+  const [order, setOrder] = useState<number[]>(() =>
+    Array.from({ length: currentQuestion?.config.items?.length ?? 0 }, (_, i) => i),
+  );
+  const [picked, setPicked] = useState<number | null>(null);
+  const [movedPos, setMovedPos] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (questionLocked) setPicked(null);
+  }, [questionLocked]);
+
+  useEffect(() => {
+    if (movedPos === null) return;
+    const t = setTimeout(() => setMovedPos(null), 600);
+    return () => clearTimeout(t);
+  }, [movedPos]);
 
   const toggleIndex = useCallback((i: number) => {
     if (submitted || questionLocked) return;
@@ -200,6 +217,79 @@ export default function QuestionPage() {
             className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
           >
             Submit ({selectedIndices.size} selected)
+          </button>
+        )}
+        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {!submitted && questionLocked && lockedMsg}
+      </div>
+    );
+  }
+
+  if (currentQuestion.type === 'put_in_order') {
+    const items = currentQuestion.config.items ?? [];
+    const inactive = submitted || questionLocked;
+
+    // Pick-and-place with insert semantics: the picked item is removed and re-inserted at
+    // the tapped position, so it always ends up exactly where the player tapped.
+    const tapRow = (pos: number) => {
+      if (inactive) return;
+      if (picked === null) {
+        setPicked(pos);
+        return;
+      }
+      if (picked === pos) {
+        setPicked(null);
+        return;
+      }
+      const next = [...order];
+      const [item] = next.splice(picked, 1);
+      next.splice(pos, 0, item);
+      setOrder(next);
+      setPicked(null);
+      setMovedPos(pos);
+    };
+
+    return (
+      <div className="py-6 px-4 flex flex-col gap-3">
+        <div className="pb-2">
+          {questionLabel}
+          <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
+        </div>
+        <p className="text-center text-slate-400 text-sm">
+          {picked === null ? 'Tap an item to move it' : 'Tap where it goes'}
+        </p>
+        {order.map((itemIdx, pos) => {
+          const isPicked = picked === pos;
+          const isMoved = movedPos === pos;
+          return (
+            <button
+              key={itemIdx}
+              data-testid={`pio-row-${pos}`}
+              aria-pressed={isPicked}
+              disabled={inactive}
+              onClick={() => tapRow(pos)}
+              className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 text-left font-semibold text-lg border-2 transition-all
+                ${inactive ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
+                ${isPicked
+                  ? 'bg-indigo-600 border-indigo-300 text-white ring-2 ring-indigo-300'
+                  : isMoved
+                    ? 'bg-emerald-700 border-emerald-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                }`}
+            >
+              <span className="text-xl font-black w-8 shrink-0 text-center">{pos + 1}</span>
+              <span>{items[itemIdx]}</span>
+            </button>
+          );
+        })}
+        {!inactive && (
+          <button
+            data-testid="pio-lock-in"
+            disabled={inactive}
+            onClick={() => submit({ orderedIndices: order })}
+            className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+          >
+            Lock in
           </button>
         )}
         {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}

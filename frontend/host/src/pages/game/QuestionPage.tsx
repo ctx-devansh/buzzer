@@ -25,6 +25,7 @@ export default function QuestionPage() {
     true_false: 'True / False',
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
+    put_in_order: 'Put in Order',
   };
 
   function editDistanceLabel(d: number): string {
@@ -71,9 +72,25 @@ export default function QuestionPage() {
       </div>
 
       {!questionLocked && (
-        <h2 className="text-4xl font-bold text-slate-100 text-center max-w-3xl leading-tight">
-          {currentQuestion.prompt}
-        </h2>
+        <>
+          <h2 className="text-4xl font-bold text-slate-100 text-center max-w-3xl leading-tight">
+            {currentQuestion.prompt}
+          </h2>
+          {/* Scrambled display order, lettered (not numbered) so it doesn't read as positions */}
+          {currentQuestion.type === 'put_in_order' && (
+            <ul className="w-full max-w-2xl flex flex-col gap-3">
+              {(currentQuestion.config.items ?? []).map((item, i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-4 rounded-2xl bg-slate-800 border border-slate-700 px-5 py-3 text-2xl text-slate-100"
+                >
+                  <span className="font-black text-indigo-400 w-8 shrink-0">{String.fromCharCode(65 + i)}</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <div className="text-slate-300 text-xl">
