@@ -1,0 +1,232 @@
+{
+  "format": "buzzer/game",
+  "version": 1,
+  "game": {
+    "title": "Cell Biology: Cells and Division",
+    "description": "An intro-college review of cell structure, the cell cycle, mitosis, and meiosis. Most questions are graded for accuracy; a few check in on how confident you feel.",
+    "max_players": 150
+  },
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Before we start: how confident do you feel about cell division right now?",
+      "config": {
+        "options": [
+          "Very confident — I could explain it to a classmate",
+          "Fairly confident",
+          "Somewhat unsure",
+          "Not confident yet"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "Which organelle is the main site of ATP production in eukaryotic cells?",
+      "config": {
+        "options": [
+          "Golgi apparatus",
+          "Mitochondrion",
+          "Ribosome",
+          "Lysosome"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [0.0, 1.0, 0.0, 0.0]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "Prokaryotic cells lack a membrane-bound nucleus.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1.0,
+          "false": 0.0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1.0
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Which of these structures are found in typical plant cells but NOT in animal cells? Select all that apply.",
+      "config": {
+        "options": [
+          "Cell wall",
+          "Mitochondria",
+          "Chloroplasts",
+          "Ribosomes",
+          "Large central vacuole"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [1.0, -1.0, 1.0, -1.0, 1.0]
+      },
+      "time_limit_seconds": 30,
+      "points_value": 3.0
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "During interphase, DNA is replicated in the ___ phase. (Answer with the phase's letter.)",
+      "config": {},
+      "answer_data": {
+        "acceptedAnswers": [
+          "S",
+          "S phase",
+          "S-phase",
+          "synthesis",
+          "synthesis phase",
+          "DNA synthesis",
+          "DNA synthesis phase"
+        ],
+        "answerPoints": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        "editDistance": 0
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1.0
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "In which phase of mitosis do sister chromatids separate and move toward opposite poles?",
+      "config": {
+        "options": [
+          "Metaphase",
+          "Prophase",
+          "Anaphase",
+          "Telophase"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [0.0, 0.0, 1.0, 0.0]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "ACCURACY",
+      "prompt": "Put the phases of mitosis in the order they occur.",
+      "config": {
+        "items": [
+          "Anaphase",
+          "Prophase",
+          "Telophase",
+          "Metaphase",
+          "Prometaphase"
+        ]
+      },
+      "answer_data": {
+        "correct_order": [1, 4, 3, 0, 2]
+      },
+      "time_limit_seconds": 45,
+      "points_value": 1.0
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "Meiosis produces two genetically identical diploid daughter cells.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 0.0,
+          "false": 1.0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1.0
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "How many chromosomes does a typical human somatic (body) cell contain? (Answer with a number.)",
+      "config": {},
+      "answer_data": {
+        "acceptedAnswers": [
+          "46",
+          "46 chromosomes",
+          "forty-six",
+          "forty six",
+          "forty-six chromosomes",
+          "forty six chromosomes"
+        ],
+        "answerPoints": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        "editDistance": 0
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Which of these events occur in meiosis but NOT in mitosis? Select all that apply.",
+      "config": {
+        "options": [
+          "Crossing over between homologous chromosomes",
+          "Separation of sister chromatids",
+          "Synapsis (pairing of homologous chromosomes)",
+          "DNA replication before division begins",
+          "Separation of homologous chromosomes"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [1.0, -1.0, 1.0, -1.0, 1.0]
+      },
+      "time_limit_seconds": 30,
+      "points_value": 3.0
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "What is the failure of chromosomes to separate properly during cell division called?",
+      "config": {
+        "options": [
+          "Crossing over",
+          "Cytokinesis",
+          "Apoptosis",
+          "Nondisjunction"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [0.0, 0.0, 0.0, 1.0]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "COMPLETENESS",
+      "prompt": "In a word or two, which cell-division concept is still the most confusing to you?",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 30,
+      "points_value": 1.0
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Rank these topics from the one you feel most confident about to the one you feel least confident about.",
+      "config": {
+        "items": [
+          "Meiosis",
+          "Organelles",
+          "Mitosis",
+          "The cell cycle and checkpoints"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 40,
+      "points_value": 1.0
+    }
+  ]
+}
