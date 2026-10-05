@@ -3,6 +3,7 @@ import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import type { PlayerAnswerReveal, QuestionSummaryItem } from '../../types/game';
 import { orderText } from '../../lib/putInOrder';
+import { aspectOf, isTap, pinVerdict } from '../../lib/pinTheSpot';
 
 function describePlayerAnswer(
   playerAnswer: QuestionSummaryItem['playerAnswer'],
@@ -32,6 +33,9 @@ function describePlayerAnswer(
   }
   if (type === 'put_in_order') {
     return orderText(playerAnswer.orderedIndices, items) ?? '—';
+  }
+  if (type === 'pin_the_spot') {
+    return isTap(playerAnswer) ? 'Pin placed' : '—';
   }
   return '—';
 }
@@ -75,10 +79,19 @@ function QuestionRow({ item, index }: { item: QuestionSummaryItem; index: number
   const noAnswer = !item.playerAnswer;
   // put_in_order ACCURACY: correctness is the stored is_correct (perfect order only).
   const isPioAccuracy = item.type === 'put_in_order' && item.answerReveal.type === 'put_in_order';
-  const isCorrect = isPioAccuracy
-    ? !noAnswer && item.isCorrect
-    : !isCompleteness && !noAnswer && item.pointsAwarded > 0;
-  const isPartial = isPioAccuracy && !noAnswer && !item.isCorrect && item.pointsAwarded > 0;
+  // pin_the_spot ACCURACY: ✓ from the stored isCorrect, ◐ by the stored tap's distance (D9).
+  const pinVerdictValue =
+    item.type === 'pin_the_spot' && item.answerReveal.type === 'pin_the_spot' && !noAnswer
+      ? pinVerdict(item.isCorrect, item.playerAnswer, item.answerReveal, aspectOf(item.config))
+      : null;
+  const isCorrect = pinVerdictValue
+    ? pinVerdictValue === 'correct'
+    : isPioAccuracy
+      ? !noAnswer && item.isCorrect
+      : !isCompleteness && !noAnswer && item.pointsAwarded > 0;
+  const isPartial = pinVerdictValue
+    ? pinVerdictValue === 'partial'
+    : isPioAccuracy && !noAnswer && !item.isCorrect && item.pointsAwarded > 0;
   const showCorrectAnswer = !isCompleteness && !isCorrect;
 
   const playerAnswerLabel = describePlayerAnswer(item.playerAnswer, item.type, options, items);

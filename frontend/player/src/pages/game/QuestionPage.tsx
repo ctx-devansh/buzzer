@@ -1,6 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { TimerBar } from '../../components/ui/TimerBar';
+import { PinCanvas } from '../../components/PinCanvas';
+import { aspectOf } from '../../lib/pinTheSpot';
+import type { PinPoint } from '../../lib/pinTheSpot';
 
 const OPTION_COLORS = [
   'bg-red-600 hover:bg-red-500 border-red-500',
@@ -30,6 +33,9 @@ export default function QuestionPage() {
   );
   const [picked, setPicked] = useState<number | null>(null);
   const [movedPos, setMovedPos] = useState<number | null>(null);
+  // pin_the_spot: the placed (not yet locked) pin; resets on remount like `submitted`.
+  const [pin, setPin] = useState<PinPoint | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     if (questionLocked) setPicked(null);
@@ -291,6 +297,59 @@ export default function QuestionPage() {
           >
             Lock in
           </button>
+        )}
+        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {!submitted && questionLocked && lockedMsg}
+      </div>
+    );
+  }
+
+  if (currentQuestion.type === 'pin_the_spot') {
+    const aspect = aspectOf(currentQuestion.config);
+    const inactive = submitted || questionLocked;
+    const canLock = !inactive && !!pin && !imageFailed;
+    return (
+      <div className="py-6 px-4 flex flex-col gap-3">
+        <div className="pb-2">
+          {questionLabel}
+          <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
+        </div>
+        {/* The one type whose prompt the phone shows: the player is looking down at the image.
+            Plain React text (escaped), as on the host. */}
+        <p data-testid="pin-prompt" className="text-center text-slate-100 text-lg font-semibold leading-snug">
+          {currentQuestion.prompt}
+        </p>
+        {aspect === null ? (
+          <p className="text-center text-slate-400">Image failed to load</p>
+        ) : (
+          <PinCanvas
+            imageUrl={currentQuestion.config.image_url}
+            aspect={aspect}
+            pin={pin}
+            onChange={imageFailed ? undefined : setPin}
+            onSubmit={() => canLock && submit({ x: pin!.x, y: pin!.y })}
+            disabled={inactive}
+            ariaLabel={currentQuestion.prompt}
+            onImageError={() => {
+              setImageFailed(true);
+              setPin(null);
+            }}
+          />
+        )}
+        {!inactive && !imageFailed && aspect !== null && (
+          <>
+            <p className="text-center text-slate-400 text-sm">
+              {pin ? 'Drag to adjust, then lock in' : 'Tap the image to drop your pin'}
+            </p>
+            <button
+              data-testid="pin-lock-in"
+              disabled={!canLock}
+              onClick={() => canLock && submit({ x: pin!.x, y: pin!.y })}
+              className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+            >
+              Lock in
+            </button>
+          </>
         )}
         {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
         {!submitted && questionLocked && lockedMsg}

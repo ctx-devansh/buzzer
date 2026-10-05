@@ -6,6 +6,8 @@ import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal, HostQuestionSummaryItem } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
+import { PinBoard } from '../../components/PinBoard';
+import { aspectOf, revealKey } from '../../lib/pinTheSpot';
 
 const TARGET_BUCKETS = 8;
 
@@ -92,6 +94,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
     put_in_order: 'Put in Order',
+    pin_the_spot: 'Pin the Spot',
   };
 
   const answeredPct = totalPlayers > 0 ? Math.round((totalAnswered / totalPlayers) * 100) : 0;
@@ -151,6 +154,17 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
 
       {/* Distribution */}
       <div className="space-y-2">
+        {type === 'pin_the_spot' && aspectOf(config) !== null && (
+          <PinBoard
+            imageUrl={config.image_url}
+            aspect={aspectOf(config)!}
+            taps={answerDistribution}
+            pinKey={revealKey(reveal)}
+            ariaLabel={`${prompt}: every answer`}
+            maxHeight={420}
+            testId="pin-board-gameover"
+          />
+        )}
         {isPio && pioBars.length > 0 && (
           <p className="text-slate-400 text-sm">{pioCaption(reveal)}</p>
         )}
