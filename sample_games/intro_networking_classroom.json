@@ -1,0 +1,232 @@
+{
+  "format": "buzzer/game",
+  "version": 1,
+  "game": {
+    "title": "Intro to Computer Networks: Core Concepts Check",
+    "description": "An in-class check on DNS, ports, TCP vs. UDP, IPv4, DHCP and the steps of loading a web page, followed by a short self-assessment. One point per question (two for the multi-select).",
+    "max_players": 150
+  },
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "Which protocol translates a domain name such as example.com into an IP address?",
+      "config": {
+        "options": [
+          "DHCP",
+          "DNS",
+          "ARP",
+          "SMTP"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "What is the default TCP port for HTTPS?",
+      "config": {
+        "options": [
+          "80",
+          "22",
+          "443",
+          "8080"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "TCP guarantees that data arrives in the order it was sent.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1,
+          "false": 0
+        }
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "UDP automatically retransmits packets that are lost in transit.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 0,
+          "false": 1
+        }
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "How many bits long is an IPv4 address? (answer with a number)",
+      "config": {
+        "maxLength": 20
+      },
+      "answer_data": {
+        "acceptedAnswers": [
+          "32",
+          "thirty-two",
+          "thirty two"
+        ],
+        "answerPoints": [
+          1,
+          1,
+          1
+        ],
+        "editDistance": 0
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "Which protocol automatically assigns an IP address to a device joining a network? (acronym)",
+      "config": {
+        "maxLength": 20
+      },
+      "answer_data": {
+        "acceptedAnswers": [
+          "DHCP"
+        ],
+        "answerPoints": [
+          1
+        ],
+        "editDistance": 0
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Select every TRANSPORT-layer protocol. Incorrect selections deduct points.",
+      "config": {
+        "options": [
+          "TCP",
+          "IP",
+          "UDP",
+          "HTTP",
+          "Ethernet"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          1,
+          -1,
+          1,
+          -1,
+          -1
+        ]
+      },
+      "time_limit_seconds": 30,
+      "points_value": 2
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "ACCURACY",
+      "prompt": "Put the steps of loading https://example.com for the first time in order.",
+      "config": {
+        "items": [
+          "Browser sends the HTTP GET request",
+          "Browser resolves the domain name via DNS",
+          "Browser renders the page",
+          "TLS handshake negotiates encryption keys",
+          "Server returns the HTML response",
+          "TCP three-way handshake opens a connection"
+        ]
+      },
+      "answer_data": {
+        "correct_order": [
+          1,
+          5,
+          3,
+          0,
+          4,
+          2
+        ]
+      },
+      "time_limit_seconds": 45,
+      "points_value": 1
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "COMPLETENESS",
+      "prompt": "How confident are you explaining what happens after you type a URL and press Enter?",
+      "config": {
+        "options": [
+          "Very confident",
+          "Somewhat confident",
+          "A little unsure",
+          "Not confident yet"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "true_false",
+      "grading_type": "COMPLETENESS",
+      "prompt": "I have used ping or traceroute before this course.",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 15,
+      "points_value": 1
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Which of these networking tools have you used? Select all that apply.",
+      "config": {
+        "options": [
+          "ping",
+          "traceroute",
+          "curl",
+          "Wireshark",
+          "dig / nslookup"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "COMPLETENESS",
+      "prompt": "In a word or two, which networking topic would you most like reviewed next class?",
+      "config": {
+        "maxLength": 40
+      },
+      "answer_data": {},
+      "time_limit_seconds": 30,
+      "points_value": 1
+    }
+  ]
+}
