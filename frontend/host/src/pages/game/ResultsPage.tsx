@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal } from '../../types/game';
+import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
 
 const RESULTS_DISPLAY_SECONDS = 10;
 
@@ -112,7 +113,7 @@ function WordCloud({ distribution, answerReveal, totalAnswered, totalPlayers }: 
 // ---------------------------------------------------------------------------
 
 interface BarChartProps {
-  bars: { label: string; count: number; correct: boolean | null }[];
+  bars: { label: string; count: number; correct: boolean | null; testId?: string }[];
   totalAnswered: number;
   totalPlayers: number;
 }
@@ -132,7 +133,7 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
             : 'bg-indigo-500';
 
         return (
-          <div key={i} className="flex items-center gap-3">
+          <div key={i} className="flex items-center gap-3" data-testid={bar.testId}>
             <span className="text-slate-300 font-bold font-mono w-8 text-right shrink-0">
               {bar.label}
             </span>
@@ -142,15 +143,25 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
                 style={{ width: `${Math.max(pct, bar.count > 0 ? 4 : 0)}%` }}
               >
                 {bar.count > 0 && (
-                  <span className="text-white font-bold text-sm">{bar.count}</span>
+                  <span
+                    className="text-white font-bold text-sm"
+                    data-testid={bar.testId ? `${bar.testId}-count` : undefined}
+                  >
+                    {bar.count}
+                  </span>
                 )}
               </div>
             </div>
             {bar.correct === true && (
               <span className="text-green-400 text-sm font-semibold shrink-0">✓ Correct</span>
             )}
-            {bar.count === 0 && bar.correct !== true && (
-              <span className="text-slate-600 text-sm shrink-0">0</span>
+            {bar.count === 0 && (bar.correct !== true || bar.testId) && (
+              <span
+                className="text-slate-600 text-sm shrink-0"
+                data-testid={bar.testId ? `${bar.testId}-count` : undefined}
+              >
+                0
+              </span>
             )}
           </div>
         );
@@ -237,15 +248,29 @@ export default function ResultsPage() {
   }, [autoAdvance, questionResults, emitAdvance]);
 
   const isFitb = currentQuestion?.type === 'fill_in_the_blank';
+  // Branch on the question type, not reveal.type: a COMPLETENESS put_in_order reveal is
+  // type 'completeness', and buildBars' completeness fallback reads config.options.
+  const isPio = currentQuestion?.type === 'put_in_order';
 
-  const bars =
-    !isFitb && questionResults
-      ? buildBars(
+  const bars = !questionResults
+    ? []
+    : isPio
+      ? buildPioBars(
           questionResults.answerReveal,
           questionResults.answerDistribution,
-          currentQuestion?.config?.options,
+          currentQuestion?.config?.items,
         )
-      : [];
+      : !isFitb
+        ? buildBars(
+            questionResults.answerReveal,
+            questionResults.answerDistribution,
+            currentQuestion?.config?.options,
+          )
+        : [];
+  const pioOrderText =
+    isPio && questionResults
+      ? correctOrderText(questionResults.answerReveal, currentQuestion?.config?.items)
+      : null;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-8">
@@ -257,6 +282,10 @@ export default function ResultsPage() {
         <p className="text-slate-300 text-xl text-center max-w-2xl">
           {currentQuestion.prompt}
         </p>
+      )}
+
+      {questionResults && isPio && bars.length > 0 && (
+        <p className="text-slate-400 text-base -mb-4">{pioCaption(questionResults.answerReveal)}</p>
       )}
 
       {questionResults && isFitb ? (
@@ -273,6 +302,12 @@ export default function ResultsPage() {
           totalPlayers={questionResults.totalPlayers}
         />
       ) : null}
+
+      {pioOrderText && (
+        <p className="text-slate-400 text-lg">
+          Correct order: <span className="text-green-400 font-semibold">{pioOrderText}</span>
+        </p>
+      )}
 
       <div className="flex flex-col items-center gap-2">
         <Button size="lg" onClick={emitAdvance} className="px-10">

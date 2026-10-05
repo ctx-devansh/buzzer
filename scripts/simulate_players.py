@@ -21,6 +21,8 @@ All question types are handled automatically:
   fill_in_the_blank — random word from --fitb-words; if --game-json supplied,
                       correct answers are drawn from acceptedAnswers and wrong
                       answers from --fitb-words
+  put_in_order      — random permutation of the items; if --game-json supplied,
+                      accurate players submit answer_data.correct_order
 
 Usage:
     # Basic — 20 players, default profile mix, default FITB word pool
@@ -258,6 +260,15 @@ class SimPlayer:
             k = random.randint(1, n)
             return {"selectedIndices": sorted(random.sample(range(n), k))}
 
+        if q_type == "put_in_order":
+            correct_order = (jq or {}).get("answer_data", {}).get("correct_order")
+            if correct_order and random.random() < p.accuracy:
+                return {"orderedIndices": list(correct_order)}
+            n = len(q.get("config", {}).get("items", []))
+            if n == 0:
+                return None
+            return {"orderedIndices": random.sample(range(n), n)}
+
         return None  # unknown type
 
     def _answer_str(self, answer: dict) -> str:
@@ -267,6 +278,8 @@ class SimPlayer:
             return f"option {answer['selectedIndex']}"
         if "selectedIndices" in answer:
             return f"options {answer['selectedIndices']}"
+        if "orderedIndices" in answer:
+            return f"order {answer['orderedIndices']}"
         if "selectedValue" in answer:
             return str(answer["selectedValue"])
         return repr(answer)

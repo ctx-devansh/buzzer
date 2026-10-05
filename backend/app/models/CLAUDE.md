@@ -36,7 +36,8 @@ from wire format (e.g. `Question.answer_data` is never serialized to players).
   paths do `await db.refresh(game, ["created_at", "course"])` / expire + refresh explicitly.
 - `Question.config`/`answer_data` and `SessionScore.answer_data` are untyped JSON — their actual
   shape varies by `Question.type` and is enforced only by Pydantic validators in
-  `../schemas/admin.py::QuestionCreate.validate_structure`, not by the DB or ORM layer.
+  `../schemas/admin.py::QuestionCreate.validate_structure` and, for `put_in_order` updates, by
+  `../services/authoring_service.py::update_question` — not by the DB or ORM layer.
 - Several FKs are `NOT NULL` without `ON DELETE CASCADE` (e.g. `game_sessions.game_id`,
   `session_scores.user_id`) — deleting a `Game` or `User` requires manually deleting/reassigning
   dependent rows first (see the gotcha in `../routers/CLAUDE.md` re: `admin.delete_game`/

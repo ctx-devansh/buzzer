@@ -20,7 +20,14 @@ import pytest
 
 from .conftest import create_guest_tokens, create_questions, create_room
 from .engine.orchestrator import run_game, run_game_with_timer_expiry
-from .engine.scoring import compute_expected_summary, compute_player_score
+from .engine.scoring import (
+    _build_reveal,
+    compute_expected_summary,
+    compute_player_score,
+    compute_question_score,
+    expected_distribution,
+    expected_is_correct,
+)
 from .scenarios import collect_all_scenarios
 from .scenarios.edge_cases import EdgeScenario
 
@@ -64,13 +71,16 @@ async def test_game_scenario(scenario, game_setup, base_url, admin_token, fast_m
             timer_seconds=2,
         )
     else:
+        results_sink: list[dict] = []
         payloads = await run_game(
             base_url=base_url,
             host_token=admin_token,
             player_tokens=player_tokens,
             room_code=room_code,
             scenario=scenario,
+            results_sink=results_sink,
         )
+        _assert_put_in_order_live_results(scenario, results_sink)
 
     # ── Assert outcomes ───────────────────────────────────────────────────────
     assert len(payloads) == len(scenario.player_scripts), (
@@ -110,7 +120,7 @@ def _assert_player_outcome(scenario, player_idx: int, payload: dict):
     # ── Final score ───────────────────────────────────────────────────────────
     expected_score = compute_player_score(scenario, player_idx)
     actual_score = payload.get("yourFinalScore", -1)
-    assert actual_score == expected_score, (
+    assert actual_score == pytest.approx(expected_score), (
         f"{label}: expected final score {expected_score}, got {actual_score}"
     )
 
@@ -132,10 +142,17 @@ def _assert_player_outcome(scenario, player_idx: int, payload: dict):
         response = script.responses[q_idx]
 
         # Points awarded
-        assert actual_q["pointsAwarded"] == expected["pointsAwarded"], (
+        assert actual_q["pointsAwarded"] == pytest.approx(expected["pointsAwarded"]), (
             f"{q_label}: expected {expected['pointsAwarded']} pts, "
             f"got {actual_q['pointsAwarded']}"
         )
+
+        # Stored correctness flag (asserted only for types that define it)
+        if expected["isCorrect"] is not None:
+            assert actual_q.get("isCorrect") == expected["isCorrect"], (
+                f"{q_label}: expected isCorrect {expected['isCorrect']}, "
+                f"got {actual_q.get('isCorrect')}"
+            )
 
         # Player's submitted answer (or null for skips)
         if response is None:
@@ -183,6 +200,44 @@ def _assert_answer_matches(label: str, submitted: dict, actual: dict):
             f"{label}: stored text {actual.get('text')!r} "
             f"≠ submitted {submitted['text']!r}"
         )
+    if "orderedIndices" in submitted:
+        assert actual.get("orderedIndices") == submitted["orderedIndices"], (
+            f"{label}: stored orderedIndices {actual.get('orderedIndices')} "
+            f"≠ submitted {submitted['orderedIndices']}"
+        )
+
+
+def _assert_put_in_order_live_results(scenario, results_sink: list[dict]):
+    """
+    Check the live question_results payloads for every put_in_order question: each
+    player's yourPoints / yourIsCorrect, the host's "item@position" distribution, and
+    the host reveal. Other types are not checked here.
+    """
+    assert len(results_sink) == len(scenario.questions)
+    for q_idx, q_spec in enumerate(scenario.questions):
+        if q_spec.type != "put_in_order":
+            continue
+        label = f"Scenario '{scenario.name}', Q{q_idx + 1} live results"
+        results = results_sink[q_idx]
+        responses = [s.responses[q_idx] for s in scenario.player_scripts]
+
+        for p_idx, (response, player_payload) in enumerate(
+            zip(responses, results["players"])
+        ):
+            assert player_payload["yourPoints"] == pytest.approx(
+                compute_question_score(q_spec, response)
+            ), f"{label}: player {p_idx} yourPoints {player_payload['yourPoints']}"
+            assert player_payload["yourIsCorrect"] == expected_is_correct(
+                q_spec, response
+            ), f"{label}: player {p_idx} yourIsCorrect {player_payload['yourIsCorrect']}"
+
+        host = results["host"]
+        assert host["answerDistribution"] == expected_distribution(q_spec, responses), (
+            f"{label}: host answerDistribution {host['answerDistribution']}"
+        )
+        assert host["answerReveal"] == _build_reveal(q_spec), (
+            f"{label}: host answerReveal {host['answerReveal']}"
+        )
 
 
 def _assert_ranking_order(scenario, payloads: list[dict]):
@@ -218,7 +273,18 @@ def _assert_reveal_content(label: str, q_spec, actual_reveal: dict, expected_rev
     """Check reveal payload content matches our locally-computed expectation."""
     kind = expected_reveal.get("type")
     if kind == "completeness":
-        return  # No further content to check
+        # Only put_in_order adds content (an optional correctOrder); None == None otherwise.
+        assert actual_reveal.get("correctOrder") == expected_reveal.get("correctOrder"), (
+            f"{label}: correctOrder {actual_reveal.get('correctOrder')} "
+            f"≠ expected {expected_reveal.get('correctOrder')}"
+        )
+        return
+
+    if kind == "put_in_order":
+        assert actual_reveal.get("correctOrder") == expected_reveal.get("correctOrder"), (
+            f"{label}: correctOrder {actual_reveal.get('correctOrder')} "
+            f"≠ expected {expected_reveal.get('correctOrder')}"
+        )
 
     if kind == "multiple_choice":
         assert set(actual_reveal.get("correctIndices", [])) == set(

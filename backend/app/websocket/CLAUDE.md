@@ -9,7 +9,10 @@ REST call in `../routers/game.py`).
   connect rate limiting, host-disconnect grace period with auto-lock/auto-abandon), `JOIN_ROOM`
   and `REJOIN_ROOM` (initial join vs. reconnect-after-drop, both emit `SYNC_STATE`),
   `HOST_ADVANCE` (the host-driven phase state machine: LOBBY→QUESTION→RESULTS→next
-  QUESTION→…→COMPLETED), `SUBMIT_ANSWER` (validates, scores via `../services/game_service.py`,
+  QUESTION→…→COMPLETED; the personal `question_results` carries `yourPoints` and
+  `yourIsCorrect`, the stored `is_correct`), `SUBMIT_ANSWER` (validates — `multi_select` indices,
+  and `put_in_order` `orderedIndices` as a `type(x) is int` permutation of `config.items`
+  indices, else an `error` event and nothing recorded — scores via `../services/game_service.py`,
   persists, broadcasts), and `HOST_LOCK_QUESTION` (pause/resume the countdown). Also owns the
   per-process in-memory dicts (`_sid_ctx`, `_abandon_tasks`, `_timer_tasks`) that track socket
   context and background asyncio tasks.
@@ -37,8 +40,9 @@ top of those services, mirroring how `../routers/` consumes the same services ov
 - `_question_timer_task`'s cleanup only pops `_timer_tasks[session_id]` if it's still *this*
   task (`is asyncio.current_task()`) — a blind `.pop()` would race a newer replacement timer.
   Preserve that check if touching timer cancellation logic.
-- `_answer_reveal` here duplicates `../services/report_service.py::_answer_reveal` — see the
-  gotcha in `../services/CLAUDE.md`; keep both in sync for any new question type.
+- `_answer_reveal` here duplicates `../services/report_service.py::_answer_reveal` and the two
+  summary reveals in `../services/game_service.py` — see the gotcha in `../services/CLAUDE.md`;
+  keep all four in sync for any new question type.
 - The in-memory manager is deliberately used in dev instead of `AsyncRedisManager` — its pubsub
   listener was found to drop connections under idle load, silently breaking room-targeted emits.
   Don't "fix" this by switching dev to Redis without re-verifying that behavior.

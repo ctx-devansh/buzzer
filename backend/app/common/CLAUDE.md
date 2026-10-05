@@ -11,7 +11,9 @@ limiting. Nothing here is domain-specific (no game/course/session logic).
   equivalent of `get_current_user` is `../websocket/middleware.py::authenticate_socket` —
   duplicated, not shared, since Socket.IO doesn't use FastAPI's dependency injection.
 - `exceptions.py` — `BuzzerError` base class and `NotFoundError`/`ForbiddenError`/
-  `UnauthorizedError`/`ConflictError` subclasses, each mapping to an HTTP status; plus
+  `UnauthorizedError`/`ConflictError`/`ValidationFailedError` (422, `VALIDATION_ERROR` — for
+  services, which can't raise FastAPI's `HTTPException`) subclasses, each mapping to an HTTP
+  status; plus
   `register_exception_handlers(app)`, which installs handlers for `BuzzerError`,
   `RequestValidationError` (422, routed through `jsonable_encoder` — see gotcha), and any
   unhandled `Exception` (500, logged with `exc_info`).

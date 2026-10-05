@@ -3,6 +3,7 @@ from __future__ import annotations
 import secrets
 import uuid
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 import structlog
 from rapidfuzz.distance import Levenshtein
@@ -350,7 +351,11 @@ def calculate_score(question: Question, answer_data: dict) -> ScoreResult:
     """
     Calculate points for a player's answer.
     COMPLETENESS: any answer = full points, no answer = 0
-    ACCURACY:     points come from answer_data.answer_points per selected option
+    ACCURACY:     points come from answer_data.answer_points per selected option;
+                  put_in_order scores pairwise (Kendall-style): points_value * c / t,
+                  rounded half-up to 2 dp and clamped to points_value, where c is the
+                  number of item pairs in the correct relative order and t = n(n-1)/2.
+                  A perfect order scores points_value exactly.
     """
     if not answer_data:
         return ScoreResult(points_awarded=0, is_correct=False)
@@ -404,6 +409,9 @@ def calculate_score(question: Question, answer_data: dict) -> ScoreResult:
             is_correct=(best >= question.points_value),
         )
 
+    if question.type == "put_in_order":
+        return _score_put_in_order(question, answer_data)
+
     if question.type == "multi_select":
         selected = answer_data.get("selectedIndices")
         if not isinstance(selected, list):
@@ -421,6 +429,39 @@ def calculate_score(question: Question, answer_data: dict) -> ScoreResult:
         )
 
     return ScoreResult(points_awarded=0, is_correct=False)
+
+
+def _is_permutation(value: object, n: int) -> bool:
+    """A list of real ints (bools excluded: type(x) is int) forming a permutation of 0..n-1."""
+    return (
+        isinstance(value, list)
+        and all(type(x) is int for x in value)
+        and sorted(value) == list(range(n))
+    )
+
+
+def _score_put_in_order(question: Question, answer_data: dict) -> ScoreResult:
+    sub = answer_data.get("orderedIndices")
+    correct = (question.answer_data or {}).get("correct_order", [])
+    if (
+        not isinstance(correct, list)
+        or len(correct) < 2
+        or not _is_permutation(sub, len(correct))
+    ):
+        return ScoreResult(points_awarded=0, is_correct=False)
+    rank = {item: pos for pos, item in enumerate(correct)}
+    n = len(sub)
+    t = n * (n - 1) // 2
+    c = sum(1 for i in range(n) for j in range(i + 1, n) if rank[sub[i]] < rank[sub[j]])
+    pv = question.points_value
+    if c == t:
+        return ScoreResult(points_awarded=pv, is_correct=True)
+    # round(pv, 6) strips float32 read-back noise before the half-up step;
+    # the min() clamp keeps a >2dp points_value from being exceeded.
+    raw = (Decimal(str(round(pv, 6))) * c / t).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return ScoreResult(points_awarded=min(float(raw), pv), is_correct=False)
 
 
 async def record_answer(
@@ -477,6 +518,14 @@ async def record_answer(
                     await state.increment_answer_dist(
                         redis, session_id, question.id, str(idx)
                     )
+    elif question.type == "put_in_order":
+        # One "item@position" key per item; written under both grading types.
+        ordered = answer_data.get("orderedIndices")
+        if _is_permutation(ordered, len((question.config or {}).get("items", []))):
+            for pos, item in enumerate(ordered):
+                await state.increment_answer_dist(
+                    redis, session_id, question.id, f"{item}@{pos}"
+                )
     if dist_key is not None:
         await state.increment_answer_dist(redis, session_id, question.id, dist_key)
 
@@ -507,6 +556,90 @@ async def get_leaderboard(db: AsyncSession, session_id: str) -> list[dict]:
     return [{"user_id": r.user_id, "score": float(r.total_score or 0)} for r in rows]
 
 
+def _player_summary_reveal(
+    q_type: str, grading_type: str, answer_data: dict, points_value: float
+) -> dict:
+    """Answer reveal for the player game-over recap. One of four reveal copies (with
+    gateway._answer_reveal and report_service._answer_reveal); a unit parity test
+    in tests/unit/test_put_in_order.py keeps them identical."""
+    answer_data = answer_data or {}
+    if q_type == "put_in_order":
+        correct_order = answer_data.get("correct_order")
+        if grading_type == "COMPLETENESS":
+            if correct_order is None:
+                return {"type": "completeness"}
+            return {"type": "completeness", "correctOrder": correct_order}
+        return {"type": "put_in_order", "correctOrder": correct_order or []}
+    if grading_type == "COMPLETENESS":
+        reveal: dict = {"type": "completeness"}
+    elif q_type == "multiple_choice":
+        pts = answer_data.get("answer_points", [])
+        correct_indices = [i for i, p in enumerate(pts) if p >= points_value]
+        reveal = {"type": "multiple_choice", "correctIndices": correct_indices}
+    elif q_type == "true_false":
+        pts_map = answer_data.get("answer_points", {})
+        correct_true = pts_map.get("true", 0) >= points_value
+        reveal = {"type": "true_false", "correctValue": correct_true}
+    elif q_type == "fill_in_the_blank":
+        reveal = {
+            "type": "fill_in_the_blank",
+            "acceptedAnswers": answer_data.get("acceptedAnswers", []),
+            "editDistance": answer_data.get("editDistance", 0),
+        }
+    elif q_type == "multi_select":
+        reveal = {
+            "type": "multi_select",
+            "answerPoints": answer_data.get("answer_points", []),
+        }
+    else:
+        reveal = {}
+    return reveal
+
+
+def _host_summary_reveal(
+    q_type: str, grading_type: str, answer_data: dict, points_value: float
+) -> dict:
+    """Answer reveal for the host game-over screen. One of four reveal copies (with
+    gateway._answer_reveal and report_service._answer_reveal); a unit parity test
+    in tests/unit/test_put_in_order.py keeps them identical."""
+    answer_data = answer_data or {}
+    if q_type == "put_in_order":
+        correct_order = answer_data.get("correct_order")
+        if grading_type == "COMPLETENESS":
+            if correct_order is None:
+                return {"type": "completeness"}
+            return {"type": "completeness", "correctOrder": correct_order}
+        return {"type": "put_in_order", "correctOrder": correct_order or []}
+    if grading_type == "COMPLETENESS":
+        reveal: dict = {"type": "completeness"}
+    elif q_type == "multiple_choice":
+        pts_list = answer_data.get("answer_points", [])
+        reveal = {
+            "type": "multiple_choice",
+            "correctIndices": [i for i, p in enumerate(pts_list) if p >= points_value],
+        }
+    elif q_type == "true_false":
+        pts_map = answer_data.get("answer_points", {})
+        reveal = {
+            "type": "true_false",
+            "correctValue": pts_map.get("true", 0) >= points_value,
+        }
+    elif q_type == "fill_in_the_blank":
+        reveal = {
+            "type": "fill_in_the_blank",
+            "acceptedAnswers": answer_data.get("acceptedAnswers", []),
+            "editDistance": answer_data.get("editDistance", 0),
+        }
+    elif q_type == "multi_select":
+        reveal = {
+            "type": "multi_select",
+            "answerPoints": answer_data.get("answer_points", []),
+        }
+    else:
+        reveal = {}
+    return reveal
+
+
 async def get_player_question_summary(
     db: AsyncSession, session_id: str, user_id: str
 ) -> list[dict]:
@@ -525,6 +658,7 @@ async def get_player_question_summary(
             SessionScore.points_awarded,
             SessionScore.answer_time_ms,
             SessionScore.answer_data.label("player_answer"),
+            SessionScore.is_correct,
         )
         .join(GameSession, GameSession.game_id == Question.game_id)
         .outerjoin(
@@ -544,29 +678,7 @@ async def get_player_question_summary(
         q_ans = r.q_answer_data or {}
         pts_val = r.points_value
 
-        if grading_type == "COMPLETENESS":
-            reveal: dict = {"type": "completeness"}
-        elif q_type == "multiple_choice":
-            pts = q_ans.get("answer_points", [])
-            correct_indices = [i for i, p in enumerate(pts) if p >= pts_val]
-            reveal = {"type": "multiple_choice", "correctIndices": correct_indices}
-        elif q_type == "true_false":
-            pts_map = q_ans.get("answer_points", {})
-            correct_true = pts_map.get("true", 0) >= pts_val
-            reveal = {"type": "true_false", "correctValue": correct_true}
-        elif q_type == "fill_in_the_blank":
-            reveal = {
-                "type": "fill_in_the_blank",
-                "acceptedAnswers": q_ans.get("acceptedAnswers", []),
-                "editDistance": q_ans.get("editDistance", 0),
-            }
-        elif q_type == "multi_select":
-            reveal = {
-                "type": "multi_select",
-                "answerPoints": q_ans.get("answer_points", []),
-            }
-        else:
-            reveal = {}
+        reveal = _player_summary_reveal(q_type, grading_type, q_ans, pts_val)
 
         result.append(
             {
@@ -580,6 +692,7 @@ async def get_player_question_summary(
                 "answerTimeMs": r.answer_time_ms,
                 "playerAnswer": r.player_answer,
                 "answerReveal": reveal,
+                "isCorrect": bool(r.is_correct),
             }
         )
 
@@ -654,33 +767,7 @@ async def get_host_question_summary(
         pts_val = q["points_value"]
         grading_type = q["grading_type"]
 
-        if grading_type == "COMPLETENESS":
-            reveal: dict = {"type": "completeness"}
-        elif q_type == "multiple_choice":
-            pts_list = q_ans.get("answer_points", [])
-            reveal = {
-                "type": "multiple_choice",
-                "correctIndices": [i for i, p in enumerate(pts_list) if p >= pts_val],
-            }
-        elif q_type == "true_false":
-            pts_map = q_ans.get("answer_points", {})
-            reveal = {
-                "type": "true_false",
-                "correctValue": pts_map.get("true", 0) >= pts_val,
-            }
-        elif q_type == "fill_in_the_blank":
-            reveal = {
-                "type": "fill_in_the_blank",
-                "acceptedAnswers": q_ans.get("acceptedAnswers", []),
-                "editDistance": q_ans.get("editDistance", 0),
-            }
-        elif q_type == "multi_select":
-            reveal = {
-                "type": "multi_select",
-                "answerPoints": q_ans.get("answer_points", []),
-            }
-        else:
-            reveal = {}
+        reveal = _host_summary_reveal(q_type, grading_type, q_ans, pts_val)
 
         dist: dict[str, int] = {}
         correct_count = 0
@@ -710,6 +797,14 @@ async def get_host_question_summary(
                             if isinstance(idx, int):
                                 k = str(idx)
                                 dist[k] = dist.get(k, 0) + 1
+                elif q_type == "put_in_order":
+                    # Keyed on type alone: COMPLETENESS charts read the same counts.
+                    # Rows that aren't a permutation of the current items are skipped.
+                    ordered = ans.get("orderedIndices")
+                    if _is_permutation(ordered, len(q["config"].get("items", []))):
+                        for pos, item in enumerate(ordered):
+                            k = f"{item}@{pos}"
+                            dist[k] = dist.get(k, 0) + 1
             if s["is_correct"]:
                 correct_count += 1
             if s["answer_time_ms"] is not None:

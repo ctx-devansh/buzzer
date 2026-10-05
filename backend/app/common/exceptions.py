@@ -37,6 +37,13 @@ class ConflictError(BuzzerError):
         super().__init__("CONFLICT", message, status.HTTP_409_CONFLICT)
 
 
+class ValidationFailedError(BuzzerError):
+    def __init__(self, message: str = "Validation failed"):
+        super().__init__(
+            "VALIDATION_ERROR", message, status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(BuzzerError)
     async def buzzer_error_handler(request: Request, exc: BuzzerError) -> JSONResponse:

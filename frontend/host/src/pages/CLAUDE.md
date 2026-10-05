@@ -91,10 +91,16 @@ on `../components/ui/` (see `../components/CLAUDE.md`). Socket payload types com
 - **Adding a question type touches the host in three places:** the `typeLabel` maps in
   `QuestionPage` and `GameOverPage`, `buildBars()` in `ResultsPage`, and `QuestionCard` in
   `GameOverPage`. The `AnswerReveal` union in `../types/game.ts` must also match
-  `gateway.py::_answer_reveal`.
+  `gateway.py::_answer_reveal`. `put_in_order` bars come from `buildPioBars` in
+  `../lib/putInOrder.ts` (shared by both pages), and both pages branch on the **question type**
+  before any `reveal.type` check — a COMPLETENESS `put_in_order` reveal is type `completeness`,
+  and `buildBars`' completeness fallback would read `config.options`.
   The editor is a fourth: `manage/QuestionEditorPage.tsx` (`QuestionType` union, `typeLabel`,
   a `build*Payload` helper, `questionToForm`, `formToPayload` — which derives ACCURACY
-  `points_value` on the client — and the `QuestionForm` UI; reorder posts `{order: [ids]}`).
+  `points_value` on the client except for `put_in_order`, where it is authored directly — and
+  the `QuestionForm` UI; reorder posts `{order: [ids]}`). `buildPioPayload` scrambles only when
+  the item list changed; otherwise it resends the stored `config.items`/`correct_order`
+  verbatim, because past answers index into the stored scramble.
 - `ResultsPage`'s word-cloud colouring is an approximation. The backend grades fill-in-the-blank
   after collapsing internal whitespace (`" ".join(text.lower().split())`) and uses
   `rapidfuzz`'s Levenshtein. The client only lowercases. A word can appear grey on the host
