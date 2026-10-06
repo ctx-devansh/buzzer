@@ -68,6 +68,7 @@ CLEAN_INFO_KEYS = frozenset(
         "background",
         "duration",
         "timestamp",
+        "version",  # GIF87a / GIF89a
     }
 )
 
@@ -118,6 +119,8 @@ def _reencode(img: PILImage.Image, fmt: str) -> bytes:
         if img.mode not in ("RGB", "L", "CMYK"):
             img = img.convert("RGB")
         img.save(buf, "JPEG", quality=90)
+    elif fmt == "GIF":
+        img.save(buf, "GIF")
     elif fmt == "PNG":
         img.save(buf, "PNG", optimize=True)
     else:
@@ -132,7 +135,8 @@ def process_upload(raw: bytes) -> ProcessedImage:
     The format is the one Pillow detects, never a client's Content-Type or file
     extension (SVG can't be decoded, so it is impossible). Animated images and static
     GIFs are stored byte for byte; a static PNG/JPEG/WebP is stored byte for byte when
-    it is clean, and otherwise turned upright and re-encoded without metadata.
+    it is clean, and otherwise turned upright and re-encoded without metadata. A static
+    GIF goes through the same allowlist (it can carry comments and XMP).
     Contract: process_upload(process_upload(x).data).data == process_upload(x).data.
     """
     if not raw:
@@ -166,7 +170,7 @@ def process_upload(raw: bytes) -> ProcessedImage:
         raise ImageRejected("Image width and height must be from 1 to 20000 pixels")
 
     animated = getattr(img, "n_frames", 1) > 1
-    if animated or fmt == "GIF" or _is_clean(img):
+    if animated or _is_clean(img):
         data = raw
     else:
         data = _reencode(img, fmt)

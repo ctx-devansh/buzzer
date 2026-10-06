@@ -90,6 +90,12 @@ FIXTURES = {
     "jpeg_comment": lambda: _encode(_photo(), "JPEG", comment=b"secret"),
     "jpeg_iptc": _jpeg_with_iptc,
     "gif_static": lambda: _encode(Image.new("P", (12, 8), 5), "GIF"),
+    "gif_comment": lambda: _encode(
+        Image.new("P", (12, 8), 5), "GIF", comment=b"Shot at 43.07N 89.40W"
+    ),
+    "gif_transparent": lambda: _encode(
+        Image.new("P", (12, 8), 5), "GIF", transparency=5, comment=b"note"
+    ),
     "gif_animated": _animated_gif,
     "webp": lambda: _encode(_photo(), "WEBP", quality=80),
     "webp_exif": lambda: _encode(_photo(), "WEBP", quality=80, exif=_maker_exif()),
@@ -216,7 +222,7 @@ def test_exif_with_gps_is_removed():
     assert "exif" not in stored.info
 
 
-@pytest.mark.parametrize("name", ["png_text", "jpeg_comment", "jpeg_iptc"])
+@pytest.mark.parametrize("name", ["png_text", "jpeg_comment", "jpeg_iptc", "gif_comment"])
 def test_other_metadata_is_removed(name):
     raw = FIXTURES[name]()
     out = process_upload(raw)
@@ -350,3 +356,12 @@ def test_pin_accepts_image_id_and_rejects_both_sources():
     both = {"image_id": IMG, "image_url": PIN_URL, **sized}
     with pytest.raises(ValueError, match="exactly"):
         validate_pin_the_spot("COMPLETENESS", both, {})
+
+
+def test_static_gif_comment_removed_and_transparency_kept():
+    out = process_upload(FIXTURES["gif_transparent"]())
+    stored = Image.open(io.BytesIO(out.data))
+    assert out.content_type == "image/gif"
+    assert "comment" not in stored.info
+    # Pillow compacts the palette on save, so check the pixel, not the index.
+    assert stored.convert("RGBA").getpixel((0, 0))[3] == 0
