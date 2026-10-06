@@ -41,7 +41,7 @@ def test_host_signs_in_with_password_and_lands_in_shell(env: Env, page_as):
     page.get_by_role("button", name="Sign In").click()
 
     expect(page).to_have_url(re.compile(r"/host/home$"))
-    for item in ("Play", "Games", "Rosters", "Sessions", "Sign out"):
+    for item in ("Play", "Games", "Courses", "Sessions", "Sign out"):
         expect(page.get_by_role("navigation").get_by_text(item, exact=True)).to_be_visible()
     # Role USER: the admin link is display-gated on the JWT role claim.
     expect(page.get_by_text("Admin console")).to_have_count(0)
@@ -112,7 +112,7 @@ def test_roster_of_unhosted_course_shows_host_access_message(env: Env, page_as):
     page = page_as(env.host.token)
     page.goto(f"/host/courses/{env.course_b['id']}/roster")
     expect(page.get_by_text("You don't have HOST access to this course")).to_be_visible()
-    expect(page.get_by_role("button", name="Back to Rosters")).to_be_visible()
+    expect(page.get_by_role("button", name="Back to Courses")).to_be_visible()
     expect(page.get_by_role("heading", name="Course Roster")).to_have_count(0)
 
 
