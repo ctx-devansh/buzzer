@@ -5,7 +5,7 @@
 | Task | T6 (quiz/game JSON files), Satvik's two games |
 | Owner | Satvik Utkoori (utkoori) |
 | Branch | `feature/t7-redo` (both T7 types, `put_in_order` and `pin_the_spot`, are on this branch) |
-| Status | Revised after two Goldfish rounds (§8). Implementation in progress |
+| Status | Implemented and live-checked (§8) |
 | Related | [instructions.md](../instructions.md) T6, [design-pin-the-spot.md](design-pin-the-spot.md), [design-put-in-order.md](design-put-in-order.md) |
 
 This replaces an earlier T6 design at this path, whose implementation was reverted in `8c26fb3`
@@ -416,3 +416,4 @@ the last commit (findings already present in `tests/integration/conftest.py` and
 | 2026-10-05 | First draft, from the design discussion (S1–S10), committed before the Goldfish test |
 | 2026-10-05 | Goldfish revisions. **G1** classroom Q4 was false for a root commit → "except the very first". **G2** answer shapes verified against `validate_structure`/`calculate_score` and listed in §5; commit 3 now requires a 201 import. **G3** import test compares a fixed key list (not `order_index`/`course_id`); starters' round trip and every prompt's sanitiser stability checked. **G4** `Cleanup` created before the `try`, `cleanup.run()` in `finally`. **G5** `write()` sets COMPLETENESS `answer_data` to `{}` (it disagreed with `--check`), with a test. **G6** `main(argv)` signature; exit-2 test case named. **G7** `PlanRow` fields, out-of-range index is a `PlanError`, draw order = listed order. **G8** §5.3 reason corrected. **G9** party Q4 edit-distance list completed. **G10** live check signed in as admin. S9 defaults (frown, `git switch -c`) unchanged |
 | 2026-10-05 | Goldfish round 2. Classroom Q4 reworded to the merge-commit statement (the G1 wording was still false for extra root commits). Confirmed `simulate_players.py --game-json` answers `put_in_order` and aims `pin_the_spot` taps at the target, so §5.8 needs no script change |
+| 2026-10-05 | Implemented (§5.1–5.7). `--check` exits 0; targets equal the drawings; images checked by eye; all 14 `sample_games/*.json` pass `test_sample_games.py`. **Live check (§5.8) passed** on :8080, signed in as admin, Socket.IO-scripted host, 20 simulated players (18 joined before start): every question in both games was shown and answered; both ACCURACY pin reveals equal the file's target and radii, with taps clustered on the target (classroom Q8 11/13, party Q3 7/14 inside `r_zero`; the rest are the simulator's deliberately inaccurate players); Game Over carries a summary for every question, including each pin's distribution and reveal. Imported games deleted afterwards |
