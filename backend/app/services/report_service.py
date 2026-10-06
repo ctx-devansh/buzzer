@@ -263,8 +263,8 @@ PTS_BOARD_WIDTH = 1000  # SVG user units; everything scales with the viewBox
 
 def _render_pin_board(q: Question, dist: dict[str, int], reveal: dict) -> str:
     """Inline SVG in the stored aspect (the image is stretched to it, as on every canvas):
-    the image, then every tap (dot area grows with repeats), then the full-credit circle,
-    the dashed zero-credit circle and the target when the reveal has them."""
+    the image, then the dashed zero-credit and full-credit circles when the reveal has them,
+    then every tap (dot area grows with repeats), then the target on top."""
     config = q.config or {}
     aspect = pin_the_spot.aspect(config)
     if aspect is None:

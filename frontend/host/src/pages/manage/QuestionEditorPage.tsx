@@ -162,7 +162,11 @@ const round3 = (v: number) => Math.round(v * 1000) / 1000;
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    // An SVG without dimensions loads as 0 × 0: no aspect, so no target or radii to set.
+    img.onload = () =>
+      img.naturalWidth > 0 && img.naturalHeight > 0
+        ? resolve(img)
+        : reject(new Error('Image has no size; use a PNG, JPEG, GIF or WebP'));
     img.onerror = () => reject(new Error('Image failed to load'));
     img.src = src;
   });

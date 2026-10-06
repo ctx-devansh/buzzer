@@ -223,7 +223,8 @@ export function PinCanvas({
         ref={canvasRef}
         data-testid="pin-canvas"
         data-loaded={image ? 'true' : 'false'}
-        role="img"
+        // A focusable control while it takes taps and arrow keys; a picture when read-only.
+        role={interactive ? 'application' : 'img'}
         aria-label={ariaLabel}
         tabIndex={interactive ? 0 : -1}
         onPointerDown={handlePointerDown}

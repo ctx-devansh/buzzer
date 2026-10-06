@@ -104,7 +104,8 @@ on `../components/ui/` (see `../components/CLAUDE.md`). Socket payload types com
   `points_value` on the client except for `put_in_order` and `pin_the_spot`, where it is
   authored directly — and the `QuestionForm` UI; reorder posts `{order: [ids]}`).
   `pin_the_spot`: a file is downscaled to ≤ 1280 px on white and re-encoded as JPEG (0.85 → 0.7
-  → 0.5 while over 1,500,000 chars, else "Image too large"); an `https` URL is kept as-is. A new
+  → 0.5 while over 1,500,000 chars, else "Image too large"); an `https` URL is kept as-is. An image
+  that loads as 0 × 0 (e.g. an SVG without dimensions) is refused. A new
   image clears the target and clamps radii. `buildPinPayload` resends the stored `config` and,
   unless the target or a slider was touched, the stored `answer_data` verbatim — a played
   question's image is frozen (409), and imported off-grid radii must not be snapped. `buildPioPayload` scrambles only when

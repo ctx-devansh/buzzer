@@ -20,7 +20,8 @@ letterboxed into the *stored* aspect, DPR-sharp, redrawn on resize/orientation; 
 capture and `touch-action: none`: a tap that starts in the letterbox is ignored, a drag off the
 image clamps to its edge, nothing before the image loads. Keyboard (`tabIndex=0`): the first
 arrow places the pin at the centre, arrows nudge 0.01 (Shift 0.05), Enter locks in. Read-only
-with `reveal` (target and circles) on the results screen. `--pin-*` colours; `data-loaded`.
+with `reveal` (target and circles) on the results screen. `role="application"` while it takes
+input, `role="img"` read-only. `--pin-*` colours; `data-loaded`.
 
 **How it fits in.** `../pages/JoinPage.tsx` and `NamePage.tsx` use `Button`/`Card`/`Input`.
 `../pages/game/QuestionPage.tsx` uses `TimerBar` (with `paused={questionLocked}`).
