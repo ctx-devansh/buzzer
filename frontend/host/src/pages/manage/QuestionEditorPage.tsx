@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Download, ImagePlus } from 'lucide-react';
 import { api } from '../../lib/api';
+import { loadImage, toPinDataUrl, type PinUrlImage } from '../../lib/imageFile';
+import { imageUrl, type LibraryImage } from '../../lib/images';
+import { ImagePicker, uploadToLibrary } from '../../components/ImagePicker';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardHeader } from '../../components/ui/card';
@@ -21,6 +24,7 @@ interface Question {
   type: QuestionType;
   grading_type: GradingType;
   prompt: string;
+  prompt_image_id: string | null;
   config: Record<string, unknown>;
   answer_data: Record<string, unknown>;
   time_limit_seconds: number;
@@ -32,11 +36,23 @@ interface Game { id: number; title: string; course_id: number | null; course_nam
 
 // ---- helpers for building config/answer_data per type ----
 
-interface McOption { text: string; points: number }
+/** An option row. Its image travels with it, so adding, removing or reordering keeps them aligned. */
+interface McOption { text: string; points: number; imageId?: string | null }
+
+/**
+ * config for MC / multi-select: option_image_ids only when some option has an image.
+ * config is replaced as a whole on update, so leaving the key out removes stored images.
+ */
+function optionsConfig(options: McOption[]): Record<string, unknown> {
+  const ids = options.map((o) => o.imageId ?? null);
+  return ids.some((id) => id !== null)
+    ? { options: options.map((o) => o.text), option_image_ids: ids }
+    : { options: options.map((o) => o.text) };
+}
 
 function buildMcPayload(options: McOption[], _grading: GradingType) {
   return {
-    config: { options: options.map((o) => o.text) },
+    config: optionsConfig(options),
     answer_data: { answer_points: options.map((o) => o.points) },
   };
 }
@@ -50,7 +66,7 @@ function buildTfPayload(truePoints: number, falsePoints: number) {
 
 function buildMsPayload(options: McOption[]) {
   return {
-    config: { options: options.map((o) => o.text) },
+    config: optionsConfig(options),
     answer_data: { answer_points: options.map((o) => o.points) },
   };
 }
@@ -150,60 +166,28 @@ function pioItemsError(pioItems: string[]): string | null {
 
 // ---- pin_the_spot ----
 
-/** Stored config, resent verbatim unless a new image is picked (D3's played-image guard). */
-interface PinImage { image_url: string; image_width: number; image_height: number }
+/** A course-library canvas (T8): the server sets its size from the image row. */
+interface PinLibraryImage { image_id: string; image_width: number; image_height: number }
 
-const PIN_MAX_URL_CHARS = 1_500_000;
-const PIN_MAX_SIDE = 1280;
-const PIN_QUALITIES = [0.85, 0.7, 0.5];
+/**
+ * The canvas: exactly the stored config (image_url or image_id, never both), resent
+ * verbatim unless a new image is picked (D3's played-image guard).
+ */
+type PinImage = PinUrlImage | PinLibraryImage;
+
+/** What PinBoard draws: the library URL for image_id, else the stored image_url. */
+function pinImageSrc(image: PinImage): string {
+  return 'image_id' in image ? imageUrl(image.image_id) : image.image_url;
+}
+
+function libraryPinImage(image: LibraryImage): PinLibraryImage {
+  return { image_id: image.id, image_width: image.width, image_height: image.height };
+}
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    // An SVG without dimensions loads as 0 × 0: no aspect, so no target or radii to set.
-    img.onload = () =>
-      img.naturalWidth > 0 && img.naturalHeight > 0
-        ? resolve(img)
-        : reject(new Error('Image has no size; use a PNG, JPEG, GIF or WebP'));
-    img.onerror = () => reject(new Error('Image failed to load'));
-    img.src = src;
-  });
-}
-
-/**
- * A local file → JPEG data: URL, longest side ≤ 1280 px (never upscaled), drawn on white so
- * PNG transparency doesn't turn black (an animated GIF keeps its first frame). Retries at
- * lower quality while over the server's 1,500,000-character limit.
- */
-async function fileToPinImage(file: File): Promise<PinImage> {
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const img = await loadImage(objectUrl);
-    const scale = Math.min(1, PIN_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth * scale));
-    const h = Math.max(1, Math.round(img.naturalHeight * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Image failed to load');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
-    for (const q of PIN_QUALITIES) {
-      const url = canvas.toDataURL('image/jpeg', q);
-      if (url.length <= PIN_MAX_URL_CHARS) return { image_url: url, image_width: w, image_height: h };
-    }
-    throw new Error('Image too large');
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
 /** A pasted https URL, kept as-is; its natural size becomes the stored size. */
-async function urlToPinImage(raw: string): Promise<PinImage> {
+async function urlToPinImage(raw: string): Promise<PinUrlImage> {
   const url = raw.trim();
   if (!/^https:\/\/\S+$/i.test(url)) throw new Error('Paste an https:// image URL');
   const img = await loadImage(url);
@@ -232,12 +216,71 @@ function pinError(form: FormState): string | null {
   return null;
 }
 
+// ---- images ----
+
+/** A library image thumbnail with Remove / Re-pick; a deleted image shows as missing. */
+function ImageThumb({
+  id,
+  onRemove,
+  onRepick,
+  size = 'md',
+  testId,
+}: {
+  id: string;
+  onRemove: () => void;
+  onRepick: () => void;
+  size?: 'sm' | 'md';
+  testId?: string;
+}) {
+  const [missing, setMissing] = useState(false);
+  useEffect(() => setMissing(false), [id]);
+  const box = size === 'sm' ? 'h-10 w-14' : 'h-24 w-36';
+  return (
+    <div className="flex items-center gap-1" data-testid={testId}>
+      {missing ? (
+        <div className={`${box} flex items-center justify-center rounded border border-dashed border-red-500 text-center text-[10px] text-red-400`}>
+          Missing image
+        </div>
+      ) : (
+        <img
+          src={imageUrl(id)}
+          alt=""
+          onError={() => setMissing(true)}
+          className={`${box} rounded border border-slate-700 bg-slate-900 object-contain`}
+        />
+      )}
+      <Button type="button" variant="ghost" size="sm" onClick={onRepick}>
+        {missing ? 'Re-pick' : 'Change'}
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onRemove} aria-label="Remove image">
+        <Trash2 size={12} />
+      </Button>
+    </div>
+  );
+}
+
+/** A stored option's image in the read-only question list. */
+function OptionThumb({ q, index }: { q: Question; index: number }) {
+  const id = ((q.config['option_image_ids'] as (string | null)[] | undefined) ?? [])[index];
+  return id ? <img src={imageUrl(id)} alt="" className="h-6 w-8 rounded object-contain" /> : null;
+}
+
+/** Where a picked library image goes. */
+type PickerTarget =
+  | { kind: 'prompt' }
+  | { kind: 'option'; list: 'mcOptions' | 'msOptions'; index: number }
+  | { kind: 'pin' };
+
+const NO_COURSE_NOTE = 'Attach this game to a course to use images';
+
 // ---- QuestionForm subcomponent ----
 
 interface FormState {
   type: QuestionType;
   grading: GradingType;
   prompt: string;
+  /** Course-library image under the prompt on the host screen (not for pin_the_spot). */
+  promptImageId: string | null;
   timeLimitSeconds: number;
   pointsValue: number;
   // multiple_choice
@@ -267,6 +310,7 @@ const defaultForm = (): FormState => ({
   type: 'multiple_choice',
   grading: 'ACCURACY',
   prompt: '',
+  promptImageId: null,
   timeLimitSeconds: 30,
   pointsValue: 1,
   mcOptions: [{ text: '', points: 1 }, { text: '', points: 0 }],
@@ -291,13 +335,15 @@ function questionToForm(q: Question): FormState {
     type: q.type,
     grading: q.grading_type,
     prompt: q.prompt,
+    promptImageId: q.prompt_image_id ?? null,
     timeLimitSeconds: q.time_limit_seconds,
     pointsValue: q.points_value,
   };
+  const optionImages = (q.config['option_image_ids'] as (string | null)[] | undefined) ?? [];
   if (q.type === 'multiple_choice') {
     const opts = (q.config['options'] as string[]) ?? [];
     const pts = (q.answer_data['answer_points'] as number[]) ?? [];
-    base.mcOptions = opts.map((text, i) => ({ text, points: pts[i] ?? 0 }));
+    base.mcOptions = opts.map((text, i) => ({ text, points: pts[i] ?? 0, imageId: optionImages[i] ?? null }));
   } else if (q.type === 'true_false') {
     const ap = q.answer_data['answer_points'] as { true: number; false: number } | undefined;
     base.tfTruePoints = ap?.true ?? 1;
@@ -313,7 +359,7 @@ function questionToForm(q: Question): FormState {
     const opts = (q.config['options'] as string[]) ?? [];
     const pts = (q.answer_data['answer_points'] as number[]) ?? [];
     base.msOptions = opts.length
-      ? opts.map((text, i) => ({ text, points: pts[i] ?? 1 }))
+      ? opts.map((text, i) => ({ text, points: pts[i] ?? 1, imageId: optionImages[i] ?? null }))
       : [{ text: '', points: 1 }, { text: '', points: 1 }];
   } else if (q.type === 'put_in_order') {
     const items = (q.config['items'] as string[]) ?? [];
@@ -324,12 +370,10 @@ function questionToForm(q: Question): FormState {
     base.pioStored = correctOrder ? { items, correct_order: correctOrder } : { items };
   } else if (q.type === 'pin_the_spot') {
     const c = q.config;
-    if (typeof c['image_url'] === 'string' && typeof c['image_width'] === 'number' && typeof c['image_height'] === 'number') {
-      base.pinImage = {
-        image_url: c['image_url'],
-        image_width: c['image_width'],
-        image_height: c['image_height'],
-      };
+    if (typeof c['image_width'] === 'number' && typeof c['image_height'] === 'number') {
+      const size = { image_width: c['image_width'], image_height: c['image_height'] };
+      if (typeof c['image_id'] === 'string') base.pinImage = { image_id: c['image_id'], ...size };
+      else if (typeof c['image_url'] === 'string') base.pinImage = { image_url: c['image_url'], ...size };
     }
     const t = q.answer_data['target'] as PinPoint | undefined;
     if (t && typeof t.x === 'number' && typeof t.y === 'number') base.pinTarget = { x: t.x, y: t.y };
@@ -384,6 +428,8 @@ function formToPayload(form: FormState) {
     type: form.type,
     grading_type: form.grading,
     prompt: form.prompt,
+    // Always sent: null clears a stored prompt image (design §4.2). Never on pin_the_spot.
+    prompt_image_id: form.type === 'pin_the_spot' ? null : form.promptImageId,
     config,
     answer_data,
     time_limit_seconds: form.timeLimitSeconds,
@@ -393,16 +439,20 @@ function formToPayload(form: FormState) {
 
 function QuestionForm({
   initial,
+  courseId,
   onSave,
   onCancel,
   saving,
 }: {
   initial: FormState;
+  /** The game's course; null (an unattached game) disables the image library. */
+  courseId: number | null;
   onSave: (payload: ReturnType<typeof formToPayload>) => void;
   onCancel: () => void;
   saving: boolean;
 }) {
   const [form, setForm] = useState<FormState>(initial);
+  const [picker, setPicker] = useState<PickerTarget | null>(null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -416,7 +466,10 @@ function QuestionForm({
   const pinAspect = aspectOf(form.pinImage ?? undefined);
   const pinRZeroMax = pinAspect !== null ? floor2(diagonal(pinAspect)) : floor2(Math.SQRT2);
 
-  /** A new image clears the target and clamps the radii to its diagonal. */
+  /**
+   * A different canvas (a file, a library pick or a URL) clears the target and clamps the
+   * radii to its diagonal. Picking the library image that is already the canvas keeps both.
+   */
   async function pickPinImage(load: () => Promise<PinImage>) {
     setPinBusy(true);
     setPinImageError(null);
@@ -424,6 +477,10 @@ function QuestionForm({
       const image = await load();
       const max = floor2(diagonal(image.image_height / image.image_width));
       setForm((prev) => {
+        if ('image_id' in image && prev.pinImage && 'image_id' in prev.pinImage
+            && prev.pinImage.image_id === image.image_id) {
+          return prev;
+        }
         const rZero = Math.min(prev.pinRZero, max);
         const rFull = Math.min(prev.pinRFull, round3(rZero - R_GAP));
         return {
@@ -437,6 +494,54 @@ function QuestionForm({
     } finally {
       setPinBusy(false);
     }
+  }
+
+  function setOptionImage(list: 'mcOptions' | 'msOptions', index: number, imageId: string | null) {
+    setForm((prev) => {
+      const opts = [...prev[list]];
+      opts[index] = { ...opts[index], imageId };
+      return { ...prev, [list]: opts };
+    });
+  }
+
+  function onPicked(image: LibraryImage) {
+    const target = picker;
+    setPicker(null);
+    if (!target) return;
+    if (target.kind === 'prompt') set('promptImageId', image.id);
+    else if (target.kind === 'option') setOptionImage(target.list, target.index, image.id);
+    else void pickPinImage(async () => libraryPinImage(image));
+  }
+
+  /** The image button + thumbnail of one MC / multi-select option row. */
+  function optionImageControl(list: 'mcOptions' | 'msOptions', i: number) {
+    const id = form[list][i]?.imageId;
+    if (id) {
+      return (
+        <ImageThumb
+          id={id}
+          size="sm"
+          onRemove={() => setOptionImage(list, i, null)}
+          onRepick={() => setPicker({ kind: 'option', list, index: i })}
+          testId={`option-image-${i}`}
+        />
+      );
+    }
+    return (
+      <span title={courseId === null ? NO_COURSE_NOTE : 'Add an image to this option'}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={courseId === null}
+          onClick={() => setPicker({ kind: 'option', list, index: i })}
+          data-testid={`option-image-add-${i}`}
+          aria-label="Add an image to this option"
+        >
+          <ImagePlus size={14} />
+        </Button>
+      </span>
+    );
   }
 
   function setPinRFull(v: number) {
@@ -472,7 +577,11 @@ function QuestionForm({
           <select
             className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm"
             value={form.type}
-            onChange={(e) => set('type', e.target.value as QuestionType)}
+            onChange={(e) => {
+              const type = e.target.value as QuestionType;
+              // A Pin the Spot question can't have a prompt image: its canvas is the image.
+              setForm((prev) => ({ ...prev, type, promptImageId: type === 'pin_the_spot' ? null : prev.promptImageId }));
+            }}
           >
             <option value="multiple_choice">Multiple Choice</option>
             <option value="true_false">True / False</option>
@@ -508,6 +617,35 @@ function QuestionForm({
         />
       </div>
 
+      {/* Prompt image: on the big screen under the prompt, never on phones */}
+      {form.type !== 'pin_the_spot' && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Prompt image (optional, shown on the big screen)</label>
+          {form.promptImageId ? (
+            <ImageThumb
+              id={form.promptImageId}
+              onRemove={() => set('promptImageId', null)}
+              onRepick={() => setPicker({ kind: 'prompt' })}
+              testId="prompt-image"
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={courseId === null}
+                onClick={() => setPicker({ kind: 'prompt' })}
+                data-testid="prompt-image-add"
+              >
+                <ImagePlus size={14} className="mr-1" /> Add image
+              </Button>
+              {courseId === null && <span className="text-slate-500 text-xs">{NO_COURSE_NOTE}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Type-specific */}
       {form.type === 'multiple_choice' && (
         <div>
@@ -532,6 +670,7 @@ function QuestionForm({
                   }}
                   className="flex-1 text-sm"
                 />
+                {optionImageControl('mcOptions', i)}
                 {form.grading === 'ACCURACY' && (
                   <Input
                     type="number"
@@ -594,6 +733,7 @@ function QuestionForm({
                   }}
                   className="flex-1 text-sm"
                 />
+                {optionImageControl('msOptions', i)}
                 {form.grading === 'ACCURACY' && (
                   <Input
                     type="number"
@@ -721,10 +861,26 @@ function QuestionForm({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = '';
-                  if (file) void pickPinImage(() => fileToPinImage(file));
+                  if (!file) return;
+                  // Attached games upload to the course library; unattached keep a data: URL (T7).
+                  void pickPinImage(async () =>
+                    courseId === null ? toPinDataUrl(file) : libraryPinImage(await uploadToLibrary(courseId, file)),
+                  );
                 }}
                 className="text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-slate-100"
               />
+              <span title={courseId === null ? NO_COURSE_NOTE : undefined}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={courseId === null || pinBusy}
+                  onClick={() => setPicker({ kind: 'pin' })}
+                  data-testid="pin-library"
+                >
+                  Choose from library
+                </Button>
+              </span>
               <Input
                 placeholder="or paste an https:// image URL"
                 value={pinUrl}
@@ -754,7 +910,7 @@ function QuestionForm({
               </p>
               <div className="max-w-2xl">
                 <PinBoard
-                  imageUrl={form.pinImage.image_url}
+                  imageUrl={pinImageSrc(form.pinImage)}
                   aspect={pinAspect}
                   pinKey={form.pinTarget ? { target: form.pinTarget, rFull: form.pinRFull, rZero: form.pinRZero } : undefined}
                   onPick={(p) => setForm((prev) => ({ ...prev, pinTarget: p, pinAnswerTouched: true }))}
@@ -949,6 +1105,10 @@ function QuestionForm({
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
+
+      {picker && courseId !== null && (
+        <ImagePicker courseId={courseId} onPick={onPicked} onClose={() => setPicker(null)} />
+      )}
     </div>
   );
 }
@@ -1117,6 +1277,7 @@ export default function QuestionEditorPage() {
           <CardContent>
             <QuestionForm
               initial={defaultForm()}
+              courseId={game?.course_id ?? null}
               onSave={(payload) => void addQuestion(payload)}
               onCancel={() => setShowAddForm(false)}
               saving={saving}
@@ -1141,6 +1302,7 @@ export default function QuestionEditorPage() {
                 <CardContent>
                   <QuestionForm
                     initial={questionToForm(q)}
+                    courseId={game?.course_id ?? null}
                     onSave={(payload) => void updateQuestion(q.id, payload)}
                     onCancel={() => setEditingId(null)}
                     saving={saving}
@@ -1179,6 +1341,9 @@ export default function QuestionEditorPage() {
                     <span className="text-slate-500 text-xs">{q.time_limit_seconds}s · {q.points_value}pts</span>
                   </div>
                   <p className="text-slate-100 text-sm leading-relaxed">{q.prompt}</p>
+                  {q.prompt_image_id && (
+                    <img src={imageUrl(q.prompt_image_id)} alt="" className="mt-2 h-16 rounded border border-slate-700 object-contain" />
+                  )}
 
                   {q.type === 'multiple_choice' && (
                     <div className="mt-2 space-y-1">
@@ -1189,6 +1354,7 @@ export default function QuestionEditorPage() {
                             <span className={pts > 0 ? 'text-green-400' : 'text-slate-500'}>
                               {pts > 0 ? '\u2713' : '\u25cb'}
                             </span>
+                            <OptionThumb q={q} index={oi} />
                             <span className={pts > 0 ? 'text-slate-200' : 'text-slate-400'}>{opt}</span>
                             {pts > 0 && <span className="text-slate-500">({pts}pts)</span>}
                           </div>
@@ -1232,7 +1398,9 @@ export default function QuestionEditorPage() {
                   })()}
 
                   {q.type === 'pin_the_spot' && (() => {
-                    const url = q.config['image_url'];
+                    const url = typeof q.config['image_id'] === 'string'
+                      ? imageUrl(q.config['image_id'])
+                      : q.config['image_url'];
                     const t = q.answer_data['target'] as PinPoint | undefined;
                     return (
                       <div className="mt-2 flex items-center gap-3 text-xs text-slate-400">
@@ -1258,6 +1426,7 @@ export default function QuestionEditorPage() {
                             <span className={isCorrect ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-slate-500'}>
                               {isCorrect ? '\u2713' : pts < 0 ? '\u2212' : '\u25cb'}
                             </span>
+                            <OptionThumb q={q} index={oi} />
                             <span className={isCorrect ? 'text-slate-200' : 'text-slate-400'}>{opt}</span>
                             {pts !== 0 && <span className="text-slate-500">({pts > 0 ? '+' : ''}{pts}pts)</span>}
                           </div>

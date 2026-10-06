@@ -12,6 +12,7 @@ from app.models import (  # noqa: F401
     CourseRoster,
     Game,
     GameSession,
+    Image,
     Question,
     SessionScore,
     User,

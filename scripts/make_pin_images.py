@@ -4,6 +4,8 @@ make_pin_images.py — draw the Pin the Spot images for the T6 sample games and 
 game files in sync with them.
 
 Prerequisites:
+    Pillow 10.1 or later. It is in backend/requirements.txt (T8), so scripts/setup_venv.sh
+    installs it into the host venv; anywhere else:
     pip install "pillow>=10.1"
 
 Usage:

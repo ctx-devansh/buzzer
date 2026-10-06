@@ -1,6 +1,6 @@
 """
 Browser checks for the pin_the_spot question type (docs/design-pin-the-spot.md §12 → Browser):
-authoring in the host editor (file upload → downscaled JPEG data: URL, click to place the
+authoring in the host editor (file upload → downscaled, into the course library (T8), click to place the
 target, pushing sliders, prompt-only edit keeps the image byte for byte), and a play-through
 (prompt on the phone, tap, drag, Lock in, partial credit, host boards, game-over recap).
 
@@ -87,7 +87,7 @@ def test_pin_the_spot_authoring(env: Env, page_as, cleanup: Cleanup):
     save = page.get_by_role("button", name="Save Question")
     expect(save).to_be_disabled()  # no image yet
 
-    # A 2000×1000 PNG is downscaled to 1280×640 and re-encoded as JPEG.
+    # A 2000×1000 PNG is downscaled to 1280×640 before it is uploaded.
     page.get_by_test_id("pin-file").set_input_files(
         files=[{"name": "map.png", "mimeType": "image/png", "buffer": _png(2000, 1000)}]
     )
@@ -108,7 +108,10 @@ def test_pin_the_spot_authoring(env: Env, page_as, cleanup: Cleanup):
 
     (q,) = _questions(env, host.token, game["id"])
     assert q["type"] == "pin_the_spot"
-    assert q["config"]["image_url"].startswith("data:image/jpeg;base64,")
+    # T8: in a game attached to a course, the file is uploaded to the course library
+    # (downscaled to 1280 px as a PNG) and the question refers to it by image_id.
+    assert "image_url" not in q["config"]
+    assert q["config"]["image_id"]
     assert (q["config"]["image_width"], q["config"]["image_height"]) == (1280, 640)
     target = q["answer_data"]["target"]
     assert abs(target["x"] - 0.75) < 0.02 and abs(target["y"] - 0.5) < 0.03

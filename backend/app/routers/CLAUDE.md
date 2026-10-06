@@ -16,7 +16,16 @@ Business logic (scoring, room state, CSV parsing) lives in `../services/`, not h
   `require_user` + `game_service.assert_host_can_use_course/game`; ADMIN passes every check.
   `POST /host/games` and `/host/games/import` (multipart `file` + form `course_id`) auto-grant
   the creator. `PUT /host/games/{id}` takes `HostGameUpdate` (no `course_id` → 422). No game
-  delete and no multipart roster route, deliberately.
+  delete and no multipart roster route, deliberately. The course image library (T8) is here
+  too: `GET/POST /host/courses/{cid}/images`, `GET/PUT/DELETE …/images/{image_id}`, gated by
+  `assert_host_can_use_course` (course-wide: every HOST of the course); another course's image
+  is a 404 through this path.
+- `images.py` — the public `GET /images/{id}` (T8): **no auth** (the random UUID is the only
+  protection) and **no `get_db`**: it opens a short `AsyncSessionLocal` session, reads the head
+  and, only for a 200, the bytes, and closes the session before sending, so no pooled
+  connection is held while bytes stream to slow phones. ETag = sha256, `Cache-Control:
+  no-cache`, `nosniff`, 304 on a matching `If-None-Match`; HEAD gets the same headers without
+  reading the bytes; a non-canonical id is a 404.
 - `auth.py` — login (password or dev-only netid), OAuth2 callback (reads Traefik-injected
   `X-Auth-Request-User`/`-Email` headers), temp-token exchange, guest join, refresh, logout.
   Sets/clears the `refresh_token` httpOnly cookie. Rate-limited via `slowapi` (`../common/rate_limit.py`).
@@ -49,8 +58,9 @@ Routers here create/manage rooms and sessions; the websocket gateway drives game
   can't handle the NOT NULL FK columns involved. Don't "simplify" these away. `delete_game` also
   reads each session's `(id, room_code)` first and, after `flush()`, clears its Redis keys with
   `state_service.delete_room_state` (as `DELETE /game/sessions/{id}` does).
-- The `buzzer/game` bundle format (`version: 1`) lives in `services/authoring_service.py`
-  (`SUPPORTED_IMPORT_VERSION`). A game's course **never** travels in the file: export omits it and
+- The `buzzer/game` bundle format (versions 1 and 2; 2 embeds library images) lives in
+  `services/authoring_service.py` (`SUPPORTED_IMPORT_VERSION`). The admin import route
+  passes no course, so the importer refuses a version 2 file with images there. A game's course **never** travels in the file: export omits it and
   import discards any `course_id` in the bundle — the host route's form field is the only source.
 - Guest-merge logic is duplicated between `admin.merge_guest` and `game.merge_guest_for_session`
   (same steps, different auth gate) — a bug fix in one likely needs the other too.

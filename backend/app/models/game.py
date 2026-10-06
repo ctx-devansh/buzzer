@@ -65,6 +65,11 @@ class Question(Base):
         Enum("ACCURACY", "COMPLETENESS", name="grading_type"), nullable=False
     )
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    # A course-library image shown on the host screen under the prompt (T8). Not for
+    # pin_the_spot, whose canvas is its image. RESTRICT: an image in use can't go.
+    prompt_image_id: Mapped[str | None] = mapped_column(
+        sa.CHAR(36), ForeignKey("images.id", ondelete="RESTRICT"), nullable=True
+    )
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     answer_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     time_limit_seconds: Mapped[int] = mapped_column(Integer, default=30, nullable=False)

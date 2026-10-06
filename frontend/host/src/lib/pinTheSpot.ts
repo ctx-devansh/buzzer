@@ -7,6 +7,8 @@
  * aspect (height / width, D6).
  */
 
+import { imageUrl } from './images';
+
 export interface PinPoint {
   x: number;
   y: number;
@@ -23,6 +25,14 @@ export interface PinKey {
   target?: PinPoint;
   rFull?: number;
   rZero?: number;
+}
+
+/**
+ * The canvas image's source: the course library's public URL for image_id (T8),
+ * otherwise the stored image_url (https:// or data:).
+ */
+export function pinImageSrc(config: { image_id?: string; image_url?: string } | undefined): string | undefined {
+  return config?.image_id ? imageUrl(config.image_id) : config?.image_url;
 }
 
 /** Editor slider limits and defaults (§3 author 3). */
