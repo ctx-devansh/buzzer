@@ -46,7 +46,9 @@ Routers here create/manage rooms and sessions; the websocket gateway drives game
   all repeat this pattern.
 - `admin.delete_game` and `admin.delete_user` manually pre-delete dependent rows
   (`session_scores`, `game_sessions`) before deleting the parent — SQLAlchemy's default cascade
-  can't handle the NOT NULL FK columns involved. Don't "simplify" these away.
+  can't handle the NOT NULL FK columns involved. Don't "simplify" these away. `delete_game` also
+  reads each session's `(id, room_code)` first and, after `flush()`, clears its Redis keys with
+  `state_service.delete_room_state` (as `DELETE /game/sessions/{id}` does).
 - The `buzzer/game` bundle format (`version: 1`) lives in `services/authoring_service.py`
   (`SUPPORTED_IMPORT_VERSION`). A game's course **never** travels in the file: export omits it and
   import discards any `course_id` in the bundle — the host route's form field is the only source.

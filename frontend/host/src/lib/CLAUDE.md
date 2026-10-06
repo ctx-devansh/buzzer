@@ -23,6 +23,11 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   without `correctOrder`), `pioCaption(reveal)` and `correctOrderText(reveal, items)`. Used by
   `ResultsPage` and `GameOverPage` so the live and game-over charts can't drift.
 
+- `pinTheSpot.ts` — Pin the Spot geometry (`fitRect`, `toFraction`, `aspectOf`, `diagonal`,
+  `floor2`, `parseTapKey`, `dotRadius`, `revealKey`) and the editor's slider limits/defaults.
+  The player app has its own copy (`frontend/player/src/lib/pinTheSpot.ts`); keep the geometry
+  identical.
+
 **How it fits in.** `../pages/` and `../components/HostShell.tsx` call `api` for everything
 outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/GameLayout.tsx`
 (which takes its socket token from `getToken()`). `../components/ui/` imports `cn`.

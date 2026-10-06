@@ -12,7 +12,8 @@ REST call in `../routers/game.py`).
   QUESTION→…→COMPLETED; the personal `question_results` carries `yourPoints` and
   `yourIsCorrect`, the stored `is_correct`), `SUBMIT_ANSWER` (validates — `multi_select` indices,
   and `put_in_order` `orderedIndices` as a `type(x) is int` permutation of `config.items`
-  indices, else an `error` event and nothing recorded — scores via `../services/game_service.py`,
+  indices, and a `pin_the_spot` tap via `pin_the_spot.is_valid_tap` (exactly `{x, y}`, finite,
+  non-bool, in [0, 1]), else an `error` event and nothing recorded — scores via `../services/game_service.py`,
   persists, broadcasts), and `HOST_LOCK_QUESTION` (pause/resume the countdown). Also owns the
   per-process in-memory dicts (`_sid_ctx`, `_abandon_tasks`, `_timer_tasks`) that track socket
   context and background asyncio tasks.
@@ -43,6 +44,10 @@ top of those services, mirroring how `../routers/` consumes the same services ov
 - `_answer_reveal` here duplicates `../services/report_service.py::_answer_reveal` and the two
   summary reveals in `../services/game_service.py` — see the gotcha in `../services/CLAUDE.md`;
   keep all four in sync for any new question type.
+- `SUBMIT_ANSWER` emits `answer_received` **before** its DB session commits (the commit is in
+  `_db()`'s exit). A host that advances immediately can read no `session_scores` row yet, so the
+  personal `question_results` shows `yourPoints` 0 / `yourIsCorrect` false for that answer
+  (`yourScore` is from Redis and is right). Pre-existing, all question types.
 - The in-memory manager is deliberately used in dev instead of `AsyncRedisManager` — its pubsub
   listener was found to drop connections under idle load, silently breaking room-targeted emits.
   Don't "fix" this by switching dev to Redis without re-verifying that behavior.

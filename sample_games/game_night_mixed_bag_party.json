@@ -1,0 +1,255 @@
+{
+  "format": "buzzer/game",
+  "version": 1,
+  "game": {
+    "title": "Game Night Mixed Bag",
+    "description": "A party quiz for any crowd: quick trivia, an odd-one-out hunt, ranking rounds, and a few no-wrong-answer hot takes to finish.",
+    "max_players": 150
+  },
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "Warm-up! How many hearts does an octopus have?",
+      "config": {
+        "options": [
+          "1",
+          "2",
+          "3",
+          "8"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          0,
+          1000,
+          0
+        ]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1000
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "Botanically speaking, bananas are berries.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1000,
+          "false": 0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1000
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "ACCURACY",
+      "prompt": "Spot the odd one out! Tap the face that is different.",
+      "config": {
+        "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAyAAAAJYCAIAAAAVFBUnAAAdoUlEQVR42u3dTU4ryRKA0STlOQLJU+asgSWwXlZlCcQO7gAJWfzULcCVFRF5jt6gW+/1pZz+XnY4XTZXd/cPDQCAy+mWAADAgAUAYMACADBgAQBgwAIAMGABABiwAAAwYAEAGLAAAAxYAAAYsAAADFgAAAYsAAADFgAABiwAAAMWAIABCwAAAxYAgAELAMCABQCAAQsAwIAFAGDAAgDAgAUAYMACADBgAQAYsAAAMGABABiwAADqO1iCz16fX376j1zf3lg3dIWu0BVvru7uH2S0xR8rNV3pCl2hKwOWmDZk89KVrtAVujJgzd7T6en00z/5+HhUmH1KV+gKXelqogFruadfZPT31OxcutIVukJXBqxqPW0U0y8is3PpSlfoCl0ZsHInNbin9YXZtnSlK13pCl0ZsJIltXtPKwuzbelKV7rSFboyYElKXrYqXaErdKWrogPW56SC97SmMNuWrnSlK12hKwNWlKrSJbWQlz1LV7rSla7QlQHLwG6E90JQV+gKXekq84BVaWD30lBXutKVrtBVsa7yDVi1k7Jt6UpXutIVuirQVVdVWB8e3eDfG2W30hW60pWudNVmOME6X9naSS2M8F4X6kpXutKVrnRlwDKwOybVla50pSt0NV1XXVXNMandSle60pWudKWrNtMJ1rTHoY7fdaUrXekKXeXtqqsq7wjvdaGudKUrXelKVwYsVdmzdKUrXekKXU3RVVeVtuxW6EpXutKVruoPWKqyZ+lKV7rSla50lbqrript2a3Qla50pStdVR6wVGXP0pWudKUrXemqQFddVdqyW6ErXelKV7qqfw+WqqyYVbJiVsmKWSVSr1iPNrar6o9teVGoK13pSle60pUBy//HrKd1sJ7WwXpaB+tQbT27t5y9Ce1WBnSlK13pSldl78FSlTW0JtbQmlhDa0KNNezecvYmtFsZ0JWudKUrXdUZsBwLW2GP2gp71OiKkivcHeg5ILUOWE/rYD2tg/UsMmA5FHXwritd6Qpd6apqV92hqANSjxSr7ZFabY/Uapd6i9DYbm09dmvrsaMr6q1tN7Yb3j1GrLmurLnHaM3rnGAZ262wR22FPWp0RckV7u7pc5efe0XRla50pStdlf0mdwCAGrqx3fDu5SC60pWudKWryzoUXtDj4zHgW90xrwpd4RnUla50dUFXd/cP9X5b+IcnL8gTueNVnf/o69sbv4VeV7rSla50patW7B6sHav6739b9apmeN2pK13pSle60lWcrnrt49AgbcW8KnSFrnSlK13lHrDG3Na3/rkZ+SwGuaqSt47qSle60pWudBWzK1/TAABgwLrQ2DtmeI95VegKXelKV7pKP2D52o/mC2Z0pStdoStdzdSVtwgBAAxYAACTD1jORZtTd13pSlfoSleTddWn/d62MaHHvCp0ha50pStdGbAAAAxY4Yf3kQNyzKtCV+hKV7rSVdYBa/wbz2t+0PjnL9RVFbitQVe60pWudKWr4F312eb3vabjmFeFrtCVrnSlqy0cCrf14dtgd3/yYl4VusIzqCtd6cqAlf6TCHYoXekKXaGr5iZ3AAAMWAAARQcs313bfD+yrnSlK3Slqym7coIFAGDAAgAwYAEAGLAAADBgAQAYsAAADFgAABiwAAAMWAAABiwAAAxYAAAGLAAAAxYAgAELAAADFgCAAQsAwID1Z9e3N29/cXw8WuhQ3p+R9+coEV3pSle60hXxu3KCBQBgwAIAMGABABiwAAAwYAEATDJg+QBF85EcXelKV+hKV/N15QQLAODCDoUn09PTydWiK8+dZ0pXunK1zT1Yf3ySzs9g45/HfrhaB8i60pWudIWuDFgt1NvPNZ6VYauU94YGXelKV7rSla7id1XnBOvLo8XItX15bQ7edaUrXekKXTUnWNpSlT1LV+gKXelqhwFr9w+pRmtr93XIft6uK13pSle60lXwrvoMw3uotr67Ei8HdaUrXekKXTUnWBnb2jevhQuwW+lKV7rSFbqq5Oru/mHMT3p9fhm5iMsNDX4iI1xMsfN2XelKV7rSla4id9Vnm98HT/H//UFeC+pKV+gKXdWzwwnWyNVcU89GF7Pjj16+mKqvCHWlK13pSle6itPVuAFr/OnoT+/su8hVjfxZztt1pStd6UpXuorZVcHfRfjls7jm+f7wv1n53P/iiNUxu650ha7QVW1DT7B2HN6DfEh130dd8uWgrnSlK13pSlcBuyp7k3vAkdkLQV3pCl2hq0mMPsHafXgfP8UHeZiFXw7qSle60pWudBWtqz0HrAjD7KZ5hXp082xYutKVrnSlK13t3tVhl1/JdN5WC3NYepHIYp5/lt+tdKUrXelKV7oK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",
+        "image_width": 800,
+        "image_height": 600
+      },
+      "answer_data": {
+        "target": {
+          "x": 0.625,
+          "y": 0.5
+        },
+        "r_full": 0.09,
+        "r_zero": 0.15
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1000
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "What colour is a polar bear's skin under its fur? (one word)",
+      "config": {
+        "maxLength": 20
+      },
+      "answer_data": {
+        "acceptedAnswers": [
+          "black"
+        ],
+        "answerPoints": [
+          1000
+        ],
+        "editDistance": 1
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1000
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Which of these are mammals? Wrong picks cost you!",
+      "config": {
+        "options": [
+          "Dolphin",
+          "Penguin",
+          "Bat",
+          "Shark",
+          "Platypus"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          300,
+          -300,
+          300,
+          -300,
+          300
+        ]
+      },
+      "time_limit_seconds": 25,
+      "points_value": 900
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "ACCURACY",
+      "prompt": "Fastest to slowest! Rank these by top speed (diving counts).",
+      "config": {
+        "items": [
+          "Human",
+          "Garden snail",
+          "Cheetah",
+          "Peregrine falcon",
+          "Grizzly bear"
+        ]
+      },
+      "answer_data": {
+        "correct_order": [
+          3,
+          2,
+          4,
+          0,
+          1
+        ]
+      },
+      "time_limit_seconds": 30,
+      "points_value": 1000
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "A group of crows is called a \"murder\".",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1000,
+          "false": 0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1000
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "Which letter appears most often in English text?",
+      "config": {
+        "options": [
+          "A",
+          "E",
+          "T",
+          "S"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          1000,
+          0,
+          0
+        ]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1000
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "COMPLETENESS",
+      "prompt": "No wrong answers: tap where you would hang out at this party.",
+      "config": {
+        "image_url": "data:image/png;base64,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",
+        "image_width": 800,
+        "image_height": 500
+      },
+      "answer_data": {},
+      "time_limit_seconds": 25,
+      "points_value": 250
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Rank these pizza toppings, favourite first.",
+      "config": {
+        "items": [
+          "Pepperoni",
+          "Mushrooms",
+          "Pineapple",
+          "Extra cheese"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 30,
+      "points_value": 250
+    },
+    {
+      "type": "true_false",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Hot take: cereal is a soup.",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 15,
+      "points_value": 250
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "COMPLETENESS",
+      "prompt": "The best game-night snack is…",
+      "config": {
+        "options": [
+          "Chips & dip",
+          "Popcorn",
+          "Pizza rolls",
+          "Candy"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 250
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Which of these have you done this year? Pick all that apply.",
+      "config": {
+        "options": [
+          "Sung karaoke",
+          "Tried a new cuisine",
+          "Pulled an all-nighter",
+          "Learned a dance"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 25,
+      "points_value": 250
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Last one! Describe tonight's vibe in ONE word.",
+      "config": {
+        "maxLength": 20
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 250
+    }
+  ]
+}

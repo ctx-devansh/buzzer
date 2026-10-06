@@ -51,6 +51,7 @@ npm run build
 python scripts/seed_demo.py
 python scripts/simulate_players.py --room ABCDE1
 python scripts/smoke_test_websocket.py
+python scripts/make_pin_images.py --check   # T6 sample games' Pin the Spot images in sync
 ```
 
 ## Architecture notes

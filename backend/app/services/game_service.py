@@ -3,7 +3,6 @@ from __future__ import annotations
 import secrets
 import uuid
 from datetime import datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
 
 import structlog
 from rapidfuzz.distance import Levenshtein
@@ -18,6 +17,7 @@ from ..models.game import Game, Question, UserGameAccess
 from ..models.session import GameSession, SessionScore
 from ..models.user import User
 from ..schemas.game import ScoreResult
+from . import pin_the_spot
 from . import state_service as state
 
 logger = structlog.get_logger()
@@ -360,6 +360,17 @@ def calculate_score(question: Question, answer_data: dict) -> ScoreResult:
     if not answer_data:
         return ScoreResult(points_awarded=0, is_correct=False)
 
+    if question.type == "pin_the_spot":
+        # Before the COMPLETENESS short-circuit: an invalid tap scores 0 under both.
+        points, is_correct = pin_the_spot.score(
+            question.grading_type,
+            question.points_value,
+            question.config,
+            question.answer_data,
+            answer_data,
+        )
+        return ScoreResult(points_awarded=points, is_correct=is_correct)
+
     if question.grading_type == "COMPLETENESS":
         return ScoreResult(points_awarded=question.points_value, is_correct=True)
 
@@ -456,12 +467,9 @@ def _score_put_in_order(question: Question, answer_data: dict) -> ScoreResult:
     pv = question.points_value
     if c == t:
         return ScoreResult(points_awarded=pv, is_correct=True)
-    # round(pv, 6) strips float32 read-back noise before the half-up step;
-    # the min() clamp keeps a >2dp points_value from being exceeded.
-    raw = (Decimal(str(round(pv, 6))) * c / t).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
+    return ScoreResult(
+        points_awarded=pin_the_spot.half_up_points(pv, c, t), is_correct=False
     )
-    return ScoreResult(points_awarded=min(float(raw), pv), is_correct=False)
 
 
 async def record_answer(
@@ -526,6 +534,10 @@ async def record_answer(
                 await state.increment_answer_dist(
                     redis, session_id, question.id, f"{item}@{pos}"
                 )
+    elif question.type == "pin_the_spot":
+        # One "x,y" key per tap (4 dp), under both grading types.
+        if pin_the_spot.is_valid_tap(answer_data):
+            dist_key = pin_the_spot.tap_key(answer_data)
     if dist_key is not None:
         await state.increment_answer_dist(redis, session_id, question.id, dist_key)
 
@@ -563,6 +575,8 @@ def _player_summary_reveal(
     gateway._answer_reveal and report_service._answer_reveal); a unit parity test
     in tests/unit/test_put_in_order.py keeps them identical."""
     answer_data = answer_data or {}
+    if q_type == "pin_the_spot":
+        return pin_the_spot.reveal(grading_type, answer_data)
     if q_type == "put_in_order":
         correct_order = answer_data.get("correct_order")
         if grading_type == "COMPLETENESS":
@@ -603,6 +617,8 @@ def _host_summary_reveal(
     gateway._answer_reveal and report_service._answer_reveal); a unit parity test
     in tests/unit/test_put_in_order.py keeps them identical."""
     answer_data = answer_data or {}
+    if q_type == "pin_the_spot":
+        return pin_the_spot.reveal(grading_type, answer_data)
     if q_type == "put_in_order":
         correct_order = answer_data.get("correct_order")
         if grading_type == "COMPLETENESS":
@@ -679,6 +695,11 @@ async def get_player_question_summary(
         pts_val = r.points_value
 
         reveal = _player_summary_reveal(q_type, grading_type, q_ans, pts_val)
+        config = r.config or {}
+        if q_type == "pin_the_spot":
+            # The recap is text only: don't make every phone download every image again.
+            # Width/height stay, for the partial (◐) distance check.
+            config = {k: v for k, v in config.items() if k != "image_url"}
 
         result.append(
             {
@@ -686,7 +707,7 @@ async def get_player_question_summary(
                 "prompt": r.prompt,
                 "type": q_type,
                 "gradingType": grading_type,
-                "config": r.config or {},
+                "config": config,
                 "pointsAwarded": r.points_awarded or 0,
                 "maxPoints": pts_val,
                 "answerTimeMs": r.answer_time_ms,
@@ -805,6 +826,10 @@ async def get_host_question_summary(
                         for pos, item in enumerate(ordered):
                             k = f"{item}@{pos}"
                             dist[k] = dist.get(k, 0) + 1
+                elif q_type == "pin_the_spot":
+                    if pin_the_spot.is_valid_tap(ans):
+                        k = pin_the_spot.tap_key(ans)
+                        dist[k] = dist.get(k, 0) + 1
             if s["is_correct"]:
                 correct_count += 1
             if s["answer_time_ms"] is not None:
