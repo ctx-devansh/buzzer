@@ -87,6 +87,9 @@ export default function QuestionPage() {
               alt={plainText(currentQuestion.prompt)}
               className="max-h-[45vh] max-w-full rounded-xl object-contain"
               data-testid="prompt-image"
+              // A deleted image (the accepted delete race) hides rather than showing a
+              // broken-image icon on the projector; the prompt text stands alone.
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           )}
           {/* Scrambled display order, lettered (not numbered) so it doesn't read as positions */}
