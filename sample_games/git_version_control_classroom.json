@@ -105,7 +105,7 @@
     {
       "type": "fill_in_the_blank",
       "grading_type": "ACCURACY",
-      "prompt": "Which file in a repository lists path patterns that Git should not track? (include the dot)",
+      "prompt": "Which file in a repository lists path patterns that Git should not track?",
       "config": {
         "maxLength": 30
       },
