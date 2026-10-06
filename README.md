@@ -345,8 +345,7 @@ The Admin app (`http://localhost:8080/admin/`) provides a full management UI:
 | **Roster** | Upload a Canvas gradebook CSV or a basic CSV roster; activate or deactivate individual entries |
 | **Users** | Create local accounts; click any user to grant or revoke course access (HOST/PLAYER) and game access |
 | **Guests** | View guest accounts; merge a guest's scores into a real netid account; delete stale guests |
-| **Games** | Create games; import a game from a JSON file; delete games |
-| **Questions** | Add, edit, delete, and reorder questions within a game; export the game as a JSON file |
+| **Games** | A link to the Host app's Games page (`/host/games`), where games are created, imported, edited and exported. Signed in as an admin, that page also deletes games and attaches unattached games to a course. The admin app's old game and question URLs redirect there |
 | **Sessions** | View completed game sessions and download score exports |
 
 Log in with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
@@ -406,8 +405,8 @@ Per question type (COMPLETENESS awards `points_value` for any valid answer, so i
 | `true_false` | `{}` | `{"answer_points": {"true": n, "false": n}}` | `{"selectedValue": true}` |
 | `fill_in_the_blank` | `{"maxLength": n}` (optional) | `{"acceptedAnswers": [...], "answerPoints": [...], "editDistance": n}`: one points value ≥ 0 per answer; `editDistance` is an int ≥ 0, default 0. Matching lowercases and collapses whitespace, but keeps punctuation | `{"text": "..."}` |
 | `multi_select` | `{"options": [...]}`, ≥ 2 | `{"answer_points": [...]}`, one number per option; may be negative (the total is floored at 0) | `{"selectedIndices": [...]}` |
-| `put_in_order` | `{"items": [...]}`, exactly that key, 3–6 distinct strings in display order | `{"correct_order": [...]}`: the item indices in the correct sequence, not the identity. Optional under COMPLETENESS. Partial credit per correctly ordered pair | `{"orderedIndices": [...]}` |
-| `pin_the_spot` | `{"image_url", "image_width", "image_height"}`: an `https://` URL or a base64 PNG/JPEG/GIF/WebP `data:` URL (≤ 1,500,000 chars), integer pixel size | `{"target": {"x", "y"}, "r_full", "r_zero"}`: target as fractions 0–1 of the image; radii as fractions of its width, `0 < r_full < r_zero`. Full points inside `r_full`, falling linearly to 0 at `r_zero`. Under COMPLETENESS, `{}` or a target to show in the reveal | `{"x": 0.42, "y": 0.61}` |
+| `put_in_order` | `{"items": [...]}`, exactly that key, 3–6 strings in display order, each ≤ 200 chars and distinct ignoring case | `{"correct_order": [...]}`: the item indices in the correct sequence, not the identity. Optional under COMPLETENESS. Partial credit per correctly ordered pair | `{"orderedIndices": [...]}` |
+| `pin_the_spot` | `{"image_url", "image_width", "image_height"}`: an `https://` URL or a base64 PNG/JPEG/GIF/WebP `data:` URL (≤ 1,500,000 chars), integer pixel size | `{"target": {"x", "y"}, "r_full", "r_zero"}`: target as fractions 0–1 of the image; radii as fractions of its width, `0 < r_full < r_zero ≤` the image diagonal (`√(1 + (height/width)²)`). Full points inside `r_full`, falling linearly to 0 at `r_zero`. Under COMPLETENESS, `{}` or a target to show in the reveal | `{"x": 0.42, "y": 0.61}` |
 
 The Pin the Spot images in the T6 sample games are drawn by `scripts/make_pin_images.py` (needs `pip install "pillow>=10.1"`), which also writes their targets into the JSON. Run it after editing those images; `--check` verifies the files are in sync without writing.
 
