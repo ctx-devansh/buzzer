@@ -331,10 +331,12 @@ ribosome dots are excluded (requirement 6).
     zero-credit circle o closer to a neighbour.
   - r_full and r_zero equal the step-1 values (within 1e-9).
 - Record the saved values here:
-  - target `TBD`
-  - o `TBD`
-  - r_full `TBD`
-  - r_zero `TBD`
+  - target `(0.3218, 0.6449)`
+  - o `0.0023` (≤ 0.005 ✓); clearance 0.070 < N − o = 0.0737 ✓
+  - r_full `0.045`
+  - r_zero `0.07`
+  - Recorded 2026-10-06 from the export. A first export had r_full 0.075 / r_zero 0.145, which
+    gave a nucleus-edge tap 0.99 points. That was corrected in the editor and re-exported.
 
 **6. Export and replace the file.**
 - In the editor, click **Export JSON** and save the download over
