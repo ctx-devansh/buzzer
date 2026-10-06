@@ -15,7 +15,10 @@ Each image is drawn from code, so its target is computed from the drawing's own 
 prefix (PLAN): the game JSON can't carry an id, because QuestionCreate forbids extra keys.
 
 Exit codes: 0 = in sync (or written), 1 = --check found differences, 2 = the plan doesn't
-match the game files (nothing is written).
+match the game files (nothing is written). A usage error (bad argument) also exits 2.
+
+Images are compared pixel for pixel. Font rendering can change between Pillow versions, so
+after upgrading Pillow, re-run this script and set GENERATED_WITH_PILLOW to the new version.
 """
 
 from __future__ import annotations
@@ -29,13 +32,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
+import PIL
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 GAMES_DIR = ROOT / "sample_games"
 
 DATA_URL_PREFIX = "data:image/png;base64,"
-PIXEL_TOLERANCE = 2.0  # mean absolute difference over all channels, 0–255
+# The Pillow version the committed images were rendered with. Pixels are compared exactly
+# (no tolerance can tell font drift from an answer-changing edit), so a different version
+# may report commit_graph as changed: re-run the script and update this.
+GENERATED_WITH_PILLOW = "12.3.0"
 
 BACKGROUND = "#1e293b"
 LIGHT = "#f8fafc"
@@ -59,12 +66,33 @@ class PlanRow:
 
 
 PLAN: tuple[PlanRow, ...] = (
-    PlanRow("git_version_control_classroom.json", 8, "The branches main and feature",
-            "commit_graph", "ACCURACY", 0.04, 0.12),
-    PlanRow("game_night_mixed_bag_party.json", 3, "Spot the odd one out",
-            "odd_face", "ACCURACY", 0.09, 0.15),
-    PlanRow("game_night_mixed_bag_party.json", 9, "No wrong answers",
-            "party_room", "COMPLETENESS", None, None),
+    PlanRow(
+        "git_version_control_classroom.json",
+        8,
+        "The branches main and feature",
+        "commit_graph",
+        "ACCURACY",
+        0.04,
+        0.12,
+    ),
+    PlanRow(
+        "game_night_mixed_bag_party.json",
+        3,
+        "Spot the odd one out",
+        "odd_face",
+        "ACCURACY",
+        0.09,
+        0.15,
+    ),
+    PlanRow(
+        "game_night_mixed_bag_party.json",
+        9,
+        "No wrong answers",
+        "party_room",
+        "COMPLETENESS",
+        None,
+        None,
+    ),
 )
 
 
@@ -83,7 +111,9 @@ def _commit_graph() -> tuple[Image.Image, tuple[int, int] | None]:
     d.line([(220, main_y), (340, feature_y)], fill=LINE_GREY, width=6)
     d.line([(340, feature_y), (580, feature_y)], fill=LINE_GREY, width=6)
     for cx, cy in [(x, main_y) for x in main_x] + [(x, feature_y) for x in feature_x]:
-        d.ellipse((cx - 16, cy - 16, cx + 16, cy + 16), fill=LIGHT, outline=DARK, width=3)
+        d.ellipse(
+            (cx - 16, cy - 16, cx + 16, cy + 16), fill=LIGHT, outline=DARK, width=3
+        )
     font = ImageFont.load_default(size=22)
     d.text((610, main_y), "main", fill=LIGHT, font=font, anchor="lm")
     d.text((610, feature_y), "feature", fill=LIGHT, font=font, anchor="lm")
@@ -96,11 +126,18 @@ def _odd_face() -> tuple[Image.Image, tuple[int, int] | None]:
     odd = (500, 300)
     for cy in (100, 300, 500):
         for cx in (100, 300, 500, 700):
-            d.ellipse((cx - 70, cy - 70, cx + 70, cy + 70), fill="#facc15", outline=DARK, width=3)
+            d.ellipse(
+                (cx - 70, cy - 70, cx + 70, cy + 70),
+                fill="#facc15",
+                outline=DARK,
+                width=3,
+            )
             for ex in (cx - 25, cx + 25):
                 d.ellipse((ex - 8, cy - 20 - 8, ex + 8, cy - 20 + 8), fill=DARK)
             if (cx, cy) == odd:
-                d.arc((cx - 35, cy + 15, cx + 35, cy + 65), 200, 340, fill=DARK, width=6)
+                d.arc(
+                    (cx - 35, cy + 15, cx + 35, cy + 65), 200, 340, fill=DARK, width=6
+                )
             else:
                 d.arc((cx - 35, cy - 15, cx + 35, cy + 35), 20, 160, fill=DARK, width=6)
     return img, odd
@@ -116,7 +153,9 @@ def _party_room() -> tuple[Image.Image, tuple[int, int] | None]:
     d.line([(80, 130), (260, 130)], fill=LIGHT, width=4)
     d.rectangle((520, 90, 720, 210), fill="#0f172a", outline="#94a3b8", width=6)  # TV
     d.rectangle((605, 210, 635, 250), fill="#94a3b8")  # TV stand
-    d.rounded_rectangle((90, 250, 370, 310), radius=20, fill="#6d28d9")  # couch backrest
+    d.rounded_rectangle(
+        (90, 250, 370, 310), radius=20, fill="#6d28d9"
+    )  # couch backrest
     d.rounded_rectangle((90, 300, 370, 400), radius=20, fill="#7c3aed")  # couch seat
     d.rectangle((470, 360, 690, 380), fill="#d97706")  # table top
     d.rectangle((490, 380, 505, 450), fill="#d97706")  # legs
@@ -126,7 +165,11 @@ def _party_room() -> tuple[Image.Image, tuple[int, int] | None]:
     return img, None
 
 
-_DRAWINGS = {"commit_graph": _commit_graph, "odd_face": _odd_face, "party_room": _party_room}
+_DRAWINGS = {
+    "commit_graph": _commit_graph,
+    "odd_face": _odd_face,
+    "party_room": _party_room,
+}
 
 
 def render(key: str) -> tuple[Image.Image, tuple[float, float] | None]:
@@ -193,29 +236,47 @@ def _expected(row: PlanRow, img: Image.Image, target) -> tuple[dict, dict]:
     return config, answer_data
 
 
-def _difference(row: PlanRow, q: dict, img: Image.Image, answer_data: dict) -> str | None:
+def _difference(
+    row: PlanRow, q: dict, img: Image.Image, answer_data: dict, pixels: bool = True
+) -> str | None:
     """The first --check difference for this row, or None."""
     config = q.get("config")
-    if not isinstance(config, dict) or set(config) != {"image_url", "image_width", "image_height"}:
+    if not isinstance(config, dict) or set(config) != {
+        "image_url",
+        "image_width",
+        "image_height",
+    }:
         return "config keys are not exactly image_url/image_width/image_height"
     url = config["image_url"]
     if not isinstance(url, str) or not url.startswith(DATA_URL_PREFIX):
         return "image_url is not a data:image/png;base64, URL"
     try:
-        stored = Image.open(io.BytesIO(base64.b64decode(url[len(DATA_URL_PREFIX):], validate=True)))
+        stored = Image.open(
+            io.BytesIO(base64.b64decode(url[len(DATA_URL_PREFIX) :], validate=True))
+        )
         stored.load()
-    except (binascii.Error, ValueError, OSError):
+    except (binascii.Error, ValueError, OSError, Image.DecompressionBombError):
         return "image_url does not decode to an image"
     if stored.format != "PNG":
         return "image_url does not decode to a PNG"
-    if (config["image_width"], config["image_height"]) != img.size or stored.size != img.size:
+    if (
+        config["image_width"],
+        config["image_height"],
+    ) != img.size or stored.size != img.size:
         return f"size differs from the render {img.size}"
     if q.get("answer_data") != answer_data:
         return "answer_data differs" if answer_data else "answer_data is not {}"
+    if not pixels:
+        return None
     diff = ImageChops.difference(stored.convert("RGB"), img.convert("RGB"))
-    mean = sum(ImageStat.Stat(diff).mean) / 3
-    if mean > PIXEL_TOLERANCE:
-        return f"pixels differ (mean abs difference {mean:.2f} > {PIXEL_TOLERANCE})"
+    if diff.getbbox() is not None:
+        reason = "pixels differ from the render"
+        if PIL.__version__ != GENERATED_WITH_PILLOW:
+            reason += (
+                f" (generated with Pillow {GENERATED_WITH_PILLOW}, running {PIL.__version__}:"
+                " re-run the generator and update GENERATED_WITH_PILLOW)"
+            )
+        return reason
     return None
 
 
@@ -231,11 +292,14 @@ def _label(row: PlanRow) -> str:
     return f"{row.file} Q{row.index} ({row.key})"
 
 
-def check() -> list[str]:
-    """Every difference between the game files and fresh renders; raises PlanError."""
+def check(pixels: bool = True) -> list[str]:
+    """Every difference between the game files and fresh renders; raises PlanError.
+
+    pixels=False skips the pixel comparison (structure, size and answer_data only).
+    """
     out = []
     for row, q, img, _config, answer_data in _rows(verify_plan()):
-        reason = _difference(row, q, img, answer_data)
+        reason = _difference(row, q, img, answer_data, pixels)
         if reason:
             out.append(f"{_label(row)}: {reason}")
     return out
@@ -260,7 +324,9 @@ def write() -> list[tuple[PlanRow, bool]]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0].strip())
-    ap.add_argument("--check", action="store_true", help="report differences, write nothing")
+    ap.add_argument(
+        "--check", action="store_true", help="report differences, write nothing"
+    )
     args = ap.parse_args(sys.argv[1:] if argv is None else argv)
     try:
         if args.check:
