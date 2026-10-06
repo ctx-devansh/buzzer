@@ -6,15 +6,15 @@ backend app package — see the leaf directories' own `CLAUDE.md` for detail.
 
 **Contents (subdirectories — each has its own `CLAUDE.md`).**
 - `routers/` — REST endpoints (FastAPI `APIRouter`s): admin CRUD, host-scoped authoring /
-  rosters / session downloads (`/host/*`), auth, host/game resource discovery + room lifecycle,
-  health check. Thin — delegates business logic to `services/`.
+  rosters / image library / session downloads (`/host/*`), public image serving
+  (`/images/{id}`), auth, host/game resource discovery + room lifecycle, health check. Thin — delegates business logic to `services/`.
 - `services/` — the business-logic layer shared by `routers/` and `websocket/`: auth/JWT, room
   and session lifecycle, answer scoring, CSV/HTML export, roster CSV parsing, Redis-backed
   ephemeral game state, first-admin bootstrap.
 - `websocket/` — the realtime half: a python-socketio ASGI app driving in-game events (join,
   host-advance state machine, submit answer, lock/unlock) once a room exists.
 - `models/` — SQLAlchemy ORM models: the persistent (MySQL) schema — users, courses/rosters,
-  games/questions, sessions/scores.
+  games/questions, course images, sessions/scores.
 - `schemas/` — Pydantic request/response models: the API's wire contract, kept deliberately
   separate from `models/` so internal shape never leaks (e.g. `QuestionPublic` omits answer
   keys). Also the sole home of per-question-type structural validation.
