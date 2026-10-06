@@ -1270,3 +1270,38 @@ def test_report_embeds_images_and_survives_missing_ones(
         assert r.text.count('class="q-prompt-img"') == 2
     finally:
         cleanup.run()
+
+
+def test_question_numbers_are_positions_not_order_index(
+    api: Api, admin_token: str, two_courses: dict
+):
+    """Mean review R1: a delete leaves a gap in order_index; labels follow the editor."""
+    cleanup = Cleanup(api, admin_token)
+    course = two_courses["a"]
+    try:
+        game = _admin_game(api, admin_token, cleanup, "IMG numbering", course)
+        first = add_question(api, admin_token, game["id"], mc_body())
+        prompt = upload_ok(api, admin_token, course)["id"]
+        option = upload_ok(api, admin_token, course)["id"]
+        add_question(
+            api,
+            admin_token,
+            game["id"],
+            mc_body(prompt_image_id=prompt, option_image_ids=[None, option]),
+        )
+        r = api.delete(f"/host/games/{game['id']}/questions/{first['id']}", admin_token)
+        assert r.status_code == 204, r.text
+
+        r = api.get(f"/host/courses/{course}/images/{prompt}", admin_token)
+        (use,) = r.json()["used_by"]
+        assert (use["order_index"], use["question_number"]) == (1, 1)
+        r = api.delete(f"/host/courses/{course}/images/{prompt}", admin_token)
+        assert r.status_code == 409
+        assert "IMG numbering, question 1 (prompt)" in r.text
+
+        delete_image_row(option)
+        r = api.get(f"/host/games/{game['id']}/export", admin_token)
+        assert r.status_code == 409
+        assert "Question 1 refers to an image that was deleted" in r.text
+    finally:
+        cleanup.run()

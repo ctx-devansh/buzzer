@@ -12,6 +12,7 @@ class ImageUse(BaseModel):
     game_title: str
     question_id: int
     order_index: int
+    question_number: int  # 1-based position in the game, as the editor numbers it
     roles: list[str]  # subset of prompt, option, canvas
     played: bool
 

@@ -27,6 +27,8 @@ export interface ImageUse {
   game_title: string;
   question_id: number;
   order_index: number;
+  /** 1-based position in the game, as the editor numbers it (order_index can have gaps). */
+  question_number: number;
   roles: ('prompt' | 'option' | 'canvas')[];
   played: boolean;
 }
@@ -54,7 +56,7 @@ export interface ImageReplaceResult extends LibraryImage {
 
 /** "Party Night, question 3": how the library names a question (numbered from 1). */
 export function questionLabel(use: ImageUse): string {
-  return `${use.game_title}, question ${use.order_index + 1}`;
+  return `${use.game_title}, question ${use.question_number}`;
 }
 
 export function formatBytes(n: number): string {

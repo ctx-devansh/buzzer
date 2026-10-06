@@ -345,10 +345,10 @@ async def build_export_bundle(db: AsyncSession, game: Game) -> tuple[str, bytes]
                 )
             ).scalars()
         }
-        for q in questions:
+        for number, q in enumerate(questions, start=1):
             if any(image_id not in rows for _, image_id, _ in _question_refs(q)):
                 raise ConflictError(
-                    f"Question {q.order_index + 1} refers to an image that was "
+                    f"Question {number} refers to an image that was "
                     "deleted; re-pick or remove it before exporting"
                 )
         bundle["images"] = [

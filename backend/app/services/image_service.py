@@ -233,7 +233,9 @@ _ROLE_ORDER = ("prompt", "option", "canvas")
 async def usage_map(db: AsyncSession, course_id: int) -> dict[str, list[dict]]:
     """
     One scan of the course's questions: image id → one entry per using question,
-    {game_id, game_title, question_id, order_index, roles, answer_count}. There is
+    {game_id, game_title, question_id, order_index, question_number, roles,
+    answer_count}. question_number is the 1-based position in its game, as the editor
+    numbers questions: order_index can have gaps (a delete doesn't renumber). There is
     no link table (design A4); answer counts come from one grouped query.
     """
     rows = (
@@ -254,12 +256,15 @@ async def usage_map(db: AsyncSession, course_id: int) -> dict[str, list[dict]]:
     ).all()
 
     per_question: list[tuple[tuple, dict[str, set[str]]]] = []
+    position: dict[int, int] = {}
     for q_id, q_type, prompt_id, config, order_index, game_id, title in rows:
+        # Rows come ordered by game, then order_index, so this counts positions.
+        position[game_id] = number = position.get(game_id, 0) + 1
         roles: dict[str, set[str]] = {}
         for _field, image_id, role in question_image_refs(q_type, prompt_id, config):
             roles.setdefault(image_id, set()).add(role)
         if roles:
-            per_question.append(((q_id, order_index, game_id, title), roles))
+            per_question.append(((q_id, order_index, number, game_id, title), roles))
 
     counts: dict[int, int] = {}
     used_ids = [info[0] for info, _ in per_question]
@@ -275,7 +280,7 @@ async def usage_map(db: AsyncSession, course_id: int) -> dict[str, list[dict]]:
         )
 
     usage: dict[str, list[dict]] = {}
-    for (q_id, order_index, game_id, title), roles in per_question:
+    for (q_id, order_index, number, game_id, title), roles in per_question:
         for image_id, image_roles in roles.items():
             usage.setdefault(image_id, []).append(
                 {
@@ -283,6 +288,7 @@ async def usage_map(db: AsyncSession, course_id: int) -> dict[str, list[dict]]:
                     "game_title": title,
                     "question_id": q_id,
                     "order_index": order_index,
+                    "question_number": number,
                     "roles": [r for r in _ROLE_ORDER if r in image_roles],
                     "answer_count": counts.get(q_id, 0),
                 }
@@ -375,7 +381,7 @@ def image_response(img: Image, uses: list[dict]) -> dict:
 def describe_uses(uses: list[dict]) -> str:
     """'Party Night, question 3 (option); …' for up to five uses, then a count."""
     parts = [
-        f"{u['game_title']}, question {u['order_index'] + 1} ({', '.join(u['roles'])})"
+        f"{u['game_title']}, question {u['question_number']} ({', '.join(u['roles'])})"
         for u in uses[:5]
     ]
     more = len(uses) - len(parts)
