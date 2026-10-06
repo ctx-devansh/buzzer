@@ -1,5 +1,7 @@
 import { useGame } from './GameLayout';
 import { orderText } from '../../lib/putInOrder';
+import { PinCanvas } from '../../components/PinCanvas';
+import { aspectOf, isTap, pinVerdict } from '../../lib/pinTheSpot';
 
 function describeAnswer(
   lastAnswerData: Record<string, unknown> | null,
@@ -60,8 +62,17 @@ export default function ResultsPage() {
   // scores are "Partially correct". Points can equal pointsValue without a perfect order.
   const isPioAccuracy =
     currentQuestion?.type === 'put_in_order' && answerReveal.type === 'put_in_order';
-  const isCorrect = isPioAccuracy ? yourIsCorrect : !isCompleteness && yourPoints > 0;
-  const isPartial = isPioAccuracy && !yourIsCorrect && yourPoints > 0;
+  // pin_the_spot ACCURACY: ✓ from yourIsCorrect, ◐ by distance (D9), never from points.
+  const isPin = currentQuestion?.type === 'pin_the_spot';
+  const pinAspect = isPin ? aspectOf(currentQuestion?.config) : null;
+  const pinKey = 'rZero' in answerReveal || 'target' in answerReveal ? answerReveal : {};
+  const verdict = isPin && answerReveal.type === 'pin_the_spot'
+    ? pinVerdict(yourIsCorrect, lastAnswerData, pinKey, pinAspect)
+    : null;
+  const isCorrect = verdict
+    ? verdict === 'correct'
+    : isPioAccuracy ? yourIsCorrect : !isCompleteness && yourPoints > 0;
+  const isPartial = verdict ? verdict === 'partial' : isPioAccuracy && !yourIsCorrect && yourPoints > 0;
   const correctOrderLabel =
     'correctOrder' in answerReveal ? orderText(answerReveal.correctOrder, items) : null;
 
@@ -80,6 +91,20 @@ export default function ResultsPage() {
         <p className="text-amber-400 text-4xl font-black">Partially correct</p>
       ) : (
         <p className="text-red-400 text-4xl font-black">Incorrect</p>
+      )}
+
+      {/* pin_the_spot: the player's pin (from this phone's submission) against the reveal */}
+      {isPin && pinAspect !== null && (
+        <div className="w-full max-w-md">
+          <PinCanvas
+            imageUrl={currentQuestion?.config.image_url}
+            aspect={pinAspect}
+            pin={isTap(lastAnswerData) ? { x: lastAnswerData.x, y: lastAnswerData.y } : null}
+            reveal={pinKey}
+            ariaLabel={currentQuestion?.prompt ?? 'Pin the Spot results'}
+            maxHeight={typeof window !== 'undefined' ? window.innerHeight * 0.45 : undefined}
+          />
+        </div>
       )}
 
       {/* What the player answered */}

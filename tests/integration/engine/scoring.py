@@ -7,6 +7,7 @@ or grading method is added to the backend.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -18,7 +19,7 @@ from decimal import ROUND_HALF_UP, Decimal
 @dataclass
 class QuestionSpec:
     """Declarative description of one question — mirrors the DB Question model."""
-    type: str           # 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'put_in_order'
+    type: str           # 'multiple_choice' | 'true_false' | 'fill_in_the_blank' | 'put_in_order' | 'pin_the_spot'
     grading_type: str   # 'ACCURACY' | 'COMPLETENESS'
     prompt: str
     config: dict        # e.g. {"options": ["A", "B", "C"]}
@@ -131,6 +132,48 @@ def _put_in_order_score(q: QuestionSpec, response: dict) -> float:
     return min(float(raw), pv)
 
 
+PIN_EPSILON = 1e-9
+
+
+def _is_valid_tap(response: object) -> bool:
+    """Mirrors backend: exactly {x, y}, finite non-bool numbers in [0, 1]."""
+    return (
+        isinstance(response, dict)
+        and set(response) == {"x", "y"}
+        and all(
+            type(response[k]) in (int, float)
+            and math.isfinite(response[k])
+            and 0 <= response[k] <= 1
+            for k in ("x", "y")
+        )
+    )
+
+
+def _pin_distance(q: QuestionSpec, response: dict) -> float:
+    target = q.answer_data["target"]
+    aspect = q.config["image_height"] / q.config["image_width"]
+    return math.hypot(response["x"] - target["x"], (response["y"] - target["y"]) * aspect)
+
+
+def _pin_the_spot_score(q: QuestionSpec, response: dict) -> tuple[float, bool]:
+    if not _is_valid_tap(response):
+        return 0, False
+    if q.grading_type == "COMPLETENESS":
+        return q.points_value, True
+    r_full, r_zero = q.answer_data["r_full"], q.answer_data["r_zero"]
+    d = _pin_distance(q, response)
+    pv = q.points_value
+    if d <= r_full + PIN_EPSILON:
+        return pv, True
+    if d >= r_zero - PIN_EPSILON:
+        return 0, False
+    fraction = (r_zero - d) / (r_zero - r_full)
+    raw = (Decimal(str(round(pv, 6))) * Decimal(str(fraction))).quantize(
+        Decimal("0.01"), ROUND_HALF_UP
+    )
+    return min(float(raw), pv), False
+
+
 def compute_question_score(q: QuestionSpec, response: dict | None) -> float:
     """
     Return the points awarded for one player's response to one question.
@@ -142,6 +185,8 @@ def compute_question_score(q: QuestionSpec, response: dict | None) -> float:
     # Before the COMPLETENESS short-circuit, so an invalid order isn't credited.
     if q.type == "put_in_order":
         return _put_in_order_score(q, response)
+    if q.type == "pin_the_spot":
+        return _pin_the_spot_score(q, response)[0]
 
     if q.grading_type == "COMPLETENESS":
         return q.points_value  # any answer → full points
@@ -184,6 +229,8 @@ def expected_is_correct(q: QuestionSpec, response: dict | None) -> bool | None:
     it: put_in_order (perfect order under ACCURACY, any answer under COMPLETENESS, False
     when unanswered). None for every other type, meaning "not asserted".
     """
+    if q.type == "pin_the_spot":
+        return False if response is None else _pin_the_spot_score(q, response)[1]
     if q.type != "put_in_order":
         return None
     if response is None:
@@ -198,10 +245,16 @@ def expected_is_correct(q: QuestionSpec, response: dict | None) -> bool | None:
 
 
 def expected_distribution(q: QuestionSpec, responses: list[dict | None]) -> dict:
-    """put_in_order host distribution: one "item@position" count per item per answer."""
+    """put_in_order host distribution: one "item@position" count per item per answer.
+    pin_the_spot: one "x,y" (4 dp) count per valid tap."""
     dist: dict[str, int] = {}
     for response in responses:
         if response is None:
+            continue
+        if q.type == "pin_the_spot":
+            if _is_valid_tap(response):
+                key = f"{response['x']:.4f},{response['y']:.4f}"
+                dist[key] = dist.get(key, 0) + 1
             continue
         for pos, item in enumerate(response["orderedIndices"]):
             key = f"{item}@{pos}"
@@ -241,6 +294,15 @@ def compute_expected_summary(scenario: GameScenario, player_idx: int) -> list[di
 
 def _build_reveal(q: QuestionSpec) -> dict:
     """Build the answerReveal dict the backend will produce for a question."""
+    if q.type == "pin_the_spot":
+        reveal = {"type": "pin_the_spot" if q.grading_type == "ACCURACY" else "completeness"}
+        if q.answer_data:
+            reveal.update(
+                target=q.answer_data["target"],
+                rFull=q.answer_data["r_full"],
+                rZero=q.answer_data["r_zero"],
+            )
+        return reveal
     # put_in_order first: its COMPLETENESS reveal can carry correctOrder.
     if q.type == "put_in_order":
         correct_order = q.answer_data.get("correct_order")
