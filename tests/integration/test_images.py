@@ -16,8 +16,12 @@ Runs against the Docker stack on :8000.
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
+import pathlib
+import subprocess
+import time
 import uuid
 from collections.abc import Iterator
 
@@ -876,4 +880,303 @@ async def test_payloads_carry_image_ids_not_bytes(
         ]
     finally:
         await asyncio.gather(*[c.disconnect() for c in clients], return_exceptions=True)
+        cleanup.run()
+
+
+# ---------------------------------------------------------------------------
+# Export / import (design 4.7)
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
+
+
+def _export(api: Api, token: str, game_id: int) -> dict:
+    r = api.get(f"/host/games/{game_id}/export", token)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _import(api: Api, token: str, bundle: dict | bytes, course_id: int | None):
+    content = bundle if isinstance(bundle, bytes) else json.dumps(bundle)
+    files = {"file": ("g.json", content, "application/json")}
+    if course_id is None:
+        return api.post("/admin/games/import", token, files=files)
+    return api.post(
+        "/host/games/import", token, files=files, data={"course_id": str(course_id)}
+    )
+
+
+def _course_image_ids(api: Api, token: str, course_id: int) -> set[str]:
+    r = api.get(f"/host/courses/{course_id}/images", token)
+    assert r.status_code == 200, r.text
+    return {img["id"] for img in r.json()}
+
+
+def delete_image_row(image_id: str) -> None:
+    """Stand-in for the accepted delete race: remove a row behind the scan's back."""
+    assert image_id == str(uuid.UUID(image_id))  # never interpolate anything else
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "mysql",
+            "sh",
+            "-c",
+            'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" '
+            f"-e \"DELETE FROM images WHERE id = '{image_id}'\"",
+        ],
+        check=True,
+        cwd=_REPO_ROOT,
+        capture_output=True,
+    )
+
+
+@pytest.fixture(scope="module")
+def image_game(api: Api, admin_token: str, two_courses: dict) -> Iterator[dict]:
+    """A course-A game with a prompt image, option images and a library canvas."""
+    cleanup = Cleanup(api, admin_token)
+    course = two_courses["a"]
+    try:
+        game = _admin_game(api, admin_token, cleanup, "IMG export", course)
+        jpeg = io.BytesIO()
+        Image.new("RGB", (30, 20), (10, 120, 200)).save(jpeg, "JPEG", quality=90)
+        prompt = upload_ok(api, admin_token, course, jpeg.getvalue())["id"]
+        option = upload_ok(api, admin_token, course, png_bytes((8, 8), (0, 255, 0)))[
+            "id"
+        ]
+        canvas = upload_ok(api, admin_token, course, png_bytes((200, 100)))["id"]
+        add_question(
+            api,
+            admin_token,
+            game["id"],
+            mc_body(prompt_image_id=prompt, option_image_ids=[option, option]),
+        )
+        add_question(
+            api,
+            admin_token,
+            game["id"],
+            pin_body({"image_id": canvas, "image_width": 200, "image_height": 100}),
+        )
+        add_question(api, admin_token, game["id"], mc_body())
+        yield {
+            "game_id": game["id"],
+            "cleanup": cleanup,
+            "images": {prompt, option, canvas},
+        }
+    finally:
+        cleanup.run()
+
+
+def test_game_without_images_exports_version_1(
+    api: Api, admin_token: str, two_courses: dict
+):
+    cleanup = Cleanup(api, admin_token)
+    try:
+        game = _admin_game(api, admin_token, cleanup, "IMG v1", two_courses["a"])
+        add_question(api, admin_token, game["id"], mc_body())
+        bundle = _export(api, admin_token, game["id"])
+        assert bundle["version"] == 1
+        assert "images" not in bundle
+        assert "prompt_image_id" not in bundle["questions"][0]
+    finally:
+        cleanup.run()
+
+
+def test_export_v2_round_trip_into_other_course(
+    api: Api, admin_token: str, base_url: str, image_game: dict, two_courses: dict
+):
+    bundle = _export(api, admin_token, image_game["game_id"])
+    assert bundle["version"] == 2
+    assert {e["id"] for e in bundle["images"]} == image_game["images"]
+    assert len(bundle["images"]) == 3  # the option image once, though used twice
+    assert bundle["questions"][2]["prompt_image_id"] is None
+
+    target = two_courses["b"]
+    before = _course_image_ids(api, admin_token, target)
+    r = _import(api, admin_token, bundle, target)
+    assert r.status_code == 201, r.text
+    new_game = r.json()["game_id"]
+    image_game["cleanup"].games.append(new_game)
+    added = _course_image_ids(api, admin_token, target) - before
+    assert len(added) == 3 and not added & image_game["images"]
+
+    questions = api.get(f"/host/games/{new_game}/questions", admin_token).json()
+    mc, pin, _ = questions
+    assert mc["prompt_image_id"] in added
+    assert set(mc["config"]["option_image_ids"]) <= added
+    assert pin["config"]["image_id"] in added
+    assert (pin["config"]["image_width"], pin["config"]["image_height"]) == (200, 100)
+    # Same bytes (process_upload is idempotent), so the JPEG survives the round trip.
+    by_id = {e["id"]: e for e in bundle["images"]}
+    original = base64.b64decode(
+        by_id[bundle["questions"][0]["prompt_image_id"]]["data_base64"]
+    )
+    assert (
+        httpx.get(f"{base_url}/api/images/{mc['prompt_image_id']}").content == original
+    )
+
+    # A second import reuses the images: no new rows.
+    r = _import(api, admin_token, bundle, target)
+    assert r.status_code == 201, r.text
+    image_game["cleanup"].games.append(r.json()["game_id"])
+    assert _course_image_ids(api, admin_token, target) - before == added
+
+
+def test_import_into_own_course_reuses_originals(
+    api: Api, admin_token: str, image_game: dict, two_courses: dict
+):
+    course = two_courses["a"]
+    bundle = _export(api, admin_token, image_game["game_id"])
+    before = _course_image_ids(api, admin_token, course)
+    r = _import(api, admin_token, bundle, course)
+    assert r.status_code == 201, r.text
+    image_game["cleanup"].games.append(r.json()["game_id"])
+    assert _course_image_ids(api, admin_token, course) == before
+
+
+def test_import_reuses_the_oldest_of_identical_rows(api: Api, admin_token: str):
+    cleanup = Cleanup(api, admin_token)
+    try:
+        course = new_course(api, admin_token, "oldest")
+        data = png_bytes((9, 9), (4, 5, 6))
+        older = upload_ok(api, admin_token, course, data)["id"]
+        time.sleep(1.1)  # created_at has one-second resolution; ties go by id
+        newer = upload_ok(api, admin_token, course, data)["id"]
+        game = _admin_game(api, admin_token, cleanup, "IMG oldest", course)
+        add_question(api, admin_token, game["id"], mc_body(prompt_image_id=newer))
+        r = _import(api, admin_token, _export(api, admin_token, game["id"]), course)
+        assert r.status_code == 201, r.text
+        cleanup.games.append(r.json()["game_id"])
+        (q,) = api.get(f"/host/games/{r.json()['game_id']}/questions", admin_token).json()
+        assert q["prompt_image_id"] == older
+        assert _course_image_ids(api, admin_token, course) == {older, newer}
+    finally:
+        cleanup.run()
+
+
+def test_unused_image_entry_is_checked_but_not_inserted(
+    api: Api, admin_token: str, image_game: dict
+):
+    bundle = _export(api, admin_token, image_game["game_id"])
+    extra = png_bytes((5, 5), (1, 2, 3))
+    bundle["images"].append(
+        {"id": "unused", "data_base64": base64.b64encode(extra).decode()}
+    )
+    course = new_course(api, admin_token, "unused")
+    r = _import(api, admin_token, bundle, course)
+    assert r.status_code == 201, r.text
+    image_game["cleanup"].games.append(r.json()["game_id"])
+    assert len(_course_image_ids(api, admin_token, course)) == 3
+
+
+def test_admin_import_rejects_v2_with_images(
+    api: Api, admin_token: str, image_game: dict
+):
+    bundle = _export(api, admin_token, image_game["game_id"])
+    r = _import(api, admin_token, bundle, None)
+    assert r.status_code == 422, r.text
+    assert "must be imported into a course" in r.text
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda q: q.update(prompt_image_id=str(uuid.uuid4())),
+        lambda q: q["config"].update(option_image_ids=[None, None]),
+    ],
+    ids=["prompt_image_id", "option_image_ids"],
+)
+def test_v1_file_with_image_key_is_rejected(
+    api: Api, admin_token: str, two_courses: dict, mutate
+):
+    question = mc_body()
+    mutate(question)
+    bundle = {
+        "format": "buzzer/game",
+        "version": 1,
+        "game": {"title": "v1 with image"},
+        "questions": [question],
+    }
+    r = _import(api, admin_token, bundle, two_courses["a"])
+    assert r.status_code == 422, r.text
+    assert "need a version 2 file" in r.text
+
+
+def test_v1_file_with_null_prompt_image_imports(
+    api: Api, admin_token: str, image_game: dict, two_courses: dict
+):
+    bundle = {
+        "format": "buzzer/game",
+        "version": 1,
+        "game": {"title": "v1 null image"},
+        "questions": [{**mc_body(), "prompt_image_id": None}],
+    }
+    r = _import(api, admin_token, bundle, two_courses["a"])
+    assert r.status_code == 201, r.text
+    image_game["cleanup"].games.append(r.json()["game_id"])
+
+
+def test_broken_image_after_a_valid_one_fails_whole_import(
+    api: Api, admin_token: str, image_game: dict
+):
+    bundle = _export(api, admin_token, image_game["game_id"])
+    bundle["images"].append({"id": "broken", "data_base64": "not base64!!"})
+    course = new_course(api, admin_token, "broken")
+    r = _import(api, admin_token, bundle, course)
+    assert r.status_code == 422, r.text
+    assert "Image 4 invalid" in r.text
+    assert _course_image_ids(api, admin_token, course) == set()
+    assert api.get("/host/games", admin_token, params={"course_id": course}).json() == []
+
+
+def test_failure_after_images_flushed_leaves_nothing(
+    api: Api, admin_token: str, image_game: dict
+):
+    """Images are inserted and flushed before the questions; a bad question after
+    that must still leave no image or game rows (get_db rolls back)."""
+    bundle = _export(api, admin_token, image_game["game_id"])
+    bundle["questions"][1]["answer_data"] = {
+        "target": {"x": 0.5, "y": 0.5},
+        "r_full": 0.1,
+        "r_zero": 1.2,  # past the 2:1 canvas's diagonal (≈ 1.118)
+    }
+    bundle["questions"][1]["config"]["image_width"] = 100  # claims a square
+    course = new_course(api, admin_token, "rollback")
+    r = _import(api, admin_token, bundle, course)
+    assert r.status_code == 422, r.text
+    assert "Question 2 invalid" in r.text
+    assert _course_image_ids(api, admin_token, course) == set()
+    assert api.get("/host/games", admin_token, params={"course_id": course}).json() == []
+
+
+def test_export_with_dangling_reference_is_409(
+    api: Api, admin_token: str, two_courses: dict
+):
+    cleanup = Cleanup(api, admin_token)
+    course = two_courses["a"]
+    try:
+        game = _admin_game(api, admin_token, cleanup, "IMG dangling", course)
+        option = upload_ok(api, admin_token, course)["id"]
+        add_question(api, admin_token, game["id"], mc_body())
+        add_question(
+            api, admin_token, game["id"], mc_body(option_image_ids=[None, option])
+        )
+        delete_image_row(option)
+        r = api.get(f"/host/games/{game['id']}/export", admin_token)
+        assert r.status_code == 409, r.text
+        assert "Question 2 refers to an image that was deleted" in r.text
+    finally:
+        cleanup.run()
+
+
+def test_sample_games_still_import(api: Api, admin_token: str, two_courses: dict):
+    cleanup = Cleanup(api, admin_token)
+    try:
+        for path in sorted((_REPO_ROOT / "sample_games").glob("*.json")):
+            r = _import(api, admin_token, path.read_bytes(), two_courses["a"])
+            assert r.status_code == 201, f"{path.name}: {r.text}"
+            cleanup.games.append(r.json()["game_id"])
+    finally:
         cleanup.run()

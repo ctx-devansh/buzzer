@@ -125,7 +125,9 @@ async def import_game(
     """The game's course comes only from the form field; a bundle's own is discarded."""
     await assert_host_can_use_course(db, user, course_id)
     try:
-        game = await authoring.import_game_bundle(db, await file.read(), course_id)
+        game = await authoring.import_game_bundle(
+            db, await file.read(), course_id, user.id
+        )
     except authoring.BundleError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _grant_creator(db, user, game)
