@@ -203,7 +203,17 @@ def render(key: str) -> tuple[Image.Image, tuple[float, float]]:
 
 
 def _load(file: str) -> dict:
-    return json.loads((GAMES_DIR / file).read_text(encoding="utf-8"))
+    """A PLAN file's bundle; PlanError if it is missing or isn't a game bundle."""
+    path = GAMES_DIR / file
+    try:
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise PlanError(f"{file}: not found in {GAMES_DIR}") from None
+    except json.JSONDecodeError as exc:
+        raise PlanError(f"{file}: not valid JSON ({exc})") from None
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("questions"), list):
+        raise PlanError(f"{file}: no top-level 'questions' list")
+    return bundle
 
 
 def verify_plan(bundles: dict[str, dict]) -> None:

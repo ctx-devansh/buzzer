@@ -397,7 +397,7 @@ The file format is:
 
 Question order is determined by array position; `order_index` is assigned automatically on import.
 
-`format` must be `"buzzer/game"` and `version` must be `1`. Every question takes `type`, `grading_type` (`"ACCURACY"` or `"COMPLETENESS"`), `prompt` (1–2000 characters), `time_limit_seconds` (2–300, default 30), `points_value` (0–100000, default 1), `config` and `answer_data`; any other key is rejected. Per type:
+`format` must be `"buzzer/game"` and `version` must be `1`. Every question takes `type`, `grading_type` (`"ACCURACY"` or `"COMPLETENESS"`), `prompt` (1–2000 characters), `time_limit_seconds` (2–300, default 30), `points_value` (0–100000, default 1), `config` and `answer_data`, plus an optional `order_index` (accepted, then replaced by array position); any other key is rejected. Per type:
 
 | `type` | `config` | ACCURACY `answer_data` | COMPLETENESS `answer_data` | Player submits |
 |---|---|---|---|---|

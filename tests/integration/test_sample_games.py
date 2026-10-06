@@ -1,9 +1,10 @@
 """
-Every committed sample game imports cleanly (T6; docs/design-t6-sample-games.md §5.4).
+Every committed sample game imports cleanly (T6; docs/design-t6-sample-games.md §5.4, §5.8).
 
 Each sample_games/*.json is imported through the host route (POST /host/games/import, the
 Host app's Import JSON) into one throwaway course, and must come back with the same question
-types in the same order. Each imported game is deleted afterwards; the course is left behind
+types in the same order; exporting it again must reproduce every game and question value the
+file states. Each imported game is deleted afterwards; the course is left behind
 as an inert record (there is no course DELETE endpoint), named "T6 sample games <tag>".
 
 Runs against the Docker stack on :8000.
@@ -64,5 +65,17 @@ def test_sample_game_imports_cleanly(
         r = api.get(f"/host/games/{game_id}/questions", admin_token)
         assert r.status_code == 200, r.text
         assert [q["type"] for q in r.json()] == [q["type"] for q in bundle["questions"]]
+
+        # Content, not just types (§5.8): import must not alter anything the file says.
+        r = api.get(f"/host/games/{game_id}/export", admin_token)
+        assert r.status_code == 200, r.text
+        exported = r.json()
+        for key, value in bundle["game"].items():
+            assert exported["game"].get(key) == value, f"game.{key} changed on import"
+        for n, (want, got) in enumerate(
+            zip(bundle["questions"], exported["questions"], strict=True), 1
+        ):
+            for key, value in want.items():
+                assert got.get(key) == value, f"question {n} {key} changed on import"
     finally:
         cleanup.run()
