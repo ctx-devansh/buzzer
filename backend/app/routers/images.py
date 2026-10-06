@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import Response
 
 from ..common.exceptions import NotFoundError
@@ -33,9 +33,10 @@ def _etag_matches(if_none_match: str | None, etag: str) -> bool:
     )
 
 
-@router.get("/images/{image_id}")
+@router.api_route("/images/{image_id}", methods=["GET", "HEAD"])
 async def serve_image(
     image_id: str,
+    request: Request,
     if_none_match: Annotated[str | None, Header()] = None,
 ) -> Response:
     if not is_image_id(image_id):
@@ -48,6 +49,18 @@ async def serve_image(
             raise NotFoundError("Image not found")
         etag = f'"{head.sha256}"'
         row = None
+        if request.method == "HEAD" and not _etag_matches(if_none_match, etag):
+            # The GET's headers from the head query alone; HEAD never reads the bytes.
+            return Response(
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Content-Type-Options": "nosniff",
+                    "ETag": etag,
+                    "Content-Disposition": "inline",
+                    "Content-Type": head.content_type,
+                    "Content-Length": str(head.byte_size),
+                }
+            )
         if not _etag_matches(if_none_match, etag):
             row = await image_service.read_image_data(db, image_id)
             if row is None:

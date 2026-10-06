@@ -195,6 +195,13 @@ def test_public_get_needs_no_token_and_supports_etag(
     assert r.status_code == 304
     assert r.content == b""
     assert r.headers["etag"] == etag
+    # HEAD (mean review R3): the GET's headers, no body.
+    r = httpx.head(f"{base_url}{body['url']}")
+    assert r.status_code == 200
+    assert r.content == b""
+    assert r.headers["content-type"] == "image/png"
+    assert r.headers["content-length"] == str(len(data))
+    assert r.headers["etag"] == etag
 
 
 @pytest.mark.parametrize("image_id", [str(uuid.uuid4()), "not-a-uuid"])
