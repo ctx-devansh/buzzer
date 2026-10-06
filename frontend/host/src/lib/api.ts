@@ -71,6 +71,20 @@ async function downloadFetch(path: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+/** Multipart body, with no Content-Type of our own: the browser sets the boundary. */
+function sendForm<T>(method: 'POST' | 'PUT', path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  return fetch(`${BASE}${path}`, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  }).then(async (res) => {
+    if (!res.ok) throw await toError(res);
+    const text = await res.text();
+    return (text ? JSON.parse(text) : {}) as T;
+  });
+}
+
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
@@ -84,17 +98,8 @@ export const api = {
    * POST multipart/form-data (file uploads). Bypasses apiFetch on purpose: apiFetch
    * always sets Content-Type: application/json, which would break the multipart boundary.
    */
-  postForm: <T>(path: string, form: FormData) => {
-    const token = getToken();
-    return fetch(`${BASE}${path}`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    }).then(async (res) => {
-      if (!res.ok) throw await toError(res);
-      const text = await res.text();
-      return (text ? JSON.parse(text) : {}) as T;
-    });
-  },
+  postForm: <T>(path: string, form: FormData) => sendForm<T>('POST', path, form),
+  /** PUT multipart/form-data (replacing a library image). */
+  putForm: <T>(path: string, form: FormData) => sendForm<T>('PUT', path, form),
   download: downloadFetch,
 };

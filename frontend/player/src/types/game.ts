@@ -22,8 +22,12 @@ export interface QuestionConfig {
   maxLength?: number;
   items?: string[];
   image_url?: string;
+  /** A course-library canvas (T8): exactly one of image_url and image_id is set. */
+  image_id?: string;
   image_width?: number;
   image_height?: number;
+  /** MC / multi-select option images (T8), one entry per option. */
+  option_image_ids?: (string | null)[];
 }
 
 export interface PinPoint {

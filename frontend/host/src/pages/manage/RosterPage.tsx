@@ -301,7 +301,7 @@ export default function RosterPage() {
       onClick={() => navigate('/courses')}
       className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-6"
     >
-      <ArrowLeft size={14} /> Back to Rosters
+      <ArrowLeft size={14} /> Back to Courses
     </button>
   );
 

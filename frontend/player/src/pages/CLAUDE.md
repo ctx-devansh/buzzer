@@ -40,6 +40,10 @@ Results → … → Game Over.
   - T/F: two big buttons (`{selectedValue}`);
   - fill-in-the-blank: text input honouring `config.maxLength` (`{text}`);
   - multi-select: toggle tiles plus a Submit button (`{selectedIndices}`);
+  - MC and multi-select with option images (T8, any `config.option_image_ids` entry set): a
+    2-column grid of equal tiles, each with a fixed 22 vh image box (`object-contain`; the
+    letter instead when the option has no image or it fails to load) and the letter + text as
+    the caption, so nothing shifts under a finger while images load. No images: as before;
   - put-in-order: numbered rows in `config.items` order, rearranged by pick-and-place (tap a row,
     then tap where it goes; insert semantics; tap it again to cancel), then Lock in
     (`{orderedIndices}`). `order`/`picked` reset on remount like `submitted`;

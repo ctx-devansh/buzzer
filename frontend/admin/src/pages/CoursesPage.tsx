@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Users, Pencil, ExternalLink } from 'lucide-react';
+import { Plus, Users, Pencil, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import { HOST_APP_URL } from '../lib/links';
 import { Button } from '../components/ui/button';
@@ -171,6 +171,14 @@ export default function CoursesPage() {
                   onClick={() => window.location.assign(`${HOST_APP_URL}/courses/${c.id}/roster`)}
                 >
                   <Users size={14} className="mr-1" /> Roster <ExternalLink size={12} className="ml-1" />
+                </Button>
+                {/* The course image library (T8) is a host tool too. */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.location.assign(`${HOST_APP_URL}/courses/${c.id}/images`)}
+                >
+                  <ImageIcon size={14} className="mr-1" /> Images <ExternalLink size={12} className="ml-1" />
                 </Button>
               </div>
             </Card>

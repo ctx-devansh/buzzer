@@ -960,7 +960,7 @@ def test_export_then_import_into_a_different_course(t4_env: T4Env, fn_cleanup: C
     [
         ("not json", "Invalid JSON"),
         ({**_bundle(), "format": "other"}, "Unrecognised file format"),
-        ({**_bundle(), "version": 2}, "Unsupported version"),
+        ({**_bundle(), "version": 3}, "Unsupported version"),
         (_bundle(title=""), "Invalid game metadata"),
         ({**_bundle(), "questions": [{**_MC_QUESTION, "config": {"options": ["one"]}}]}, "Question 1 invalid"),
         ({**_bundle(), "game": "x"}, "'game' must be an object"),

@@ -4,7 +4,8 @@ import { Button } from '../../components/ui/button';
 import type { AnswerReveal } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
 import { PinBoard } from '../../components/PinBoard';
-import { aspectOf, revealKey } from '../../lib/pinTheSpot';
+import { aspectOf, pinImageSrc, revealKey } from '../../lib/pinTheSpot';
+import { imageUrl } from '../../lib/images';
 
 const RESULTS_DISPLAY_SECONDS = 10;
 
@@ -115,7 +116,7 @@ function WordCloud({ distribution, answerReveal, totalAnswered, totalPlayers }: 
 // ---------------------------------------------------------------------------
 
 interface BarChartProps {
-  bars: { label: string; count: number; correct: boolean | null; testId?: string }[];
+  bars: { label: string; count: number; correct: boolean | null; testId?: string; imageId?: string | null }[];
   totalAnswered: number;
   totalPlayers: number;
 }
@@ -136,6 +137,14 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
 
         return (
           <div key={i} className="flex items-center gap-3" data-testid={bar.testId}>
+            {bar.imageId && (
+              <img
+                src={imageUrl(bar.imageId)}
+                alt=""
+                className="h-12 w-16 shrink-0 rounded object-contain"
+                data-testid="bar-thumb"
+              />
+            )}
             <span className="text-slate-300 font-bold font-mono w-8 text-right shrink-0">
               {bar.label}
             </span>
@@ -180,6 +189,7 @@ function buildBars(
   reveal: AnswerReveal,
   distribution: Record<string, number>,
   options: string[] | undefined,
+  imageIds: (string | null)[] | undefined,
 ): BarChartProps['bars'] {
   if (reveal.type === 'multiple_choice') {
     const opts = options ?? [];
@@ -187,6 +197,7 @@ function buildBars(
       label: `${optionLabel(i)}  ${opt}`,
       count: distribution[String(i)] ?? 0,
       correct: reveal.correctIndices.includes(i),
+      imageId: imageIds?.[i] ?? null,
     }));
   }
 
@@ -196,6 +207,7 @@ function buildBars(
       label: `${optionLabel(i)}  ${opt}`,
       count: distribution[String(i)] ?? 0,
       correct: (reveal.answerPoints[i] ?? 0) > 0,
+      imageId: imageIds?.[i] ?? null,
     }));
   }
 
@@ -212,6 +224,7 @@ function buildBars(
       label: `${optionLabel(i)}  ${opt}`,
       count: distribution[String(i)] ?? 0,
       correct: null,
+      imageId: imageIds?.[i] ?? null,
     }));
   }
 
@@ -274,6 +287,7 @@ export default function ResultsPage() {
             questionResults.answerReveal,
             questionResults.answerDistribution,
             currentQuestion?.config?.options,
+            currentQuestion?.config?.option_image_ids,
           )
         : [];
   const pioOrderText =
@@ -303,7 +317,7 @@ export default function ResultsPage() {
             <p className="text-center text-slate-400">Image failed to load</p>
           ) : (
             <PinBoard
-              imageUrl={currentQuestion?.config.image_url}
+              imageUrl={pinImageSrc(currentQuestion?.config)}
               aspect={pinAspect}
               taps={questionResults.answerDistribution}
               pinKey={pinKey}

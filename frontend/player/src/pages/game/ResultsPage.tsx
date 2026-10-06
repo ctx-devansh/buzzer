@@ -1,7 +1,7 @@
 import { useGame } from './GameLayout';
 import { orderText } from '../../lib/putInOrder';
 import { PinCanvas } from '../../components/PinCanvas';
-import { aspectOf, isTap, pinVerdict } from '../../lib/pinTheSpot';
+import { aspectOf, isTap, pinImageSrc, pinVerdict } from '../../lib/pinTheSpot';
 
 function describeAnswer(
   lastAnswerData: Record<string, unknown> | null,
@@ -97,7 +97,7 @@ export default function ResultsPage() {
       {isPin && pinAspect !== null && (
         <div className="w-full max-w-md">
           <PinCanvas
-            imageUrl={currentQuestion?.config.image_url}
+            imageUrl={pinImageSrc(currentQuestion?.config)}
             aspect={pinAspect}
             pin={isTap(lastAnswerData) ? { x: lastAnswerData.x, y: lastAnswerData.y } : null}
             reveal={pinKey}

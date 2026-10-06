@@ -38,5 +38,9 @@ guard just checks that a token exists.
   places listed in `backend/app/CLAUDE.md`. The admin app no longer has an editor.
   `pin_the_spot` also has a canvas per app (`player/…/PinCanvas.tsx`, `host/…/PinBoard.tsx`)
   and a geometry helper per app (`lib/pinTheSpot.ts`) — copies, not shared.
+- **Library images (T8)** load by URL with no token: each app (host, player) has its own
+  `lib/images.ts::imageUrl(id)` → `/api/images/{id}`, and `lib/pinTheSpot.ts::pinImageSrc`
+  (library `image_id` first, else `image_url`). Phones get option images and Pin the Spot
+  canvases, never prompt images.
 - `npm run dev` at the repo root runs all three via `concurrently`. `npm run build` builds each
   into its own `dist/`, which docker-compose mounts into nginx.

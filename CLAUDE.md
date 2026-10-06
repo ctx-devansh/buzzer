@@ -74,6 +74,10 @@ the host/admin split is specified in [docs/design-host-admin-restructure.md](doc
 - **Cross-app links** (`frontend/*/src/lib/links.ts`) point at the other app's dev port under
   `npm run dev` and at `/host`, `/admin`, `/player` under nginx (:8080). The token is per-origin,
   so admin→host links only stay signed in on :8080.
+- **Course image library (T8).** Images live in MySQL (`images`), one library per course, and
+  are served publicly by unguessable id from `GET /api/images/{id}`. Questions refer to them by
+  id (`prompt_image_id`, `config.option_image_ids`, Pin the Spot `config.image_id`); games that
+  use them export as bundle version 2. Spec: [docs/design-image-support.md](docs/design-image-support.md).
 - After pulling schema changes run `docker compose run --rm backend alembic upgrade head`.
 
 ## Elephant-Goldfish tooling (optional, encouraged)

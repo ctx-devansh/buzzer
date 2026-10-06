@@ -21,7 +21,8 @@ roster screens moved to the host app in T4 (`docs/design-host-admin-restructure.
 
   Loads all courses and games (`GET /admin/games`, which carries `course_name`) to label grants.
 - `CoursesPage.tsx` — list, create, and edit courses (`/admin/courses`). Each course's Roster
-  button is an **external** link to `{HOST_APP_URL}/courses/{id}/roster`.
+  and Images (T8 course image library) buttons are **external** links to
+  `{HOST_APP_URL}/courses/{id}/roster` and `…/images`.
 - `SessionsPage.tsx` — every session across all hosts (`GET /admin/sessions?status=`), with a
   status filter. Each session expands into:
   - CSV export options: Canvas or raw format, assignment title/ID, SIS domain, roster-only,
