@@ -11,10 +11,26 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 from dataclasses import dataclass
 
 from PIL import Image as PILImage
 from PIL import ImageOps
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
+
+from ..common.exceptions import (
+    BuzzerError,
+    ConflictError,
+    NotFoundError,
+    ValidationFailedError,
+)
+from ..models.game import Game, Question
+from ..models.image import Image
+from ..models.session import SessionScore
+from ..schemas.admin import is_image_id, validate_pin_the_spot
 
 MAX_UPLOAD_BYTES = 5_000_000
 MAX_IMAGE_SIDE = 20_000
@@ -165,3 +181,349 @@ def process_upload(raw: bytes) -> ProcessedImage:
         byte_size=len(data),
         sha256=hashlib.sha256(data).hexdigest(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Pin the Spot radius clamp (replace step 4)
+# ---------------------------------------------------------------------------
+
+
+def clamp_radii(answer_data: dict, width: int, height: int) -> dict:
+    """
+    Fit a pin_the_spot answer_data to a new image size: r_zero to the new diagonal
+    (rounded down to 2 dp, as the editor's slider maximum), then r_full at least
+    0.01 below it (the editor's gap). A question without a target is returned as is.
+    """
+    if not answer_data:
+        return answer_data
+    cap = math.floor(math.hypot(1.0, height / width) * 100) / 100
+    r_zero = min(answer_data["r_zero"], cap)
+    r_full = min(answer_data["r_full"], round(r_zero - 0.01, 10))
+    return {**answer_data, "r_full": r_full, "r_zero": r_zero}
+
+
+# ---------------------------------------------------------------------------
+# References and where-used
+# ---------------------------------------------------------------------------
+
+
+def question_image_refs(
+    q_type: str, prompt_image_id: str | None, config: dict | None
+) -> list[tuple[str, str, str]]:
+    """Every (field, image_id, role) a question refers to, in field order."""
+    config = config if isinstance(config, dict) else {}
+    refs: list[tuple[str, str, str]] = []
+    if prompt_image_id:
+        refs.append(("prompt_image_id", prompt_image_id, "prompt"))
+    if q_type in ("multiple_choice", "multi_select"):
+        option_ids = config.get("option_image_ids")
+        for i, image_id in enumerate(
+            option_ids if isinstance(option_ids, list) else []
+        ):
+            if isinstance(image_id, str):
+                refs.append((f"option_image_ids[{i}]", image_id, "option"))
+    if q_type == "pin_the_spot" and isinstance(config.get("image_id"), str):
+        refs.append(("image_id", config["image_id"], "canvas"))
+    return refs
+
+
+_ROLE_ORDER = ("prompt", "option", "canvas")
+
+
+async def usage_map(db: AsyncSession, course_id: int) -> dict[str, list[dict]]:
+    """
+    One scan of the course's questions: image id → one entry per using question,
+    {game_id, game_title, question_id, order_index, roles, answer_count}. There is
+    no link table (design A4); answer counts come from one grouped query.
+    """
+    rows = (
+        await db.execute(
+            select(
+                Question.id,
+                Question.type,
+                Question.prompt_image_id,
+                Question.config,
+                Question.order_index,
+                Game.id,
+                Game.title,
+            )
+            .join(Game, Question.game_id == Game.id)
+            .where(Game.course_id == course_id)
+            .order_by(Game.title, Game.id, Question.order_index)
+        )
+    ).all()
+
+    per_question: list[tuple[tuple, dict[str, set[str]]]] = []
+    for q_id, q_type, prompt_id, config, order_index, game_id, title in rows:
+        roles: dict[str, set[str]] = {}
+        for _field, image_id, role in question_image_refs(q_type, prompt_id, config):
+            roles.setdefault(image_id, set()).add(role)
+        if roles:
+            per_question.append(((q_id, order_index, game_id, title), roles))
+
+    counts: dict[int, int] = {}
+    used_ids = [info[0] for info, _ in per_question]
+    if used_ids:
+        counts = dict(
+            (
+                await db.execute(
+                    select(SessionScore.question_id, func.count())
+                    .where(SessionScore.question_id.in_(used_ids))
+                    .group_by(SessionScore.question_id)
+                )
+            ).all()
+        )
+
+    usage: dict[str, list[dict]] = {}
+    for (q_id, order_index, game_id, title), roles in per_question:
+        for image_id, image_roles in roles.items():
+            usage.setdefault(image_id, []).append(
+                {
+                    "game_id": game_id,
+                    "game_title": title,
+                    "question_id": q_id,
+                    "order_index": order_index,
+                    "roles": [r for r in _ROLE_ORDER if r in image_roles],
+                    "answer_count": counts.get(q_id, 0),
+                }
+            )
+    return usage
+
+
+async def where_used(db: AsyncSession, course_id: int, image_id: str) -> list[dict]:
+    return (await usage_map(db, course_id)).get(image_id, [])
+
+
+def _is_played_canvas(use: dict) -> bool:
+    return "canvas" in use["roles"] and use["answer_count"] > 0
+
+
+def image_response(img: Image, uses: list[dict]) -> dict:
+    uploader = img.uploader
+    return {
+        "id": img.id,
+        "course_id": img.course_id,
+        "filename": img.filename,
+        "content_type": img.content_type,
+        "width": img.width,
+        "height": img.height,
+        "byte_size": img.byte_size,
+        "uploaded_by_name": (
+            (uploader.display_name or uploader.username) if uploader else None
+        ),
+        "created_at": img.created_at,
+        "updated_at": img.updated_at,
+        "url": f"/api/images/{img.id}",
+        "used_by": [
+            {
+                **{k: v for k, v in use.items() if k != "answer_count"},
+                "played": use["answer_count"] > 0,
+            }
+            for use in uses
+        ],
+    }
+
+
+def describe_uses(uses: list[dict]) -> str:
+    """'Party Night, question 3 (option); …' for up to five uses, then a count."""
+    parts = [
+        f"{u['game_title']}, question {u['order_index'] + 1} ({', '.join(u['roles'])})"
+        for u in uses[:5]
+    ]
+    more = len(uses) - len(parts)
+    text = "; ".join(parts)
+    return f"{text}; and {more} more" if more else text
+
+
+# ---------------------------------------------------------------------------
+# Library operations (callers authorise the course first)
+# ---------------------------------------------------------------------------
+
+
+def http_error(exc: ImageRejected) -> BuzzerError:
+    if isinstance(exc, ImageTooLarge):
+        return BuzzerError("PAYLOAD_TOO_LARGE", str(exc), 413)
+    return ValidationFailedError(str(exc))
+
+
+async def process_upload_async(raw: bytes) -> ProcessedImage:
+    """process_upload in a worker thread: it is CPU-bound, and this process also
+    serves every live game's Socket.IO traffic (design 4.1, "Off the event loop")."""
+    return await run_in_threadpool(process_upload, raw)
+
+
+async def _process_or_raise(raw: bytes) -> ProcessedImage:
+    try:
+        return await process_upload_async(raw)
+    except ImageRejected as exc:
+        raise http_error(exc) from exc
+
+
+def clean_filename(filename: str | None) -> str:
+    name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+    return (name or "image")[:255]
+
+
+async def get_image_in_course(db: AsyncSession, course_id: int, image_id: str) -> Image:
+    """404 for an unknown or malformed id, and for another course's image."""
+    img = await db.get(Image, image_id) if is_image_id(image_id) else None
+    if img is None or img.course_id != course_id:
+        raise NotFoundError("Image not found in this course")
+    return img
+
+
+async def list_images(db: AsyncSession, course_id: int) -> list[dict]:
+    images = (
+        await db.execute(
+            select(Image)
+            .where(Image.course_id == course_id)
+            .order_by(Image.created_at.desc(), Image.id)
+        )
+    ).scalars()
+    usage = await usage_map(db, course_id)
+    return [image_response(img, usage.get(img.id, [])) for img in images]
+
+
+async def get_image(db: AsyncSession, course_id: int, image_id: str) -> dict:
+    img = await get_image_in_course(db, course_id, image_id)
+    return image_response(img, await where_used(db, course_id, image_id))
+
+
+def new_image_row(
+    course_id: int, uploaded_by: str | None, filename: str | None, p: ProcessedImage
+) -> Image:
+    return Image(
+        course_id=course_id,
+        uploaded_by=uploaded_by,
+        filename=clean_filename(filename),
+        content_type=p.content_type,
+        width=p.width,
+        height=p.height,
+        byte_size=p.byte_size,
+        sha256=p.sha256,
+        data=p.data,
+    )
+
+
+async def upload_image(
+    db: AsyncSession, course_id: int, user_id: str, filename: str | None, raw: bytes
+) -> dict:
+    img = new_image_row(course_id, user_id, filename, await _process_or_raise(raw))
+    db.add(img)
+    await db.flush()
+    await db.refresh(img, ["created_at", "updated_at", "uploader"])
+    return image_response(img, [])
+
+
+async def replace_image(
+    db: AsyncSession,
+    course_id: int,
+    image_id: str,
+    user_id: str,
+    filename: str | None,
+    raw: bytes,
+) -> dict:
+    """
+    Replace the bytes, keeping the id (design 4.3, replace rules). 409 if the image
+    is the canvas of a played pin_the_spot question; unplayed canvases get the new
+    size, with radii clamped to the new diagonal.
+    """
+    img = await get_image_in_course(db, course_id, image_id)
+    processed = await _process_or_raise(raw)
+    uses = await where_used(db, course_id, image_id)
+    if any(_is_played_canvas(u) for u in uses):
+        raise ConflictError(
+            "This image is the canvas of a Pin the Spot question that has been "
+            "played, so it can't be replaced. Upload it as a new image instead."
+        )
+
+    size_changed = (img.width, img.height) != (processed.width, processed.height)
+    img.data = processed.data
+    img.content_type = processed.content_type
+    img.width = processed.width
+    img.height = processed.height
+    img.byte_size = processed.byte_size
+    img.sha256 = processed.sha256
+    img.filename = clean_filename(filename)
+    img.uploaded_by = user_id
+    img.updated_at = func.now()
+
+    resized: list[int] = []
+    clamped: list[int] = []
+    canvas_ids = [u["question_id"] for u in uses if "canvas" in u["roles"]]
+    if size_changed and canvas_ids:
+        questions = (
+            await db.execute(select(Question).where(Question.id.in_(canvas_ids)))
+        ).scalars()
+        for q in questions:
+            # New dicts, never in-place edits: SQLAlchemy doesn't track changes
+            # inside a JSON column (design 3.3, "Writing config").
+            config = {
+                **q.config,
+                "image_width": processed.width,
+                "image_height": processed.height,
+            }
+            answer_data = clamp_radii(
+                q.answer_data or {}, processed.width, processed.height
+            )
+            # Backstop: clamp_radii must leave every question valid.
+            validate_pin_the_spot(q.grading_type, config, answer_data)
+            q.config = config
+            resized.append(q.id)
+            if answer_data != (q.answer_data or {}):
+                q.answer_data = answer_data
+                clamped.append(q.id)
+
+    await db.flush()
+    await db.refresh(img, ["updated_at", "uploader"])
+    return {
+        **image_response(img, uses),
+        "size_changed": size_changed,
+        "resized_question_ids": resized,
+        "clamped_question_ids": clamped,
+    }
+
+
+async def delete_image(db: AsyncSession, course_id: int, image_id: str) -> None:
+    img = await get_image_in_course(db, course_id, image_id)
+    uses = await where_used(db, course_id, image_id)
+    if uses:
+        raise ConflictError(
+            f"This image is used in {len(uses)} question(s), so it can't be deleted: "
+            + describe_uses(uses)
+        )
+    await db.delete(img)
+    # Flush here, not in get_db (which commits after the 204): a prompt reference
+    # added since the scan is caught by the FK and must be a 409, not a silent failure.
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise ConflictError(
+            "This image was just used by a question. Reload the library to see where."
+        ) from exc
+
+
+async def read_image_head(db: AsyncSession, image_id: str):
+    """The public GET's first query: (content_type, byte_size, sha256), no bytes."""
+    return (
+        await db.execute(
+            select(Image.content_type, Image.byte_size, Image.sha256).where(
+                Image.id == image_id
+            )
+        )
+    ).one_or_none()
+
+
+async def read_image_data(db: AsyncSession, image_id: str):
+    """
+    The public GET's second query, only for a 200: (content_type, sha256, data).
+    The type and hash come back with the bytes, so a replace between the two
+    queries can't pair new bytes with the old ETag.
+    """
+    return (
+        await db.execute(
+            select(Image.content_type, Image.sha256, Image.data).where(
+                Image.id == image_id
+            )
+        )
+    ).one_or_none()

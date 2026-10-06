@@ -42,8 +42,9 @@ from ..schemas.admin import (
     RosterImportPayload,
     RosterUploadResult,
 )
+from ..schemas.image import ImageReplaceResponse, ImageResponse
 from ..services import authoring_service as authoring
-from ..services import roster_service
+from ..services import image_service, roster_service
 from ..services.game_service import (
     assert_host_can_use_course,
     assert_host_can_use_game,
@@ -279,6 +280,82 @@ async def patch_roster_entry(
 ) -> CourseRoster:
     await assert_host_can_use_course(db, user, course_id)
     return await roster_service.patch_roster_entry(db, course_id, roster_id, body)
+
+
+# ---------------------------------------------------------------------------
+# Image library (T8). Course-wide: every HOST of the course manages its images
+# (design decision 6). An image in another course is a 404 through this path.
+# ---------------------------------------------------------------------------
+
+_IMAGE_FILE = File(description="PNG, JPEG, GIF or WebP, at most 5 MB")
+
+
+async def _read_upload(file: UploadFile) -> bytes:
+    # One byte over the limit is enough for process_upload to answer 413.
+    return await file.read(image_service.MAX_UPLOAD_BYTES + 1)
+
+
+@router.get("/courses/{course_id}/images", response_model=list[ImageResponse])
+async def list_images(
+    course_id: int,
+    user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict]:
+    await assert_host_can_use_course(db, user, course_id)
+    return await image_service.list_images(db, course_id)
+
+
+@router.post(
+    "/courses/{course_id}/images", response_model=ImageResponse, status_code=201
+)
+async def upload_image(
+    course_id: int,
+    file: Annotated[UploadFile, _IMAGE_FILE],
+    user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    await assert_host_can_use_course(db, user, course_id)
+    return await image_service.upload_image(
+        db, course_id, user.id, file.filename, await _read_upload(file)
+    )
+
+
+@router.get("/courses/{course_id}/images/{image_id}", response_model=ImageResponse)
+async def get_image(
+    course_id: int,
+    image_id: str,
+    user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    await assert_host_can_use_course(db, user, course_id)
+    return await image_service.get_image(db, course_id, image_id)
+
+
+@router.put(
+    "/courses/{course_id}/images/{image_id}", response_model=ImageReplaceResponse
+)
+async def replace_image(
+    course_id: int,
+    image_id: str,
+    file: Annotated[UploadFile, _IMAGE_FILE],
+    user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    await assert_host_can_use_course(db, user, course_id)
+    return await image_service.replace_image(
+        db, course_id, image_id, user.id, file.filename, await _read_upload(file)
+    )
+
+
+@router.delete("/courses/{course_id}/images/{image_id}", status_code=204)
+async def delete_image(
+    course_id: int,
+    image_id: str,
+    user: Annotated[User, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await assert_host_can_use_course(db, user, course_id)
+    await image_service.delete_image(db, course_id, image_id)
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import base64
 import binascii
 import math
 import re
+import uuid
 from datetime import datetime
 from urllib.parse import urlsplit
 
@@ -187,6 +188,20 @@ def validate_put_in_order(grading_type: str, config: dict, answer_data: dict) ->
             )
         if grading_type == "ACCURACY" and order == list(range(len(items))):
             raise ValueError("Display order must differ from the correct order")
+
+
+def is_image_id(value: object) -> bool:
+    """
+    A library image id in canonical form: a lowercase, hyphenated UUID
+    (docs/design-image-support.md section 3.3). MySQL compares CHAR ids
+    case-insensitively but where-used compares in Python, so nothing else is allowed.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        return str(uuid.UUID(value)) == value
+    except ValueError:
+        return False
 
 
 PTS_MAX_IMAGE_URL_LEN = 1_500_000

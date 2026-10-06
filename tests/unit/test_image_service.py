@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 import struct
 
 import pytest
+from app.schemas.admin import validate_pin_the_spot
 from app.services.image_service import (
     MAX_UPLOAD_BYTES,
     ImageRejected,
     ImageTooLarge,
+    clamp_radii,
     process_upload,
 )
 from PIL import Image
@@ -244,3 +247,29 @@ def test_idempotent(name):
     twice = process_upload(once.data)
     assert twice.data == once.data
     assert twice.sha256 == once.sha256
+
+
+# ---------------------------------------------------------------------------
+# clamp_radii (replace step 4)
+# ---------------------------------------------------------------------------
+
+PIN_URL = "https://example.com/board.png"
+
+
+def test_clamp_tall_to_wide():
+    answer = {"target": {"x": 0.5, "y": 0.5}, "r_full": 0.9, "r_zero": 3.0}
+    out = clamp_radii(answer, 400, 100)  # diagonal √(1 + 0.25²) ≈ 1.0308
+    assert out["r_zero"] == math.floor(math.hypot(1, 0.25) * 100) / 100 == 1.03
+    assert out["r_full"] <= out["r_zero"] - 0.01 + 1e-12
+    assert out["target"] == answer["target"]
+    config = {"image_url": PIN_URL, "image_width": 400, "image_height": 100}
+    validate_pin_the_spot("ACCURACY", config, out)
+
+
+def test_clamp_leaves_fitting_radii_alone():
+    answer = {"target": {"x": 0.1, "y": 0.9}, "r_full": 0.05, "r_zero": 0.2}
+    assert clamp_radii(answer, 400, 100) == answer
+
+
+def test_clamp_without_target_is_untouched():
+    assert clamp_radii({}, 400, 100) == {}
