@@ -7,6 +7,16 @@
  * fraction means the same thing here and on the server.
  */
 
+import { imageUrl } from './images';
+
+/**
+ * The canvas image's source: the course library's public URL for image_id (T8),
+ * otherwise the stored image_url (https:// or data:).
+ */
+export function pinImageSrc(config: { image_id?: string; image_url?: string } | undefined): string | undefined {
+  return config?.image_id ? imageUrl(config.image_id) : config?.image_url;
+}
+
 export interface PinPoint {
   x: number;
   y: number;

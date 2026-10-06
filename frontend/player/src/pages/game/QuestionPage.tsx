@@ -2,7 +2,8 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { TimerBar } from '../../components/ui/TimerBar';
 import { PinCanvas } from '../../components/PinCanvas';
-import { aspectOf } from '../../lib/pinTheSpot';
+import { aspectOf, pinImageSrc } from '../../lib/pinTheSpot';
+import { imageUrl } from '../../lib/images';
 import type { PinPoint } from '../../lib/pinTheSpot';
 
 const OPTION_COLORS = [
@@ -15,6 +16,31 @@ const OPTION_COLORS = [
   'bg-pink-600 hover:bg-pink-500 border-pink-500',
   'bg-teal-600 hover:bg-teal-500 border-teal-500',
 ];
+
+/**
+ * The picture area of an image-option tile (T8, design §5.4): a fixed 22vh box, so every
+ * tile is the same size and nothing shifts under a finger while images load (an MC tap
+ * submits at once). Without an image, or if it fails to load, the box shows the letter.
+ */
+function OptionPicture({ imageId, letter }: { imageId: string | null | undefined; letter: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [imageId]);
+  return (
+    <span className="flex h-[22vh] w-full items-center justify-center">
+      {imageId && !failed ? (
+        <img
+          src={imageUrl(imageId)}
+          alt=""
+          onError={() => setFailed(true)}
+          className="max-h-full max-w-full rounded-lg object-contain"
+          data-testid="option-image"
+        />
+      ) : (
+        <span className="text-5xl font-black opacity-60">{letter}</span>
+      )}
+    </span>
+  );
+}
 
 function optionLabel(i: number): string {
   return String.fromCharCode(65 + i); // A, B, C, … Z
@@ -81,6 +107,42 @@ export default function QuestionPage() {
       Answers locked — waiting for results…
     </p>
   );
+
+  // Any option image turns the tiles into a 2-column grid of equal tiles (design §5.4);
+  // the option text stays, as the caption. No images: the tiles look as before.
+  const optionImageIds = currentQuestion.config.option_image_ids;
+  const hasOptionImages = (optionImageIds ?? []).some((id) => id);
+
+  if (currentQuestion.type === 'multiple_choice' && hasOptionImages) {
+    const options = currentQuestion.config.options ?? [];
+    return (
+      <div className="py-6 px-4 flex flex-col gap-3">
+        <div className="pb-2">
+          {questionLabel}
+          <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
+        </div>
+        <div className="grid grid-cols-2 gap-3" data-testid="option-grid">
+          {options.map((opt, i) => (
+            <button
+              key={i}
+              disabled={submitted || questionLocked}
+              onClick={() => submit({ selectedIndex: i })}
+              className={`flex flex-col items-stretch gap-2 rounded-2xl p-2 text-white font-semibold border-2 transition-all
+                ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
+                ${OPTION_COLORS[i % OPTION_COLORS.length]}`}
+            >
+              <OptionPicture imageId={optionImageIds?.[i]} letter={optionLabel(i)} />
+              <span className="text-left text-base leading-snug">
+                <span className="font-black mr-2">{optionLabel(i)}</span>{opt}
+              </span>
+            </button>
+          ))}
+        </div>
+        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {!submitted && questionLocked && lockedMsg}
+      </div>
+    );
+  }
 
   if (currentQuestion.type === 'multiple_choice') {
     const options = currentQuestion.config.options ?? [];
@@ -194,8 +256,29 @@ export default function QuestionPage() {
           <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
         </div>
         <p className="text-center text-slate-400 text-sm">Select all that apply</p>
+        <div className={hasOptionImages ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'} data-testid={hasOptionImages ? 'option-grid' : undefined}>
         {options.map((opt, i) => {
           const isSelected = selectedIndices.has(i);
+          if (hasOptionImages) {
+            return (
+              <button
+                key={i}
+                disabled={submitted || questionLocked}
+                onClick={() => toggleIndex(i)}
+                className={`flex flex-col items-stretch gap-2 rounded-2xl p-2 font-semibold border-2 transition-all
+                  ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
+                  ${isSelected
+                    ? 'bg-indigo-600 border-indigo-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                  }`}
+              >
+                <OptionPicture imageId={optionImageIds?.[i]} letter={optionLabel(i)} />
+                <span className="text-left text-base leading-snug">
+                  <span className="font-black mr-2">{isSelected ? '✓' : optionLabel(i)}</span>{opt}
+                </span>
+              </button>
+            );
+          }
           return (
             <button
               key={i}
@@ -216,6 +299,7 @@ export default function QuestionPage() {
             </button>
           );
         })}
+        </div>
         {!submitted && !questionLocked && (
           <button
             disabled={selectedIndices.size === 0}
@@ -323,7 +407,7 @@ export default function QuestionPage() {
           <p className="text-center text-slate-400">Image failed to load</p>
         ) : (
           <PinCanvas
-            imageUrl={currentQuestion.config.image_url}
+            imageUrl={pinImageSrc(currentQuestion.config)}
             aspect={aspect}
             pin={pin}
             onChange={imageFailed ? undefined : setPin}

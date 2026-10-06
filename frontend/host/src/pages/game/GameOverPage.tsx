@@ -7,7 +7,8 @@ import { Button } from '../../components/ui/button';
 import type { AnswerReveal, HostQuestionSummaryItem } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
 import { PinBoard } from '../../components/PinBoard';
-import { aspectOf, revealKey } from '../../lib/pinTheSpot';
+import { aspectOf, pinImageSrc, revealKey } from '../../lib/pinTheSpot';
+import { imageUrl } from '../../lib/images';
 
 const TARGET_BUCKETS = 8;
 
@@ -156,7 +157,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
       <div className="space-y-2">
         {type === 'pin_the_spot' && aspectOf(config) !== null && (
           <PinBoard
-            imageUrl={config.image_url}
+            imageUrl={pinImageSrc(config)}
             aspect={aspectOf(config)!}
             taps={answerDistribution}
             pinKey={revealKey(reveal)}
@@ -190,9 +191,14 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
         {(type === 'multiple_choice' || type === 'multi_select') && (config.options ?? []).map((opt, i) => {
           const count = answerDistribution[String(i)] ?? 0;
           const correct = isCorrectIndex(i);
+          // From the summary's config: no separate field (design §4.5).
+          const imageId = config.option_image_ids?.[i];
           return (
             <div key={i} className="space-y-0.5">
               <div className="flex items-center gap-2 text-xs text-slate-400">
+                {imageId && (
+                  <img src={imageUrl(imageId)} alt="" className="h-12 w-16 rounded object-contain" />
+                )}
                 <span className={`font-bold ${correct ? 'text-green-400' : ''}`}>{optionLabel(i)}.</span>
                 <span className={correct ? 'text-green-300' : ''}>{opt}</span>
               </div>

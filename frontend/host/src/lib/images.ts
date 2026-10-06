@@ -13,6 +13,14 @@ export function imageUrl(id: string, bust?: number): string {
   return `/api/images/${id}${bust ? `?v=${bust}` : ''}`;
 }
 
+/**
+ * A prompt as plain text, for an image's alt text. Prompts are bleach-sanitised HTML
+ * (<b>, <i>, <br>, <u>); tags must never show up in alt.
+ */
+export function plainText(html: string): string {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
+}
+
 /** One question using a library image (ImageUse in backend/app/schemas/image.py). */
 export interface ImageUse {
   game_id: number;
