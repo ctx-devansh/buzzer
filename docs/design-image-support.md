@@ -6,7 +6,7 @@
 | Owner | Satvik Utkoori (utkoori). Devansh Gupta agreed to hand T8 over |
 | Reviewer / Goldfish | Devansh Gupta (dgupta57) |
 | Branch | `feature/t8-image-support`, based on `feature/t7-redo` (T7 Pin the Spot + T6 sample games; rebase onto `main` once that merges) |
-| Status | Spec only, re-targeted to the Pin the Spot implementation on `feature/t7-redo` (section 13). Implemented (steps 1–10, 2026-10-06); `/mean-review` (step 11) pending |
+| Status | Re-targeted to the Pin the Spot implementation on `feature/t7-redo` (section 14). Implemented (steps 1–10, 2026-10-06); `/mean-review` findings in section 13 |
 | Related | [design-pin-the-spot.md](design-pin-the-spot.md) (T7), [design-t6-sample-games.md](design-t6-sample-games.md) (T6) |
 
 ## 1. Problem
@@ -510,7 +510,30 @@ A third fresh session (after `/clear`) on 2026-10-05 ran `goldfish-test` against
 | G4-3 | An editor open across a replace that clamps its radii resends the old radii and gets a confusing 422 | §4.3: accepted; reloading fixes it |
 | G4-4 | The Images button sat on a page titled "Rosters" | §5.1: the host page and nav item are renamed "Courses" |
 
-## 13. Revision history
+## 13. Mean-review findings (2026-10-06)
+
+`/mean-review` on the implementation (`git diff 51cc1d2..8731687`), recorded here before any fix. Each fix is its own commit.
+
+**Must fix:**
+
+| # | Finding | Fix |
+|---|---|---|
+| R1 | Every user-facing "question N" (where-used labels on the library page, the delete 409, the export 409) is `order_index + 1`. `delete_question` doesn't renumber, and a create may set `order_index`, so after deleting question 1 the library says "question 2" for what the editor shows as Q1 | `usage_map` returns `question_number`, the question's 1-based position in its game; the library page, the delete 409 and the export 409 use it. §4.1, §4.3, §4.4 updated |
+| R2 | A static GIF is stored byte for byte, so a GIF comment (or XMP) survives: a GIF commented "Shot at 43.07N 89.40W" kept the text. G4-2's allowlist was meant to remove metadata nobody thought of | A static GIF passes the same allowlist (plus `version`, a format fact); one that isn't clean is re-encoded as GIF. Animated images are still stored byte for byte (accepted, §4.1). Unit test |
+
+**Nice to have:**
+
+| # | Finding | Outcome |
+|---|---|---|
+| R3 | `HEAD /api/images/{id}` is 405 | Fixed: the route answers HEAD with the GET's headers and no body |
+| R4 | The host projector shows a broken-image icon when a prompt image's row is gone (the accepted delete race) | Fixed: the prompt image hides itself on error, so the prompt text stands alone |
+| R5 | The admin sidebar still says "Rosters ↗" for the host page renamed "Courses" (G4-4) | Fixed: "Courses ↗" |
+| R6 | A *played* Pin the Spot question whose canvas row vanished in the delete race can't be edited: its stored `image_id` fails ownership (422), and changing the canvas is the played guard's 409 | Accepted: needs the delete race on a canvas and then a recorded answer; the question can still be played and reported ("Image missing") |
+| R7 | Animated GIF/WebP keep comments and XMP | Accepted, as §4.1 already says for animated WebP |
+| R8 | `test_used_image_cannot_be_deleted_and_replace_shows_new_image` failed once (the "240 × 60" label not visible within 5 s), on the first run after a rebuild; not reproduced in nine later runs | Left as is; noted here in case it recurs |
+| R9 | On the host results screen the bar labels are cramped and the host shows a prompt's `<b>` tags as text | Both predate T8 (the label column is `w-8`; the prompt is rendered as text). Out of scope |
+
+## 14. Revision history
 
 | Date | Change |
 |---|---|
@@ -522,3 +545,4 @@ A third fresh session (after `/clear`) on 2026-10-05 ran `goldfish-test` against
 | 2026-10-05 | Revised after the third Goldfish review (section 12, G3-1 to G3-8): `process_upload` runs in a worker thread; image checks run first for every type; the admin version 2 guard moves into `import_game_bundle`; plain-text `alt`; the phone tile grid; clearer stale-`option_image_ids` and replace e2e tests, plus the per-document image cache note; lazy thumbnails and the GIF/WebP cost accepted |
 | 2026-10-06 | Revised after the fourth Goldfish review (section 12, G4-1 to G4-4): the public GET uses its own short session; allowlist for clean images and an explicit pixel check; stale-editor 422 accepted; host "Rosters" page renamed "Courses" |
 | 2026-10-06 | Implemented (steps 1–10). Corrections kept in the design: an empty upload file name can't reach the handler, so the test uses a path-only name (§8); the importer needs no explicit rollback (§4.7); `created_at` has one-second resolution, so the "older row" import test waits a second between uploads. Existing tests updated on purpose: the T7 authoring e2e now expects an attached game's file to land in the library as `image_id` (§5.2), and the T4 e2e expects the "Courses" nav item and "Back to Courses" (G4-4). Full suite: 498 passed (3 timer cases skipped without `--fast`; they pass with it), `ruff check`/`ruff format --check` (0.15.21) and `tsc` clean, `make_pin_images.py --check` passes. **Live round** on :8080: the real host UI in a browser, 12 simulated players (`--game-json` of the version 2 export) and one phone-sized guest page, on one image-option MC, one prompt-image true/false, one `image_id` Pin the Spot (client sent 1 × 1; stored 1000 × 500) and one multi-select with two option images. The phone showed the 2-column image grid and no prompt image; the host showed the prompt image (alt = plain prompt) and result thumbnails; the canvas drew the library image with taps and circles; the report embedded 6 images (4 MC thumbnails, 1 prompt, 1 canvas) and no `/api/images/` link; no console errors |
+| 2026-10-06 | `/mean-review` findings recorded (section 13, R1–R9) before fixing. The revision history becomes section 14 |
