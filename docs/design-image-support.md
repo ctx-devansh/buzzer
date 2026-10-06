@@ -171,7 +171,7 @@ An image id that exists but belongs to another course returns **404**, not 403, 
    - then `r_full ← min(r_full, r_zero − 0.01)`, keeping the editor's minimum gap.
 
    This is the pure helper `image_service.clamp_radii(answer_data, width, height)`. Since the diagonal is always ≥ 1 and the editor caps `r_full` at 0.5, this normally changes only an unusually large `r_zero`. The clamp keeps every touched question passing `validate_pin_the_spot`, which is run on each one as a backstop (a failure there is a 500-level bug, not a user error). The author should still check the target. The library page's warning (section 5.1) says when the size changed, and names the questions whose radii were clamped.
-5. `await db.flush()` before returning. `get_db` commits after the response is sent (`services/CLAUDE.md`), so without the flush a failure would surface after a 200.
+5. `await db.commit()` before returning (mean review R10). `get_db` commits after the response is sent (`services/CLAUDE.md`): with only a flush, a failure would surface after a 200, and the library page's reload right after the 200 could read the old row. Upload and delete commit before returning too.
 
 "Played" means "has `session_scores` rows". A Pin the Spot question that is open in a live session but has no answers yet counts as unplayed, so its canvas can be replaced mid-question. Phones that already loaded the old image keep it until the next load. This is accepted: replacing an image during your own live game is self-inflicted, and the first recorded tap freezes the canvas from then on.
 
@@ -519,6 +519,7 @@ A third fresh session (after `/clear`) on 2026-10-05 ran `goldfish-test` against
 | # | Finding | Fix |
 |---|---|---|
 | R1 | Every user-facing "question N" (where-used labels on the library page, the delete 409, the export 409) is `order_index + 1`. `delete_question` doesn't renumber, and a create may set `order_index`, so after deleting question 1 the library says "question 2" for what the editor shows as Q1 | `usage_map` returns `question_number`, the question's 1-based position in its game; the library page, the delete 409 and the export 409 use it. §4.1, §4.3, §4.4 updated |
+| R10 | Found while chasing R8: the library routes (upload, replace, delete) flush but leave the commit to `get_db`, which commits **after** the response is sent. The library page reloads the list as soon as a replace returns 200, and that read can land before the commit and show the old size: R8's "240 × 60 not visible" (a probe logged the PUT's 200, then a card still reading 100 × 100 five seconds later). An upload can likewise be missing from the list that follows it | `upload_image`, `replace_image` and `delete_image` commit before returning, as `create_question` already does; `get_db`'s own commit then has nothing to do. §4.3 replace step 5 and delete updated |
 | R2 | A static GIF is stored byte for byte, so a GIF comment (or XMP) survives: a GIF commented "Shot at 43.07N 89.40W" kept the text. G4-2's allowlist was meant to remove metadata nobody thought of | A static GIF passes the same allowlist (plus `version`, a format fact); one that isn't clean is re-encoded as GIF. Animated images are still stored byte for byte (accepted, §4.1). Unit test |
 
 **Nice to have:**
@@ -527,10 +528,10 @@ A third fresh session (after `/clear`) on 2026-10-05 ran `goldfish-test` against
 |---|---|---|
 | R3 | `HEAD /api/images/{id}` is 405 | Fixed: the route answers HEAD with the GET's headers and no body |
 | R4 | The host projector shows a broken-image icon when a prompt image's row is gone (the accepted delete race) | Fixed: the prompt image hides itself on error, so the prompt text stands alone |
-| R5 | The admin sidebar still says "Rosters ↗" for the host page renamed "Courses" (G4-4) | Fixed: "Courses ↗" |
+| R5 | The admin sidebar still says "Rosters ↗" for the host page renamed "Courses" (G4-4) | Fixed: "Rosters & images ↗". Not "Courses ↗": the admin sidebar already has its own "Courses" (course management), and two "Courses" links to different pages would be worse |
 | R6 | A *played* Pin the Spot question whose canvas row vanished in the delete race can't be edited: its stored `image_id` fails ownership (422), and changing the canvas is the played guard's 409 | Accepted: needs the delete race on a canvas and then a recorded answer; the question can still be played and reported ("Image missing") |
 | R7 | Animated GIF/WebP keep comments and XMP | Accepted, as §4.1 already says for animated WebP |
-| R8 | `test_used_image_cannot_be_deleted_and_replace_shows_new_image` failed once (the "240 × 60" label not visible within 5 s), on the first run after a rebuild; not reproduced in nine later runs | Left as is; noted here in case it recurs |
+| R8 | `test_used_image_cannot_be_deleted_and_replace_shows_new_image` failed intermittently (about 1 run in 3 once retried in a loop): the "240 × 60" label wasn't visible within 5 s | Not a test problem: R10 is the cause. Fixed with R10, then re-run in a loop |
 | R9 | On the host results screen the bar labels are cramped and the host shows a prompt's `<b>` tags as text | Both predate T8 (the label column is `w-8`; the prompt is rendered as text). Out of scope |
 
 ## 14. Revision history
