@@ -36,7 +36,9 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   there is no link table), `validate_question_images` (ownership; overwrites a Pin the Spot
   `image_id`'s size), and the library operations: list, upload, replace (409 for a played
   canvas; resizes and clamps unplayed canvases), delete (409 while used; FK race → 409), and
-  the public GET's two reads (head, then bytes only for a 200).
+  the public GET's two reads (head, then bytes only for a 200). Upload, replace and delete
+  **commit before returning**: the library page reloads the list as soon as they answer, and
+  `get_db`'s after-response commit could otherwise lose that race.
 - `export_service.py` — builds session-score CSVs: a raw per-question export and a
   Canvas-gradebook-formatted one (SIS Login ID matching, optional per-question columns,
   roster-only filtering). Every points cell, total and "Points Possible" goes through `_pts`

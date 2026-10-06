@@ -24,7 +24,8 @@ Business logic (scoring, room state, CSV parsing) lives in `../services/`, not h
   protection) and **no `get_db`**: it opens a short `AsyncSessionLocal` session, reads the head
   and, only for a 200, the bytes, and closes the session before sending, so no pooled
   connection is held while bytes stream to slow phones. ETag = sha256, `Cache-Control:
-  no-cache`, `nosniff`, 304 on a matching `If-None-Match`; a non-canonical id is a 404.
+  no-cache`, `nosniff`, 304 on a matching `If-None-Match`; HEAD gets the same headers without
+  reading the bytes; a non-canonical id is a 404.
 - `auth.py` — login (password or dev-only netid), OAuth2 callback (reads Traefik-injected
   `X-Auth-Request-User`/`-Email` headers), temp-token exchange, guest join, refresh, logout.
   Sets/clears the `refresh_token` httpOnly cookie. Rate-limited via `slowapi` (`../common/rate_limit.py`).
