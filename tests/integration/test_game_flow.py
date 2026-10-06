@@ -175,6 +175,13 @@ def _assert_player_outcome(scenario, player_idx: int, payload: dict):
         )
         _assert_reveal_content(q_label, q_spec, reveal, expected_reveal)
 
+        if q_spec.type == "pin_the_spot":
+            assert reveal == expected_reveal, f"{q_label}: reveal {reveal}"
+            # The recap is text only: no image per phone, but the aspect stays (D9).
+            assert "image_url" not in actual_q["config"], f"{q_label}: image_url sent"
+            assert actual_q["config"]["image_width"] == q_spec.config["image_width"]
+            assert actual_q["config"]["image_height"] == q_spec.config["image_height"]
+
     # ── Rank is a positive integer within plausible range ─────────────────────
     rank = payload.get("yourFinalRank", 0)
     n_players = payload.get("playerCount", 0)
@@ -200,6 +207,8 @@ def _assert_answer_matches(label: str, submitted: dict, actual: dict):
             f"{label}: stored text {actual.get('text')!r} "
             f"≠ submitted {submitted['text']!r}"
         )
+    if "x" in submitted:
+        assert actual == submitted, f"{label}: stored tap {actual} ≠ submitted {submitted}"
     if "orderedIndices" in submitted:
         assert actual.get("orderedIndices") == submitted["orderedIndices"], (
             f"{label}: stored orderedIndices {actual.get('orderedIndices')} "
@@ -209,13 +218,13 @@ def _assert_answer_matches(label: str, submitted: dict, actual: dict):
 
 def _assert_put_in_order_live_results(scenario, results_sink: list[dict]):
     """
-    Check the live question_results payloads for every put_in_order question: each
-    player's yourPoints / yourIsCorrect, the host's "item@position" distribution, and
-    the host reveal. Other types are not checked here.
+    Check the live question_results payloads for every put_in_order and pin_the_spot
+    question: each player's yourPoints / yourIsCorrect, the host's distribution
+    ("item@position" or "x,y" keys), and the host reveal. Other types are not checked here.
     """
     assert len(results_sink) == len(scenario.questions)
     for q_idx, q_spec in enumerate(scenario.questions):
-        if q_spec.type != "put_in_order":
+        if q_spec.type not in ("put_in_order", "pin_the_spot"):
             continue
         label = f"Scenario '{scenario.name}', Q{q_idx + 1} live results"
         results = results_sink[q_idx]

@@ -9,6 +9,7 @@ Answer distributions are reconstructed from session_scores.answer_data in MySQL
 
 from __future__ import annotations
 
+import base64
 import html
 import re
 from collections import defaultdict
@@ -19,7 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.course import Course
 from ..models.game import Game, Question
+from ..models.image import Image
 from ..models.session import GameSession, SessionScore
+from . import image_service, pin_the_spot
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +48,8 @@ def _levenshtein(a: str, b: str) -> int:
 
 def _answer_reveal(q: Question) -> dict:
     """Mirror of gateway._answer_reveal — derive correct-answer facts from answer_data."""
+    if q.type == "pin_the_spot":
+        return pin_the_spot.reveal(q.grading_type, q.answer_data)
     if q.type == "put_in_order":
         correct_order = (q.answer_data or {}).get("correct_order")
         if q.grading_type == "COMPLETENESS":
@@ -158,11 +163,18 @@ _OPTION_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def _render_bar_chart(
-    q: Question, dist: dict[str, int], reveal: dict, total_players: int
+    q: Question,
+    dist: dict[str, int],
+    reveal: dict,
+    total_players: int,
+    images: dict[str, str] | None = None,
 ) -> str:
     options = q.config.get("options", [])
+    images = images or {}
 
     if q.type == "multiple_choice":
+        option_ids = q.config.get("option_image_ids")
+        option_ids = option_ids if isinstance(option_ids, list) else []
         bars = [
             {
                 "label": f"{_OPTION_LETTERS[i]} {_esc(opt)}",
@@ -170,6 +182,8 @@ def _render_bar_chart(
                 "correct": (i in reveal.get("correctIndices", []))
                 if reveal.get("type") == "multiple_choice"
                 else None,
+                # A missing image (the accepted delete race) leaves the text alone.
+                "thumb": images.get(option_ids[i]) if i < len(option_ids) else None,
             }
             for i, opt in enumerate(options)
         ]
@@ -211,8 +225,15 @@ def _render_bars(bars: list[dict]) -> str:
         count_inner = (
             f'<span class="bar-count">{bar["count"]}</span>' if bar["count"] > 0 else ""
         )
+        thumb = bar.get("thumb")
+        thumb_html = (
+            f'<img class="bar-thumb" src="{html.escape(thumb, quote=True)}" alt="">'
+            if thumb
+            else ""
+        )
         rows.append(
             f'<div class="bar-row">'
+            f"{thumb_html}"
             f'<span class="bar-label">{bar["label"]}</span>'
             f'<div class="bar-track">'
             f'<div class="bar-fill" style="width:{display_pct}%;background:{fill_col}">{count_inner}</div>'
@@ -253,6 +274,81 @@ def _render_put_in_order(q: Question, dist: dict[str, int], reveal: dict) -> str
         + f'<p class="wc-answer-note pio-order">Correct order: '
         f'<span class="wc-answer">{order_text}</span></p>'
     )
+
+
+PTS_BOARD_WIDTH = 1000  # SVG user units; everything scales with the viewBox
+
+
+def _render_pin_board(
+    q: Question,
+    dist: dict[str, int],
+    reveal: dict,
+    images: dict[str, str] | None = None,
+) -> str:
+    """Inline SVG in the stored aspect (the image is stretched to it, as on every canvas):
+    the image, then the dashed zero-credit and full-credit circles when the reveal has them,
+    then every tap (dot area grows with repeats), then the target on top. A library
+    canvas (image_id) is embedded from `images`; one whose row is gone draws a grey
+    "Image missing" board, with the taps and circles as usual."""
+    config = q.config or {}
+    images = images or {}
+    aspect = pin_the_spot.aspect(config)
+    if aspect is None:
+        return ""
+    w = PTS_BOARD_WIDTH
+    h = w * aspect
+    base = w * 0.01
+    parts = [
+        f'<svg class="pin-board" viewBox="0 0 {w} {h:.2f}" '
+        f'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pin the Spot answers">',
+        f'<rect width="{w}" height="{h:.2f}" fill="#0f172a"/>',
+    ]
+    url = config.get("image_url")
+    image_id = config.get("image_id")
+    if isinstance(image_id, str):
+        url = images.get(image_id)
+        if url is None:
+            parts.append(
+                f'<rect width="{w}" height="{h:.2f}" fill="#334155"/>'
+                f'<text x="{w / 2}" y="{h / 2:.2f}" fill="#cbd5e1" font-size="32" '
+                f'text-anchor="middle" dominant-baseline="middle">Image missing</text>'
+            )
+    if isinstance(url, str) and url:
+        # quote=True: the https check allows '"' and '<', which would otherwise break
+        # out of the attribute in this downloaded file.
+        parts.append(
+            f'<image href="{html.escape(url, quote=True)}" x="0" y="0" width="{w}" '
+            f'height="{h:.2f}" preserveAspectRatio="none"/>'
+        )
+    target = reveal.get("target")
+    r_full, r_zero = reveal.get("rFull"), reveal.get("rZero")
+    if isinstance(target, dict) and r_full is not None and r_zero is not None:
+        cx, cy = target["x"] * w, target["y"] * h
+        parts.append(
+            f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r_zero * w:.2f}" fill="none" '
+            f'stroke="#fbbf24" stroke-width="3" stroke-dasharray="12 8"/>'
+        )
+        parts.append(
+            f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r_full * w:.2f}" '
+            f'fill="rgba(74,222,128,0.30)" stroke="#4ade80" stroke-width="3"/>'
+        )
+    for key, count in dist.items():
+        point = pin_the_spot.parse_tap_key(key)
+        if point is None:
+            continue
+        r = min(base * count**0.5, 3 * base)
+        parts.append(
+            f'<circle cx="{point[0] * w:.2f}" cy="{point[1] * h:.2f}" r="{r:.2f}" '
+            f'fill="#818cf8" fill-opacity="0.85" stroke="#fff" stroke-width="2"/>'
+        )
+    if isinstance(target, dict):
+        cx, cy = target["x"] * w, target["y"] * h
+        parts.append(
+            f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{base * 0.8:.2f}" fill="#ef4444" '
+            f'stroke="#fff" stroke-width="3"/>'
+        )
+    parts.append("</svg>")
+    return "".join(parts)
 
 
 def _render_word_cloud(q: Question, dist: dict[str, int], reveal: dict) -> str:
@@ -370,6 +466,10 @@ body{
 .badge-tf{background:#1a3a2a;color:#86efac}
 .badge-fitb{background:#3b2f1e;color:#fbbf24}
 .badge-pio{background:#3b1e33;color:#f9a8d4}
+.badge-pts{background:#1e2f3b;color:#67e8f9}
+.pin-board{display:block;width:100%;height:auto;border-radius:12px}
+.q-prompt-img{display:block;max-width:100%;max-height:360px;margin:-12px 0 24px;border-radius:10px}
+.bar-thumb{height:64px;max-width:96px;object-fit:contain;flex-shrink:0;border-radius:6px}
 .badge-accuracy{background:#2e1b3d;color:#c084fc}
 .badge-completeness{background:#2d2d1a;color:#fde68a}
 .q-timing{margin-left:auto;color:#475569;font-size:0.78rem}
@@ -435,6 +535,35 @@ body{
 
 
 # ---------------------------------------------------------------------------
+# Library images (T8): embedded so the report stays one self-contained file
+# ---------------------------------------------------------------------------
+
+
+async def _load_report_images(
+    db: AsyncSession, questions: list[Question]
+) -> dict[str, str]:
+    """Every referenced library image as a data: URL, keyed by id, in one query.
+    A reference whose row is gone (the accepted delete race) is simply absent."""
+    ids = {
+        image_id
+        for q in questions
+        for _field, image_id, _role in image_service.question_image_refs(
+            q.type, q.prompt_image_id, q.config
+        )
+    }
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(Image.id, Image.content_type, Image.data).where(Image.id.in_(ids))
+    )
+    return {
+        row.id: f"data:{row.content_type};base64,"
+        + base64.b64encode(row.data).decode("ascii")
+        for row in rows
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -468,6 +597,8 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
     for s in all_scores:
         by_question[s.question_id].append(s)
 
+    images = await _load_report_images(db, questions)
+
     # Unique players and totals for histogram
     player_totals: dict[str, float] = defaultdict(float)
     for s in all_scores:
@@ -490,7 +621,11 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
         correct_count = sum(1 for s in q_scores if s.is_correct)
 
         dist: dict[str, int] = defaultdict(int)
-        if q.type == "put_in_order":
+        if q.type == "pin_the_spot":
+            for s in q_scores:
+                if pin_the_spot.is_valid_tap(s.answer_data):
+                    dist[pin_the_spot.tap_key(s.answer_data)] += 1
+        elif q.type == "put_in_order":
             n_items = len((q.config or {}).get("items", []))
             for s in q_scores:
                 for key in _pio_answer_keys(s.answer_data, n_items):
@@ -509,6 +644,7 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
             "true_false": ("True / False", "badge-tf"),
             "fill_in_the_blank": ("Fill in the Blank", "badge-fitb"),
             "put_in_order": ("Put in Order", "badge-pio"),
+            "pin_the_spot": ("Pin the Spot", "badge-pts"),
         }.get(q.type, (q.type, ""))
         type_label, type_class = type_badge
 
@@ -520,10 +656,12 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
 
         # put_in_order first: a COMPLETENESS reveal is type "completeness", so the
         # generic choice below must never see it.
-        if q.type == "put_in_order":
+        if q.type == "pin_the_spot":
+            chart = _render_pin_board(q, dict(dist), reveal, images)
+        elif q.type == "put_in_order":
             chart = _render_put_in_order(q, dict(dist), reveal)
         elif q.type in ("multiple_choice", "true_false"):
-            chart = _render_bar_chart(q, dict(dist), reveal, total_players)
+            chart = _render_bar_chart(q, dict(dist), reveal, total_players, images)
         elif q.type == "fill_in_the_blank":
             chart = _render_word_cloud(q, dict(dist), reveal)
         else:
@@ -540,6 +678,14 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
         else:
             stats = f'<div class="q-stats">{answered} / {total_players} answered</div>'
 
+        prompt_src = images.get(q.prompt_image_id) if q.prompt_image_id else None
+        prompt_img = (
+            f'<img class="q-prompt-img" src="{html.escape(prompt_src, quote=True)}" '
+            f'alt="">'
+            if prompt_src
+            else ""
+        )
+
         # Prompt was already bleach-sanitised on write; embed as HTML
         q_sections.append(
             f'<div class="q-card">'
@@ -550,6 +696,7 @@ async def build_session_report(db: AsyncSession, session_id: str) -> tuple[str, 
             f'<span class="q-timing">{q.time_limit_seconds}s · {_esc(pts_label)}</span>'
             f"</div>"
             f'<p class="prompt">{q.prompt}</p>'
+            f"{prompt_img}"
             f"{chart}"
             f"{stats}"
             f"</div>"

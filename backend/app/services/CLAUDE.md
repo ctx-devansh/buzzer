@@ -7,7 +7,13 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
 **Contents.**
 - `authoring_service.py` — question list/create/update/delete/reorder (with `bleach` prompt
   sanitising), the `buzzer/game` export bundle builder, and the bundle importer
-  (`import_game_bundle(db, raw, course_id)`; raises `BundleError`, which routers map to 422).
+  (`import_game_bundle(db, raw, course_id, uploaded_by)`; raises `BundleError`, which routers
+  map to 422). Export writes version 1 unless a question uses a library image, then version 2
+  with each image embedded once (409 if a referenced image row is gone). Import of version 2
+  checks every image, reuses the course's oldest row with the same `sha256`, rewrites the
+  references and refuses images when `course_id` is None (the admin route); version 1 files
+  may not carry image references. Nothing commits on failure: the `BundleError` reaches
+  `get_db`, which rolls back the flushed image rows too.
   Shared by `routers/admin.py` and `routers/host.py`; callers authorise first.
   `delete_question` refuses (409) a question with `session_scores` rows — those are grade data
   and `question_id` is `NOT NULL` with no `ON DELETE` — and flushes before returning, because
@@ -20,27 +26,57 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   `ADMIN_PASSWORD` env vars, if none exists yet. Retries (rather than crashes) if the schema
   isn't migrated yet, because a crashed startup under `uvicorn --reload` leaves the container
   looking "Up" while nothing serves.
+- `image_service.py` — the course image library (T8, `docs/design-image-support.md`):
+  `process_upload` (pure; format from the bytes, ≤ 5 MB and ≤ 40 MP checked from the header,
+  metadata stripped by re-encoding only images that aren't clean by an allowlist; idempotent,
+  so an export re-imports byte for byte), `process_upload_async` (worker thread via
+  Starlette's `run_in_threadpool`, the one framework import here: it is CPU-bound and this
+  process serves Socket.IO), `clamp_radii`, `question_image_refs`,
+  `usage_map`/`where_used` (one scan of the course's questions plus one grouped answer count;
+  there is no link table), `validate_question_images` (ownership; overwrites a Pin the Spot
+  `image_id`'s size), and the library operations: list, upload, replace (409 for a played
+  canvas; resizes and clamps unplayed canvases), delete (409 while used; FK race → 409), and
+  the public GET's two reads (head, then bytes only for a 200). Upload, replace and delete
+  **commit before returning**: the library page reloads the list as soon as they answer, and
+  `get_db`'s after-response commit could otherwise lose that race.
 - `export_service.py` — builds session-score CSVs: a raw per-question export and a
   Canvas-gradebook-formatted one (SIS Login ID matching, optional per-question columns,
   roster-only filtering). Every points cell, total and "Points Possible" goes through `_pts`
   (round to 4 dp): points columns are single-precision `FLOAT`, and `put_in_order` partial
-  scores (e.g. 0.83) would otherwise print float noise.
+  scores (e.g. 0.83) would otherwise print float noise. Answers never appear in the CSV.
 - `game_service.py` — the core game/session logic: room code generation, host access checks
   (`assert_host_can_use_course/game`, plus `visible_games_query`, its list-side twin), session lifecycle (create/start/complete/abandon),
   player authorization against the course roster (`authorise_player`), answer scoring
   (`calculate_score` — one branch per question type × grading type; `put_in_order` scores
-  pairwise, half-up to 2 dp, clamped to `points_value`), `record_answer` (persists
+  pairwise, half-up to 2 dp, clamped to `points_value`; `pin_the_spot` delegates to
+  `pin_the_spot.py`), `record_answer` (persists
   to MySQL + updates Redis in one call; `put_in_order` writes one `"{item}@{position}"`
-  distribution key per item, under both grading types), and leaderboard/summary builders for
+  distribution key per item, `pin_the_spot` one `"x,y"` (4 dp) key per tap, under both grading
+  types), and leaderboard/summary builders for
   GAME_OVER payloads (their reveals are `_player_summary_reveal` / `_host_summary_reveal`; the
-  player summary also carries `isCorrect`).
+  player summary also carries `isCorrect`, and drops `config.image_url` for `pin_the_spot`).
+- `pin_the_spot.py` — pure rules for Pin the Spot (no DB/Redis): `is_valid_tap`, `tap_key` /
+  `parse_tap_key`, `aspect`, `answer_key`, `tap_distance`, `score`, `reveal`, `EDGE_EPSILON`, and
+  `half_up_points` (the half-up-to-2-dp helper `put_in_order` also uses). `calculate_score`,
+  `record_answer`, the host summary, the report and all four reveal builders call it.
 - `authoring_service.py` `update_question` — for `put_in_order` (stored or requested type) it
   checks the *merged* values before assigning anything: a question with `session_scores` rows
   can't change `type`, `config.items` or `correct_order` (409, `ConflictError`), then
-  `validate_put_in_order` must pass (422, `ValidationFailedError`). Other types keep the
-  unvalidated update path.
+  `validate_put_in_order` must pass (422, `ValidationFailedError`). `pin_the_spot` mirrors it: a
+  played question can't change `type` or `config` (the image; compared by value, so an identical
+  resend passes), target/radii/grading stay editable with no rescoring, then
+  `validate_pin_the_spot` on the merged type. Other types keep the unvalidated update path.
+  For **every** type, the image checks (`validate_image_keys`, then
+  `image_service.validate_question_images`) run right after the merge, so an image 422 comes
+  before any played guard's 409, and a stale Pin the Spot size is overwritten before the guard
+  compares. `prompt_image_id` left out keeps the stored value; `null` clears it.
 - `report_service.py` — generates a standalone, self-contained HTML session report (aggregate
-  stats only, no PII) with inline CSS and hand-rolled bar-chart/word-cloud/histogram renderers.
+  stats only, no PII) with inline CSS and hand-rolled bar-chart/word-cloud/histogram renderers,
+  plus an inline-SVG board for `pin_the_spot` (`_render_pin_board`; the image URL is
+  `html.escape(..., quote=True)`d because the `https` check allows `"`). Library images (T8)
+  are embedded as `data:` URLs from one query: prompt images, thumbnails on MC bars (the report
+  draws no multi-select bars), and `image_id` canvases; a missing row is left out (canvas:
+  "Image missing").
   Duplicates `_answer_reveal` logic from `../websocket/gateway.py` by design (no player-request
   dependency at report-generation time) — keep both in sync if scoring/reveal rules change.
 - `roster_service.py` — parses Canvas gradebook CSV exports (and a pre-mapped row list from the
@@ -87,6 +123,8 @@ score state, so this is the one place that logic should be edited.
   as Redis key naming evolves.
 - `auth_service`'s auto-generated JWT keys are silently ephemeral in dev — don't assume tokens
   survive a backend restart unless `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` are actually set.
+- Write a JSON column by assigning a new dict (`q.config = {**q.config, …}`), never by editing
+  it in place: SQLAlchemy doesn't track changes inside `Question.config`.
 - **`get_db` commits after the response is sent.** A service that changes a row a constraint can
   reject (e.g. `uq_roster_course_netid`) must `await db.flush()` itself and turn the
   `IntegrityError` into a `BuzzerError`; otherwise the client gets a 200 for a write that then

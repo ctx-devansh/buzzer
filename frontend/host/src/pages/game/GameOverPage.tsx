@@ -6,6 +6,9 @@ import { api } from '../../lib/api';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal, HostQuestionSummaryItem } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
+import { PinBoard } from '../../components/PinBoard';
+import { aspectOf, pinImageSrc, revealKey } from '../../lib/pinTheSpot';
+import { imageUrl } from '../../lib/images';
 
 const TARGET_BUCKETS = 8;
 
@@ -92,6 +95,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
     put_in_order: 'Put in Order',
+    pin_the_spot: 'Pin the Spot',
   };
 
   const answeredPct = totalPlayers > 0 ? Math.round((totalAnswered / totalPlayers) * 100) : 0;
@@ -151,6 +155,17 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
 
       {/* Distribution */}
       <div className="space-y-2">
+        {type === 'pin_the_spot' && aspectOf(config) !== null && (
+          <PinBoard
+            imageUrl={pinImageSrc(config)}
+            aspect={aspectOf(config)!}
+            taps={answerDistribution}
+            pinKey={revealKey(reveal)}
+            ariaLabel={`${prompt}: every answer`}
+            maxHeight={420}
+            testId="pin-board-gameover"
+          />
+        )}
         {isPio && pioBars.length > 0 && (
           <p className="text-slate-400 text-sm">{pioCaption(reveal)}</p>
         )}
@@ -176,9 +191,14 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
         {(type === 'multiple_choice' || type === 'multi_select') && (config.options ?? []).map((opt, i) => {
           const count = answerDistribution[String(i)] ?? 0;
           const correct = isCorrectIndex(i);
+          // From the summary's config: no separate field (design §4.5).
+          const imageId = config.option_image_ids?.[i];
           return (
             <div key={i} className="space-y-0.5">
               <div className="flex items-center gap-2 text-xs text-slate-400">
+                {imageId && (
+                  <img src={imageUrl(imageId)} alt="" className="h-12 w-16 rounded object-contain" />
+                )}
                 <span className={`font-bold ${correct ? 'text-green-400' : ''}`}>{optionLabel(i)}.</span>
                 <span className={correct ? 'text-green-300' : ''}>{opt}</span>
               </div>

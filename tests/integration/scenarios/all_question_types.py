@@ -329,4 +329,63 @@ PUT_IN_ORDER = GameScenario(
 )
 
 
-SCENARIOS: list[GameScenario] = [ALL_TYPES, SINGLE_PLAYER, FITB_TYPES, PUT_IN_ORDER]
+# ---------------------------------------------------------------------------
+# Scenario — pin_the_spot (distance scoring with linear falloff)
+# ---------------------------------------------------------------------------
+
+# A 1x1 PNG; scoring never looks at the image, only at the stored width/height.
+PIN_IMAGE = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+    "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+# Square image, target centre, r_full 0.05, r_zero 0.20, points 1000 (the §6 table).
+PIN_ACCURACY = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="ACCURACY",
+    prompt="Tap the centre.",
+    config={"image_url": PIN_IMAGE, "image_width": 100, "image_height": 100},
+    answer_data={"target": {"x": 0.5, "y": 0.5}, "r_full": 0.05, "r_zero": 0.2},
+    points_value=1000,
+)
+
+# 2:1 image (aspect 0.5): a vertical miss of 0.25 is 0.125 width units → half credit.
+PIN_WIDE = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="ACCURACY",
+    prompt="Tap the centre of the wide image.",
+    config={"image_url": PIN_IMAGE, "image_width": 200, "image_height": 100},
+    answer_data={"target": {"x": 0.5, "y": 0.5}, "r_full": 0.05, "r_zero": 0.2},
+    points_value=1000,
+)
+
+PIN_COMPLETENESS = QuestionSpec(
+    type="pin_the_spot",
+    grading_type="COMPLETENESS",
+    prompt="Tap anywhere you like.",
+    config={"image_url": PIN_IMAGE, "image_width": 100, "image_height": 100},
+    answer_data={},
+    points_value=1000,
+)
+
+PIN_THE_SPOT = GameScenario(
+    name="pin_the_spot_scoring",
+    description=(
+        "pin_the_spot ACCURACY (square and 2:1), COMPLETENESS. Players: inside r_full, "
+        "halfway, on the r_full edge, beyond r_zero, no answer."
+    ),
+    questions=[PIN_ACCURACY, PIN_WIDE, PIN_COMPLETENESS],
+    player_scripts=[
+        # Inside r_full → 1000 (isCorrect); wide, vertical 0.25 → 500; COMPLETENESS 1000
+        PlayerScript(responses=[{"x": 0.53, "y": 0.5}, {"x": 0.5, "y": 0.75}, {"x": 0.1, "y": 0.9}]),
+        # Halfway (d 0.125) → 500; wide, horizontal 0.125 → 500; COMPLETENESS 1000
+        PlayerScript(responses=[{"x": 0.625, "y": 0.5}, {"x": 0.625, "y": 0.5}, {"x": 0, "y": 0}]),
+        # On the r_full edge (float noise) → 1000; same tap as player 1 (shared key); 1000
+        PlayerScript(responses=[{"x": 0.55, "y": 0.5}, {"x": 0.5, "y": 0.75}, {"x": 1, "y": 1}]),
+        # Beyond r_zero → 0; on the r_zero edge → 0; no answer
+        PlayerScript(responses=[{"x": 0.95, "y": 0.95}, {"x": 0.7, "y": 0.5}, None]),
+    ],
+)
+
+
+SCENARIOS: list[GameScenario] = [ALL_TYPES, SINGLE_PLAYER, FITB_TYPES, PUT_IN_ORDER, PIN_THE_SPOT]

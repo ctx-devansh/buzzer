@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import math
+import re
+import uuid
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -184,14 +190,166 @@ def validate_put_in_order(grading_type: str, config: dict, answer_data: dict) ->
             raise ValueError("Display order must differ from the correct order")
 
 
+def is_image_id(value: object) -> bool:
+    """
+    A library image id in canonical form: a lowercase, hyphenated UUID
+    (docs/design-image-support.md section 3.3). MySQL compares CHAR ids
+    case-insensitively but where-used compares in Python, so nothing else is allowed.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        return str(uuid.UUID(value)) == value
+    except ValueError:
+        return False
+
+
+_OPTION_IMAGE_TYPES = ("multiple_choice", "multi_select")
+
+
+def validate_image_keys(q_type: str, prompt_image_id: object, config: dict) -> None:
+    """
+    Where image references may appear (T8, design sections 3.2 and 3.3); raises
+    ValueError naming the field. Pure structure: whether the ids exist and belong to
+    the game's course is checked with the database by
+    image_service.validate_question_images. Called from
+    QuestionCreate.validate_structure and, on the merged values, from
+    authoring_service.update_question, for every type.
+    """
+    config = config if isinstance(config, dict) else {}
+    if prompt_image_id is not None:
+        if not is_image_id(prompt_image_id):
+            raise ValueError("prompt_image_id must be an image id")
+        if q_type == "pin_the_spot":
+            raise ValueError(
+                "prompt_image_id: a Pin the Spot question can't have a prompt image; "
+                "its canvas is the image"
+            )
+    if "option_image_ids" in config:
+        if q_type not in _OPTION_IMAGE_TYPES:
+            raise ValueError(
+                "option_image_ids: only multiple choice and multi-select options can "
+                "have images"
+            )
+        ids, options = config["option_image_ids"], config.get("options")
+        if (
+            not isinstance(ids, list)
+            or not isinstance(options, list)
+            or len(ids) != len(options)
+        ):
+            raise ValueError("option_image_ids must be a list as long as options")
+        for i, image_id in enumerate(ids):
+            if image_id is not None and not is_image_id(image_id):
+                raise ValueError(f"option_image_ids[{i}] must be an image id or null")
+    if "image_id" in config and q_type != "pin_the_spot":
+        raise ValueError("image_id: only a Pin the Spot canvas can be a library image")
+
+
+PTS_MAX_IMAGE_URL_LEN = 1_500_000
+PTS_MAX_IMAGE_SIDE = 20_000
+_PTS_DATA_URL = re.compile(r"^data:image/(png|jpeg|gif|webp);base64,", re.IGNORECASE)
+
+
+def _is_real_number(value: object) -> bool:
+    """A finite int/float that is not a bool (True is an int)."""
+    return (
+        type(value) in (int, float) and math.isfinite(value)  # type: ignore[arg-type]
+    )
+
+
+def _is_valid_image_url(url: object) -> bool:
+    if not isinstance(url, str) or not url or len(url) > PTS_MAX_IMAGE_URL_LEN:
+        return False
+    if url[:8].lower() == "https://":
+        if any(ch.isspace() for ch in url):
+            return False
+        try:
+            return bool(urlsplit(url).netloc)
+        except ValueError:
+            return False
+    match = _PTS_DATA_URL.match(url)
+    if not match:
+        return False
+    payload = url[match.end() :]
+    if not payload:
+        return False
+    try:
+        base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return True
+
+
+def validate_pin_the_spot(grading_type: str, config: dict, answer_data: dict) -> None:
+    """Structural checks for a pin_the_spot question; raises ValueError on the first failure.
+
+    Shared by QuestionCreate.validate_structure and authoring_service.update_question (which
+    validates the merged values, since QuestionUpdate only sees a partial body).
+    """
+    config = config or {}
+    answer_data = answer_data if answer_data is not None else {}
+    # Exactly one image source: a URL, or a course-library image (T8). With image_id
+    # the client still sends the size, and the server overwrites it from the image
+    # row (image_service.validate_question_images), then validates again.
+    if not isinstance(config, dict) or set(config) not in (
+        {"image_url", "image_width", "image_height"},
+        {"image_id", "image_width", "image_height"},
+    ):
+        raise ValueError(
+            'Pin the Spot config must contain "image_width", "image_height" and exactly '
+            'one of "image_url" and "image_id"'
+        )
+    width, height = config["image_width"], config["image_height"]
+    for side in (width, height):
+        if type(side) is not int or not (1 <= side <= PTS_MAX_IMAGE_SIDE):
+            raise ValueError(
+                "Image width and height must be whole numbers from 1 to 20000"
+            )
+    if "image_id" in config:
+        if not is_image_id(config["image_id"]):
+            raise ValueError("image_id must be an image id")
+    elif not _is_valid_image_url(config["image_url"]):
+        raise ValueError(
+            "Image must be an https:// URL or a base64 PNG, JPEG, GIF or WebP data: URL"
+        )
+    if not isinstance(answer_data, dict):
+        raise ValueError("Pin the Spot answer_data must be an object")
+    if answer_data == {}:
+        if grading_type == "ACCURACY":
+            raise ValueError("Place a target on the image")
+        return
+    if set(answer_data) != {"target", "r_full", "r_zero"}:
+        raise ValueError(
+            'Pin the Spot answer_data must contain exactly "target", "r_full" and "r_zero"'
+        )
+    target = answer_data["target"]
+    if (
+        not isinstance(target, dict)
+        or set(target) != {"x", "y"}
+        or not all(
+            _is_real_number(target[k]) and 0 <= target[k] <= 1 for k in ("x", "y")
+        )
+    ):
+        raise ValueError("Target must be {x, y} with numbers from 0 to 1")
+    r_full, r_zero = answer_data["r_full"], answer_data["r_zero"]
+    if not (_is_real_number(r_full) and _is_real_number(r_zero)):
+        raise ValueError("Radii must be numbers")
+    diagonal = math.sqrt(1 + (height / width) ** 2)
+    if not (0 < r_full < r_zero <= diagonal):
+        raise ValueError(
+            "Radii must satisfy 0 < full-credit radius < zero-credit radius <= image diagonal"
+        )
+
+
 class QuestionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: str = Field(
         ...,
-        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order)$",
+        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order|pin_the_spot)$",
     )
     grading_type: str = Field(..., pattern="^(ACCURACY|COMPLETENESS)$")
     prompt: str = Field(..., min_length=1, max_length=2000)
+    prompt_image_id: str | None = None
     config: dict = Field(default_factory=dict)
     answer_data: dict = Field(default_factory=dict)
     time_limit_seconds: int = Field(30, ge=2, le=300)
@@ -200,6 +358,7 @@ class QuestionCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_structure(self) -> QuestionCreate:
+        validate_image_keys(self.type, self.prompt_image_id, self.config)
         if self.type == "multiple_choice":
             opts = self.config.get("options")
             if not isinstance(opts, list) or len(opts) < 2:
@@ -256,6 +415,8 @@ class QuestionCreate(BaseModel):
                     raise ValueError("answer_points values must be numbers")
         if self.type == "put_in_order":
             validate_put_in_order(self.grading_type, self.config, self.answer_data)
+        if self.type == "pin_the_spot":
+            validate_pin_the_spot(self.grading_type, self.config, self.answer_data)
         return self
 
 
@@ -263,10 +424,12 @@ class QuestionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: str | None = Field(
         None,
-        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order)$",
+        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order|pin_the_spot)$",
     )
     grading_type: str | None = Field(None, pattern="^(ACCURACY|COMPLETENESS)$")
     prompt: str | None = Field(None, min_length=1, max_length=2000)
+    # Omitted keeps the stored value; an explicit null clears it (model_fields_set).
+    prompt_image_id: str | None = None
     config: dict | None = None
     answer_data: dict | None = None
     time_limit_seconds: int | None = Field(None, ge=2, le=300)
@@ -281,6 +444,7 @@ class QuestionResponse(BaseModel):
     type: str
     grading_type: str
     prompt: str
+    prompt_image_id: str | None
     config: dict
     answer_data: dict
     time_limit_seconds: int

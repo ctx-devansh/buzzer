@@ -9,9 +9,17 @@ directly to clients and so player-facing responses can omit fields (answer keys,
   games, questions (only `QuestionCreate` carries a `model_validator` — `validate_structure`
   — that enforces per-question-type shape of `config`/`answer_data`, e.g. `multiple_choice` needs
   `answer_points` matching `options` length; `QuestionUpdate` has **no** validator, since it sees
-  only a partial body. `put_in_order` rules live in the module-level `validate_put_in_order`,
-  called from `validate_structure` and, on the merged values, from
-  `../services/authoring_service.py::update_question`. `../models/game.py` stores question data
+  only a partial body. `put_in_order` and `pin_the_spot` rules live in the module-level
+  `validate_put_in_order` / `validate_pin_the_spot`, called from `validate_structure` and, on the
+  merged values, from `../services/authoring_service.py::update_question`. `validate_pin_the_spot`
+  accepts only an `https://` URL or a base64 PNG/JPEG/GIF/WebP `data:` URL (≤ 1,500,000 chars,
+  payload base64-checked) **or** (T8) a library `image_id`, exactly one of the two, plus int
+  width/height, and `0 < r_full < r_zero ≤ diagonal`. T8 image keys: `QuestionCreate`/
+  `QuestionUpdate`/`QuestionResponse` carry `prompt_image_id`; `validate_image_keys` (called
+  from `validate_structure` and from `update_question` on merged values, for every type) puts
+  `option_image_ids` only on MC/multi-select (as long as `options`), `image_id` only on
+  `pin_the_spot`, and no prompt image on `pin_the_spot`; `is_image_id` requires the canonical
+  lowercase hyphenated UUID form. `../models/game.py` stores question data
   as untyped JSON, so these are the only structural checks), users, access grants, and the admin
   session list/export item. `GameResponse` carries `course_id`/`course_name`; `GameCreate` and
   `GameUpdate` take an optional `course_id`; `HostGameCreate` requires it; `HostGameUpdate` has
@@ -19,6 +27,9 @@ directly to clients and so player-facing responses can omit fields (answer keys,
 - `auth.py` — login/token request-response pairs: `LoginRequest` (username+password OR dev-only
   netid, enforced by a `model_validator`), `TokenResponse`/`TempTokenResponse`/`RefreshResponse`,
   `GuestJoinRequest`.
+- `image.py` — `ImageResponse` (library metadata plus `used_by`, never the bytes),
+  `ImageUse` (`played` instead of an answer count), `ImageReplaceResponse` (adds
+  `size_changed`, `resized_question_ids`, `clamped_question_ids`).
 - `game.py` — player/host-facing game schemas: `QuestionPublic` (deliberately omits
   `answer_data`/`grading_type` — the client-safe question shape), room create/info schemas, host
   resource-list items (`MyCourseItem`, `MyGameItem` — which also carries `course_id`/`course_name`), and `ScoreResult` (internal, used by
@@ -41,7 +52,12 @@ kept in sync with these schemas by hand where they overlap (e.g. `QuestionPublic
   and `_player_summary_reveal` / `_host_summary_reveal` in `../services/game_service.py`).
   Missing one silently lets malformed questions through or scores them as always-zero.
 - Integer checks in `validate_put_in_order` use `type(x) is int`, not `isinstance`: `bool` is an
-  `int` subclass, and `sorted([True, 0, 2]) == [0, 1, 2]`.
+  `int` subclass, and `sorted([True, 0, 2]) == [0, 1, 2]`. `validate_pin_the_spot` likewise
+  rejects bools and non-finite numbers (`_is_real_number`).
+- Image ids must be canonical (`str(uuid.UUID(x)) == x`): MySQL compares `CHAR` ids
+  case-insensitively, but where-used compares in Python, so an upper-case id could let a used
+  image be deleted. Existence and course ownership are checked in
+  `../services/image_service.py::validate_question_images`, not here (they need the database).
 - `ScoreResult` (in `game.py`) is not an HTTP response model — it's an internal transfer object
   between `game_service.calculate_score` and its caller. Don't assume every class in this
   directory is a route schema.

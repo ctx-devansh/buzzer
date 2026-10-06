@@ -25,8 +25,23 @@ state machine that moves through Lobby → Question → Results → … → Game
   Attach-to-course on unattached rows (`PUT /admin/games/{id}`, row re-rendered from the body).
 - `manage/QuestionEditorPage.tsx` — the question editor moved from admin, on
   `/host/games/{id}/…`; header shows the course. A failed initial load (e.g. 403) renders only the
-  error and the back link — no editor UI.
-- `manage/CoursesPage.tsx` — "Rosters": read-only cards of the shell's courses → `/courses/:id/roster`.
+  error and the back link — no editor UI. Images (T8) come from the game's course library via
+  `ImagePicker` (disabled, "Attach this game to a course to use images", for an unattached
+  game): a prompt image (not on Pin the Spot; `prompt_image_id` always sent, `null` clears),
+  one image slot per MC/multi-select option (stored on the option row, so it moves with it;
+  `option_image_ids` sent only when some option has one), and a Pin the Spot canvas that is
+  `image_url` **or** `image_id`. A reference whose image is gone shows "Missing image" with
+  Re-pick and Remove.
+- `manage/CoursesPage.tsx` — "Courses" (was "Rosters"): read-only cards of the shell's courses,
+  each with **Manage roster** (`/courses/:id/roster`) and **Images** (`/courses/:id/images`).
+- `manage/ImagesPage.tsx` — the course image library (T8, `docs/design-image-support.md` §5.1):
+  a grid (lazy thumbnails in fixed boxes) with size, uploader and where-used (links to the
+  editor; **Played** badge for a played Pin the Spot canvas); multi-file upload through
+  `prepareUpload`; full-size view; Replace (`putForm`; disabled for a played canvas; an inline
+  confirm first when a played prompt/option use means past results change; warns about resized
+  and clamped Pin the Spot questions; a local `?v=` counter refreshes the replaced thumbnail);
+  Delete (disabled while used; inline confirm; a 409 race shows the server's message). A 403
+  shows "You don't have HOST access to this course".
 - `manage/RosterPage.tsx` — moved from admin (CSV column-mapping wizard → `POST
   /host/courses/{cid}/roster/import`; inline edit/deactivate via `PATCH …/roster/{rid}`). A 403
   shows "You don't have HOST access to this course".
@@ -52,20 +67,26 @@ state machine that moves through Lobby → Question → Results → … → Game
 - `game/LobbyPage.tsx` — large QR code (`/player/join?code=…`), room code, player count, the
   auto-advance toggle and Start Game (`emitAdvance`; disabled while there are 0 players).
 - `game/QuestionPage.tsx` — question metadata (number, type label, Accuracy/Participation, and a
-  typo-tolerance label for fill-in-the-blank), `TimerBar`, the prompt (hidden while locked), the
+  typo-tolerance label for fill-in-the-blank), `TimerBar`, the prompt and its library image
+  (`promptImageId`, ≤ 45 vh, alt = the prompt as plain text; both hidden while locked), the
+  Pin the Spot image (`PinBoard`, kept while locked, **no taps** until the reveal), the
   answered/total count, Lock/Unlock and Show Results. With auto-advance on, it calls
   `emitAdvance` 1.5 s after `answerPhaseEnded`.
 - `game/ResultsPage.tsx` — per-question results built from `question_results`:
   - fill-in-the-blank shows a **word cloud** sized by frequency, with correct words coloured
     green by a client-side Levenshtein check against `acceptedAnswers`/`editDistance`;
-  - every other type shows a **bar chart** from `buildBars()` (MC uses `correctIndices`,
+  - every other type shows a **bar chart** from `buildBars()` (option images as 48 px
+    thumbnails from `config.option_image_ids`; MC uses `correctIndices`,
     multi-select uses `answerPoints[i] > 0`, true/false uses `correctValue`, completeness has no
-    correct marking).
+    correct marking);
+  - pin_the_spot shows a `PinBoard` with every tap and, when revealed, target and circles
+    (branched on the question type, before `buildBars`).
 
   Next Question or Show Final Results, plus a 10 s auto-advance countdown.
 - `game/GameOverPage.tsx` — final screen from `game_over`. Shows a score histogram (about 8
   buckets via `chooseWidth`/`buildBuckets` over `0..maxPossibleScore`), the average, high score
-  and player count, then a per-question breakdown (`QuestionCard`: distribution bars, accepted
+  and player count, then a per-question breakdown (`QuestionCard`: distribution bars, with
+  option thumbnails read from the summary's `config`, or the Pin the Spot board, accepted
   fill-in-the-blank answers, correct %/response %, average answer time), a New Game button, and
   Download summary (HTML) / scores (CSV) buttons — disabled while `sessionId` is null, no status
   gate.
@@ -97,8 +118,17 @@ on `../components/ui/` (see `../components/CLAUDE.md`). Socket payload types com
   and `buildBars`' completeness fallback would read `config.options`.
   The editor is a fourth: `manage/QuestionEditorPage.tsx` (`QuestionType` union, `typeLabel`,
   a `build*Payload` helper, `questionToForm`, `formToPayload` — which derives ACCURACY
-  `points_value` on the client except for `put_in_order`, where it is authored directly — and
-  the `QuestionForm` UI; reorder posts `{order: [ids]}`). `buildPioPayload` scrambles only when
+  `points_value` on the client except for `put_in_order` and `pin_the_spot`, where it is
+  authored directly — and the `QuestionForm` UI; reorder posts `{order: [ids]}`).
+  `pin_the_spot`: in a game attached to a course, a file is uploaded to the library
+  (`prepareUpload`) and stored as `image_id`, or one is picked from the library; in an
+  unattached game it is downscaled to ≤ 1280 px on white and re-encoded as JPEG (0.85 → 0.7
+  → 0.5 while over 1,500,000 chars, else "Image too large"; `lib/imageFile.ts::toPinDataUrl`);
+  an `https` URL is kept as-is. An image that loads as 0 × 0 (e.g. an SVG without dimensions)
+  is refused. A different canvas clears the target and clamps radii; re-picking the same
+  library image keeps both. `buildPinPayload` resends the stored `config` and,
+  unless the target or a slider was touched, the stored `answer_data` verbatim — a played
+  question's image is frozen (409), and imported off-grid radii must not be snapped. `buildPioPayload` scrambles only when
   the item list changed; otherwise it resends the stored `config.items`/`correct_order`
   verbatim, because past answers index into the stored scramble.
 - `ResultsPage`'s word-cloud colouring is an approximation. The backend grades fill-in-the-blank

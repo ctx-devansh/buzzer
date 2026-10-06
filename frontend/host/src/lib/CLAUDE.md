@@ -12,8 +12,8 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   sending JSON and a Bearer token from `getToken()`. Non-2xx throws `ApiError(message, status)`:
   the message is FastAPI's string `detail`, else a `BuzzerError`'s `message`, else a 422's
   field-error list flattened by `validationMessage` (`max_players: Input should be …`), else
-  `HTTP <status>`. Two extras ported from admin: `postForm` (multipart, deliberately no
-  `Content-Type`) and `download(path)` (reads the quoted `filename="…"` from
+  `HTTP <status>`. Extras: `postForm`/`putForm` (multipart, deliberately no
+  `Content-Type`; `putForm` replaces a library image) and `download(path)` (reads the quoted `filename="…"` from
   `Content-Disposition`, saves the blob). Both bypass `apiFetch` on purpose.
 - `links.ts` — `ADMIN_APP_URL` (`VITE_ADMIN_APP_URL`, else `http://localhost:5175` in dev and
   `/admin` in a build).
@@ -22,6 +22,19 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   counting `"{item}@{position}"` keys; green for ACCURACY, neutral for COMPLETENESS, `[]`
   without `correctOrder`), `pioCaption(reveal)` and `correctOrderText(reveal, items)`. Used by
   `ResultsPage` and `GameOverPage` so the live and game-over charts can't drift.
+
+- `images.ts` (T8) — `imageUrl(id, bust?)` (`/api/images/{id}`; public, no token; `bust` only
+  for the library page after a replace), the `LibraryImage`/`ImageUse`/`ImageReplaceResult`
+  types, `questionLabel` ("Game, question N", 1-based), `formatBytes`, and `plainText(html)`
+  (a sanitised prompt as plain text, for `alt`).
+- `imageFile.ts` (T8) — `loadImage` (refuses 0 × 0), `prepareUpload(file)` (JPEG → ≤ 1280 px
+  JPEG 0.9; PNG as-is unless > 1280 px, then PNG; GIF/WebP as-is; > 5 MB refused before
+  sending) and `toPinDataUrl(file)` (T7's JPEG `data:` URL path, for unattached games).
+- `pinTheSpot.ts` — Pin the Spot geometry (`fitRect`, `toFraction`, `aspectOf`, `diagonal`,
+  `floor2`, `parseTapKey`, `dotRadius`, `revealKey`), `pinImageSrc(config)` (library
+  `image_id` first, else `image_url`) and the editor's slider limits/defaults.
+  The player app has its own copy (`frontend/player/src/lib/pinTheSpot.ts`); keep the geometry
+  identical.
 
 **How it fits in.** `../pages/` and `../components/HostShell.tsx` call `api` for everything
 outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/GameLayout.tsx`

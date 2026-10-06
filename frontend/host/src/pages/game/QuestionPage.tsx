@@ -2,6 +2,9 @@ import { useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import { TimerBar } from '../../components/ui/TimerBar';
+import { PinBoard } from '../../components/PinBoard';
+import { aspectOf, pinImageSrc } from '../../lib/pinTheSpot';
+import { imageUrl, plainText } from '../../lib/images';
 
 export default function QuestionPage() {
   const { currentQuestion, answeredCount, playerCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, autoAdvance, emitAdvance, emitLockQuestion } = useGame();
@@ -26,6 +29,7 @@ export default function QuestionPage() {
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
     put_in_order: 'Put in Order',
+    pin_the_spot: 'Pin the Spot',
   };
 
   function editDistanceLabel(d: number): string {
@@ -76,6 +80,18 @@ export default function QuestionPage() {
           <h2 className="text-4xl font-bold text-slate-100 text-center max-w-3xl leading-tight">
             {currentQuestion.prompt}
           </h2>
+          {/* The prompt image: on this screen only, never on phones; hidden while locked. */}
+          {currentQuestion.promptImageId && (
+            <img
+              src={imageUrl(currentQuestion.promptImageId)}
+              alt={plainText(currentQuestion.prompt)}
+              className="max-h-[45vh] max-w-full rounded-xl object-contain"
+              data-testid="prompt-image"
+              // A deleted image (the accepted delete race) hides rather than showing a
+              // broken-image icon on the projector; the prompt text stands alone.
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
           {/* Scrambled display order, lettered (not numbered) so it doesn't read as positions */}
           {currentQuestion.type === 'put_in_order' && (
             <ul className="w-full max-w-2xl flex flex-col gap-3">
@@ -91,6 +107,23 @@ export default function QuestionPage() {
             </ul>
           )}
         </>
+      )}
+
+      {/* The image stays while locked (only the prompt hides); no taps until the reveal. */}
+      {currentQuestion.type === 'pin_the_spot' && (
+        <div className="w-full max-w-4xl">
+          {aspectOf(currentQuestion.config) === null ? (
+            <p className="text-center text-slate-400">Image failed to load</p>
+          ) : (
+            <PinBoard
+              imageUrl={pinImageSrc(currentQuestion.config)}
+              aspect={aspectOf(currentQuestion.config)!}
+              ariaLabel={currentQuestion.prompt}
+              maxHeight={window.innerHeight * 0.55}
+              testId="pin-board-question"
+            />
+          )}
+        </div>
       )}
 
       <div className="text-slate-300 text-xl">

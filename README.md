@@ -345,8 +345,7 @@ The Admin app (`http://localhost:8080/admin/`) provides a full management UI:
 | **Roster** | Upload a Canvas gradebook CSV or a basic CSV roster; activate or deactivate individual entries |
 | **Users** | Create local accounts; click any user to grant or revoke course access (HOST/PLAYER) and game access |
 | **Guests** | View guest accounts; merge a guest's scores into a real netid account; delete stale guests |
-| **Games** | Create games; import a game from a JSON file; delete games |
-| **Questions** | Add, edit, delete, and reorder questions within a game; export the game as a JSON file |
+| **Games** | A link to the Host app's Games page (`/host/games`), where games are created, imported, edited and exported. Signed in as an admin, that page also deletes games and attaches unattached games to a course. The admin app's old game and question URLs redirect there |
 | **Sessions** | View completed game sessions and download score exports |
 
 Log in with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
@@ -355,21 +354,23 @@ Log in with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
 
 Games (metadata + all questions including answer data) can be exported and re-imported as JSON files.
 
-**Export** — from the Admin UI, open a game's question editor and click **Export JSON**. Or via the API:
+**Export** — in the Host app, open a game's question editor and click **Export JSON**. Or via the API (admins can also use `/api/admin/games/{game_id}/export`):
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8000/api/admin/games/{game_id}/export" \
+  "http://localhost:8000/api/host/games/{game_id}/export" \
   -o my_quiz.json
 ```
 
-**Import** — from the Admin UI, click **Import JSON** on the Games page and pick a `.json` file. This always creates a *new* game — it never overwrites an existing one. Or via the API:
+**Import** — in the Host app, click **Games → Import JSON**, pick a course and a `.json` file. The game is attached to that course and you are granted access to it. This always creates a *new* game — it never overwrites an existing one. Or via the API (multipart `file` plus form field `course_id`):
 
 ```bash
-curl -X POST "http://localhost:8000/api/admin/games/import" \
+curl -X POST "http://localhost:8000/api/host/games/import" \
   -H "Authorization: Bearer $TOKEN" \
-  -F "file=@my_quiz.json"
+  -F "file=@my_quiz.json" -F "course_id=1"
 ```
+
+The admin-only `POST /api/admin/games/import` (multipart `file` only) still exists; it leaves the game unattached to any course.
 
 The file format is:
 
@@ -392,7 +393,50 @@ The file format is:
 }
 ```
 
-Question order is determined by array position; `order_index` is assigned automatically on import.
+Top level: `format` must be `"buzzer/game"` and `version` must be `1` or `2`. A `course_id` inside `game` is ignored; the course comes only from the import request.
+
+Every question has `type`, `grading_type` (`ACCURACY` or `COMPLETENESS`), `prompt`, `config`, `answer_data`, `time_limit_seconds` (2–300, default 30) and `points_value` (0–100000, default 1). It may also have `prompt_image_id` (version 2; see below). Any other key is rejected. `order_index` is optional and ignored: question order is the array position.
+
+Per question type (COMPLETENESS awards `points_value` for any valid answer, so its `answer_data` is `{}`):
+
+| `type` | `config` | ACCURACY `answer_data` | Player submits |
+|---|---|---|---|
+| `multiple_choice` | `{"options": [...]}`, ≥ 2; optional `option_image_ids` (version 2) | `{"answer_points": [...]}`, one number ≥ 0 per option | `{"selectedIndex": i}` |
+| `true_false` | `{}` | `{"answer_points": {"true": n, "false": n}}` | `{"selectedValue": true}` |
+| `fill_in_the_blank` | `{"maxLength": n}` (optional) | `{"acceptedAnswers": [...], "answerPoints": [...], "editDistance": n}`: one points value ≥ 0 per answer; `editDistance` is an int ≥ 0, default 0. Matching lowercases and collapses whitespace, but keeps punctuation | `{"text": "..."}` |
+| `multi_select` | `{"options": [...]}`, ≥ 2; optional `option_image_ids` (version 2) | `{"answer_points": [...]}`, one number per option; may be negative (the total is floored at 0) | `{"selectedIndices": [...]}` |
+| `put_in_order` | `{"items": [...]}`, exactly that key, 3–6 strings in display order, each ≤ 200 chars and distinct ignoring case | `{"correct_order": [...]}`: the item indices in the correct sequence, not the identity. Optional under COMPLETENESS. Partial credit per correctly ordered pair | `{"orderedIndices": [...]}` |
+| `pin_the_spot` | `{"image_url", "image_width", "image_height"}`: an `https://` URL or a base64 PNG/JPEG/GIF/WebP `data:` URL (≤ 1,500,000 chars), integer pixel size. Or, in version 2, `{"image_id", "image_width", "image_height"}` (exactly one of `image_url` and `image_id`); the server sets the size from the image | `{"target": {"x", "y"}, "r_full", "r_zero"}`: target as fractions 0–1 of the image; radii as fractions of its width, `0 < r_full < r_zero ≤` the image diagonal (`√(1 + (height/width)²)`). Full points inside `r_full`, falling linearly to 0 at `r_zero`. Under COMPLETENESS, `{}` or a target to show in the reveal | `{"x": 0.42, "y": 0.61}` |
+
+**Version 2: games with course-library images.** Hosts upload images to a course library (Host app → **Courses → Images**, or the editor's image buttons). Images are stored in MySQL and served from `GET /api/images/{id}`, which needs no login: the random id is the only protection, so don't upload anything private. A game whose questions use library images exports as version 2; a game without them still exports as version 1, unchanged.
+
+```json
+{
+  "format": "buzzer/game",
+  "version": 2,
+  "game": { "title": "..." },
+  "images": [
+    { "id": "0b9b6a52-…", "filename": "map.png", "content_type": "image/png",
+      "width": 1280, "height": 640, "sha256": "…", "data_base64": "iVBORw0…" }
+  ],
+  "questions": [
+    {
+      "type": "multiple_choice", "grading_type": "ACCURACY", "prompt": "Which is a Monet?",
+      "prompt_image_id": null,
+      "config": { "options": ["A", "B"], "option_image_ids": ["0b9b6a52-…", null] },
+      "answer_data": { "answer_points": [1000, 0] }
+    }
+  ]
+}
+```
+
+- `images` lists each referenced image once. Ids are lowercase hyphenated UUIDs and only need to be unique within the file; `width`, `height` and `sha256` are recomputed on import.
+- `prompt_image_id` (any type except `pin_the_spot`) shows an image under the prompt on the host screen. `option_image_ids` is a list as long as `options`, each an id or `null`; option text stays required. `pin_the_spot` may use `image_id` instead of `image_url`.
+- Import into a course checks every image (PNG, JPEG, GIF or WebP, ≤ 5 MB, ≤ 40 megapixels; metadata such as GPS location is removed), reuses an image the course already has with the same bytes, and otherwise adds it to the course library. Any failure imports nothing.
+- A version 1 file must not contain image references (`"prompt_image_id": null` is fine). The admin import route can't take a version 2 file with images, because it leaves the game without a course; use the host app's import.
+- nginx limits a request to 10 MB and base64 adds a third, so a game's images can total about 7 MB.
+
+The Pin the Spot images in the T6 sample games are drawn by `scripts/make_pin_images.py`, which also writes their targets into the JSON. It needs Pillow 10.1 or later, which `scripts/setup_venv.sh` installs (it's in `backend/requirements.txt`); elsewhere, `pip install "pillow>=10.1"`. Run it after editing those images; `--check` verifies the files are in sync without writing.
 
 ### Export session scores
 
@@ -463,6 +507,7 @@ buzzer/
 ├── scripts/
 │   ├── smoke_test_websocket.py   End-to-end WebSocket smoke test
 │   ├── simulate_players.py       Multi-profile async player simulator
+│   ├── make_pin_images.py        Draws the sample games' Pin the Spot images
 │   └── seed_demo.py              Seeds a demo course and game
 ├── tests/
 │   └── integration/        Pytest integration test suite

@@ -73,7 +73,7 @@ function AdminLayout() {
             <Gamepad2 size={16} /> Games <ExternalLink size={12} className="ml-auto" />
           </a>
           <a href={`${HOST_APP_URL}/courses`} className={externalClass}>
-            <BookOpen size={16} /> Rosters <ExternalLink size={12} className="ml-auto" />
+            <BookOpen size={16} /> Rosters &amp; images <ExternalLink size={12} className="ml-auto" />
           </a>
           <a href={`${HOST_APP_URL}/home`} className={externalClass}>
             <Play size={16} /> Host a game <ExternalLink size={12} className="ml-auto" />

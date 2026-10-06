@@ -109,7 +109,7 @@ export default function HostShell() {
           <span className="text-white font-bold mr-4">Buzzer Host</span>
           <NavLink to="/home" className={linkClass}><Play size={16} /> Play</NavLink>
           <NavLink to="/games" className={linkClass}><Gamepad2 size={16} /> Games</NavLink>
-          <NavLink to="/courses" className={linkClass}><Users size={16} /> Rosters</NavLink>
+          <NavLink to="/courses" className={linkClass}><Users size={16} /> Courses</NavLink>
           <NavLink to="/sessions" className={linkClass}><History size={16} /> Sessions</NavLink>
           <div className="ml-auto flex items-center gap-1">
             {isAdmin && (

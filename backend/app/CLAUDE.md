@@ -6,15 +6,15 @@ backend app package — see the leaf directories' own `CLAUDE.md` for detail.
 
 **Contents (subdirectories — each has its own `CLAUDE.md`).**
 - `routers/` — REST endpoints (FastAPI `APIRouter`s): admin CRUD, host-scoped authoring /
-  rosters / session downloads (`/host/*`), auth, host/game resource discovery + room lifecycle,
-  health check. Thin — delegates business logic to `services/`.
+  rosters / image library / session downloads (`/host/*`), public image serving
+  (`/images/{id}`), auth, host/game resource discovery + room lifecycle, health check. Thin — delegates business logic to `services/`.
 - `services/` — the business-logic layer shared by `routers/` and `websocket/`: auth/JWT, room
   and session lifecycle, answer scoring, CSV/HTML export, roster CSV parsing, Redis-backed
   ephemeral game state, first-admin bootstrap.
 - `websocket/` — the realtime half: a python-socketio ASGI app driving in-game events (join,
   host-advance state machine, submit answer, lock/unlock) once a room exists.
 - `models/` — SQLAlchemy ORM models: the persistent (MySQL) schema — users, courses/rosters,
-  games/questions, sessions/scores.
+  games/questions, course images, sessions/scores.
 - `schemas/` — Pydantic request/response models: the API's wire contract, kept deliberately
   separate from `models/` so internal shape never leaks (e.g. `QuestionPublic` omits answer
   keys). Also the sole home of per-question-type structural validation.
@@ -40,8 +40,9 @@ share one business-logic layer (`services/`) and one persistence layer (`models/
 - Scoring/answer-reveal logic for each question type is defined in several places that must
   stay in sync: `services/game_service.py::calculate_score`, and **four** reveal builders —
   `websocket/gateway.py::_answer_reveal`, `services/report_service.py::_answer_reveal`, and
-  `_player_summary_reveal` / `_host_summary_reveal` in `services/game_service.py` (a unit parity
-  test in `tests/unit/test_put_in_order.py` covers `put_in_order`) — plus the structural
+  `_player_summary_reveal` / `_host_summary_reveal` in `services/game_service.py` (unit parity
+  tests in `tests/unit/test_put_in_order.py` and `tests/unit/test_pin_the_spot.py` cover those
+  types; `pin_the_spot`'s rules live once, in `services/pin_the_spot.py`) — plus the structural
   validation in `schemas/admin.py::QuestionCreate.validate_structure`. A new question type
   touches all of them.
   See the gotchas in `services/CLAUDE.md`, `websocket/CLAUDE.md`, and `schemas/CLAUDE.md`.

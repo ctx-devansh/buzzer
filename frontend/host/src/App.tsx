@@ -9,6 +9,7 @@ import GameOverPage from './pages/game/GameOverPage';
 import GamesPage from './pages/manage/GamesPage';
 import QuestionEditorPage from './pages/manage/QuestionEditorPage';
 import RosterPage from './pages/manage/RosterPage';
+import ImagesPage from './pages/manage/ImagesPage';
 import CoursesPage from './pages/manage/CoursesPage';
 import SessionsPage from './pages/manage/SessionsPage';
 import HostShell from './components/HostShell';
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/games/:gameId/questions" element={<QuestionEditorPage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:courseId/roster" element={<RosterPage />} />
+          <Route path="/courses/:courseId/images" element={<ImagesPage />} />
           <Route path="/sessions" element={<SessionsPage />} />
         </Route>
         <Route path="/game/:code" element={<RequireAuth><GameLayout /></RequireAuth>}>
