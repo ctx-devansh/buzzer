@@ -1180,3 +1180,93 @@ def test_sample_games_still_import(api: Api, admin_token: str, two_courses: dict
             cleanup.games.append(r.json()["game_id"])
     finally:
         cleanup.run()
+
+
+# ---------------------------------------------------------------------------
+# HTML session report (design 4.6)
+# ---------------------------------------------------------------------------
+
+
+def test_report_embeds_images_and_survives_missing_ones(
+    base_url: str, api: Api, admin_token: str, two_courses: dict
+):
+    cleanup = Cleanup(api, admin_token)
+    course = two_courses["a"]
+    try:
+        game = _admin_game(api, admin_token, cleanup, "IMG report", course)
+        mc_prompt = upload_ok(api, admin_token, course)["id"]
+        option = upload_ok(api, admin_token, course, png_bytes((8, 8), (0, 9, 0)))["id"]
+        ms_prompt = upload_ok(api, admin_token, course, png_bytes((6, 6), (7, 0, 0)))[
+            "id"
+        ]
+        canvas = upload_ok(api, admin_token, course, png_bytes((200, 100)))["id"]
+        q1 = add_question(
+            api,
+            admin_token,
+            game["id"],
+            mc_body(prompt_image_id=mc_prompt, option_image_ids=[None, option]),
+        )
+        ms = {
+            "type": "multi_select",
+            "grading_type": "COMPLETENESS",
+            "prompt": "Pick some.",
+            "prompt_image_id": ms_prompt,
+            "config": {"options": ["x", "y"], "option_image_ids": [option, None]},
+            "points_value": 10,
+        }
+        q2 = add_question(api, admin_token, game["id"], ms)
+        q3 = add_question(
+            api,
+            admin_token,
+            game["id"],
+            pin_body({"image_id": canvas, "image_width": 200, "image_height": 100}),
+        )
+        scenario = GameScenario(
+            name="img_report",
+            questions=[
+                QuestionSpec(
+                    "multiple_choice",
+                    "ACCURACY",
+                    "Which colour?",
+                    q1["config"],
+                    {"answer_points": [0, 100]},
+                    100,
+                ),
+                QuestionSpec(
+                    "multi_select", "COMPLETENESS", "Pick some.", q2["config"], {}, 10
+                ),
+                QuestionSpec(
+                    "pin_the_spot", "ACCURACY", "Tap.", q3["config"], PIN_ANSWER
+                ),
+            ],
+            player_scripts=[
+                PlayerScript(
+                    responses=[
+                        {"selectedIndex": 1},
+                        {"selectedIndices": [0]},
+                        {"x": 0.5, "y": 0.5},
+                    ]
+                )
+            ],
+        )
+        _play(base_url, api, admin_token, cleanup, course, game["id"], scenario)
+        report = f"/host/sessions/{cleanup.sessions[-1]}/report"
+
+        r = api.get(report, admin_token)
+        assert r.status_code == 200, r.text
+        html = r.text
+        assert html.count('<img class="q-prompt-img" src="data:image/png;base64,') == 2
+        assert html.count('<img class="bar-thumb" src="data:image/png;base64,') == 1
+        assert '<image href="data:image/png;base64,' in html  # the library canvas
+        assert "/api/images/" not in html  # self-contained: no links to the server
+
+        # The accepted delete race: rows gone behind the scan's back.
+        delete_image_row(option)
+        delete_image_row(canvas)
+        r = api.get(report, admin_token)
+        assert r.status_code == 200, r.text
+        assert 'class="bar-thumb"' not in r.text
+        assert "Image missing" in r.text
+        assert r.text.count('class="q-prompt-img"') == 2
+    finally:
+        cleanup.run()
