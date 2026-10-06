@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import { TimerBar } from '../../components/ui/TimerBar';
+import { PinBoard } from '../../components/PinBoard';
+import { aspectOf } from '../../lib/pinTheSpot';
 
 export default function QuestionPage() {
   const { currentQuestion, answeredCount, playerCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, autoAdvance, emitAdvance, emitLockQuestion } = useGame();
@@ -26,6 +28,7 @@ export default function QuestionPage() {
     fill_in_the_blank: 'Fill in the Blank',
     multi_select: 'Multi-Select',
     put_in_order: 'Put in Order',
+    pin_the_spot: 'Pin the Spot',
   };
 
   function editDistanceLabel(d: number): string {
@@ -91,6 +94,23 @@ export default function QuestionPage() {
             </ul>
           )}
         </>
+      )}
+
+      {/* The image stays while locked (only the prompt hides); no taps until the reveal. */}
+      {currentQuestion.type === 'pin_the_spot' && (
+        <div className="w-full max-w-4xl">
+          {aspectOf(currentQuestion.config) === null ? (
+            <p className="text-center text-slate-400">Image failed to load</p>
+          ) : (
+            <PinBoard
+              imageUrl={currentQuestion.config.image_url}
+              aspect={aspectOf(currentQuestion.config)!}
+              ariaLabel={currentQuestion.prompt}
+              maxHeight={window.innerHeight * 0.55}
+              testId="pin-board-question"
+            />
+          )}
+        </div>
       )}
 
       <div className="text-slate-300 text-xl">

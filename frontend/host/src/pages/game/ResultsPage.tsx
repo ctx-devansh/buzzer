@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGame } from './GameLayout';
 import { Button } from '../../components/ui/button';
 import type { AnswerReveal } from '../../types/game';
 import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder';
+import { PinBoard } from '../../components/PinBoard';
+import { aspectOf, revealKey } from '../../lib/pinTheSpot';
 
 const RESULTS_DISPLAY_SECONDS = 10;
 
@@ -251,8 +253,15 @@ export default function ResultsPage() {
   // Branch on the question type, not reveal.type: a COMPLETENESS put_in_order reveal is
   // type 'completeness', and buildBars' completeness fallback reads config.options.
   const isPio = currentQuestion?.type === 'put_in_order';
+  // pin_the_spot: every tap on the image, plus target and circles when revealed.
+  const isPin = currentQuestion?.type === 'pin_the_spot';
+  const pinAspect = isPin ? aspectOf(currentQuestion?.config) : null;
+  const pinKey = useMemo(
+    () => revealKey(questionResults?.answerReveal),
+    [questionResults?.answerReveal],
+  );
 
-  const bars = !questionResults
+  const bars = !questionResults || isPin
     ? []
     : isPio
       ? buildPioBars(
@@ -288,7 +297,26 @@ export default function ResultsPage() {
         <p className="text-slate-400 text-base -mb-4">{pioCaption(questionResults.answerReveal)}</p>
       )}
 
-      {questionResults && isFitb ? (
+      {questionResults && isPin ? (
+        <div className="w-full max-w-4xl flex flex-col gap-2">
+          {pinAspect === null ? (
+            <p className="text-center text-slate-400">Image failed to load</p>
+          ) : (
+            <PinBoard
+              imageUrl={currentQuestion?.config.image_url}
+              aspect={pinAspect}
+              taps={questionResults.answerDistribution}
+              pinKey={pinKey}
+              ariaLabel={`${currentQuestion?.prompt ?? 'Pin the Spot'}: every answer`}
+              maxHeight={window.innerHeight * 0.6}
+              testId="pin-board-results"
+            />
+          )}
+          <p className="text-slate-500 text-sm text-right">
+            {questionResults.totalAnswered} / {questionResults.totalPlayers} answered
+          </p>
+        </div>
+      ) : questionResults && isFitb ? (
         <WordCloud
           distribution={questionResults.answerDistribution}
           answerReveal={questionResults.answerReveal}

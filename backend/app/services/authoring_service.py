@@ -24,6 +24,7 @@ from ..schemas.admin import (
     GameCreate,
     QuestionCreate,
     QuestionUpdate,
+    validate_pin_the_spot,
     validate_put_in_order,
 )
 
@@ -120,6 +121,8 @@ async def update_question(
     are checked before anything is assigned: a played question's items, correct_order and
     type are frozen (409), because stored orderedIndices point into config.items as it was
     at play time; then the merged question must pass validate_put_in_order (422).
+    pin_the_spot follows the same shape: a played question's config (the image) and type
+    are frozen (409), then validate_pin_the_spot must pass (422).
     """
     question = await _get_question_in_game(db, game_id, question_id)
 
@@ -147,9 +150,24 @@ async def update_question(
                 "cannot be changed. Create a new question instead."
             )
 
+    if question.type == "pin_the_spot" or new_type == "pin_the_spot":
+        # Only the image (and type) is frozen: stored taps are fractions of that image.
+        # Target, radii and grading type stay editable, with no rescoring.
+        frozen_changed = new_type != question.type or new_config != old_config
+        if frozen_changed and await _score_count(db, question_id):
+            raise ConflictError(
+                "This question has recorded answers from a past session, so its image "
+                "cannot be changed. Create a new question instead."
+            )
+
     if new_type == "put_in_order":
         try:
             validate_put_in_order(new_grading_type, new_config, new_answer_data)
+        except ValueError as exc:
+            raise ValidationFailedError(str(exc)) from exc
+    if new_type == "pin_the_spot":
+        try:
+            validate_pin_the_spot(new_grading_type, new_config, new_answer_data)
         except ValueError as exc:
             raise ValidationFailedError(str(exc)) from exc
 

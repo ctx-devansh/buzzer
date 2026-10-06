@@ -17,6 +17,15 @@ Sessions, an **Admin console** link (only when `getRole() === 'ADMIN'`), Sign ou
   otherwise the page. The `[]` replacement is skipped when `pathname` is **exactly** `/home` or
   `/sessions` (own sessions/live rooms stay reachable); the error states replace every path.
 
+**`PinBoard.tsx`.** The Pin the Spot canvas: the image letterboxed into the *stored* aspect
+(stretched if its natural size differs), DPR-sharp, redrawn on resize. Optional `taps` (the
+`"x,y"` distribution; dot radius `base·√count`, capped at `3·base`), `pinKey` (dashed
+zero-credit circle, filled full-credit circle, target), and `onPick` (the editor's target
+picker: click places, drag moves, a click in the letterbox is ignored, nothing before the image
+loads). Shows "Image failed to load" in its box on error. Colours come from `--pin-*` custom
+properties with fallbacks. `data-loaded` is `'true'` once the image has decoded (e2e waits on it).
+Used by `game/QuestionPage` (no taps), `game/ResultsPage`, `game/GameOverPage` and the editor.
+
 **Contents (`ui/`).**
 - `button.tsx` — `Button`: native `<button>` with `variant` (`default` indigo, `outline`,
   `ghost`, `destructive`) and `size` (`sm`/`md`/`lg`); passes through all button props.

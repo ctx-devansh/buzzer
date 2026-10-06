@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import math
+import re
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -184,11 +189,101 @@ def validate_put_in_order(grading_type: str, config: dict, answer_data: dict) ->
             raise ValueError("Display order must differ from the correct order")
 
 
+PTS_MAX_IMAGE_URL_LEN = 1_500_000
+PTS_MAX_IMAGE_SIDE = 20_000
+_PTS_DATA_URL = re.compile(r"^data:image/(png|jpeg|gif|webp);base64,", re.IGNORECASE)
+
+
+def _is_real_number(value: object) -> bool:
+    """A finite int/float that is not a bool (True is an int)."""
+    return (
+        type(value) in (int, float) and math.isfinite(value)  # type: ignore[arg-type]
+    )
+
+
+def _is_valid_image_url(url: object) -> bool:
+    if not isinstance(url, str) or not url or len(url) > PTS_MAX_IMAGE_URL_LEN:
+        return False
+    if url[:8].lower() == "https://":
+        if any(ch.isspace() for ch in url):
+            return False
+        try:
+            return bool(urlsplit(url).netloc)
+        except ValueError:
+            return False
+    match = _PTS_DATA_URL.match(url)
+    if not match:
+        return False
+    payload = url[match.end() :]
+    if not payload:
+        return False
+    try:
+        base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return True
+
+
+def validate_pin_the_spot(grading_type: str, config: dict, answer_data: dict) -> None:
+    """Structural checks for a pin_the_spot question; raises ValueError on the first failure.
+
+    Shared by QuestionCreate.validate_structure and authoring_service.update_question (which
+    validates the merged values, since QuestionUpdate only sees a partial body).
+    """
+    config = config or {}
+    answer_data = answer_data if answer_data is not None else {}
+    if not isinstance(config, dict) or set(config) != {
+        "image_url",
+        "image_width",
+        "image_height",
+    }:
+        raise ValueError(
+            'Pin the Spot config must contain exactly "image_url", "image_width" and "image_height"'
+        )
+    width, height = config["image_width"], config["image_height"]
+    for side in (width, height):
+        if type(side) is not int or not (1 <= side <= PTS_MAX_IMAGE_SIDE):
+            raise ValueError(
+                "Image width and height must be whole numbers from 1 to 20000"
+            )
+    if not _is_valid_image_url(config["image_url"]):
+        raise ValueError(
+            "Image must be an https:// URL or a base64 PNG, JPEG, GIF or WebP data: URL"
+        )
+    if not isinstance(answer_data, dict):
+        raise ValueError("Pin the Spot answer_data must be an object")
+    if answer_data == {}:
+        if grading_type == "ACCURACY":
+            raise ValueError("Place a target on the image")
+        return
+    if set(answer_data) != {"target", "r_full", "r_zero"}:
+        raise ValueError(
+            'Pin the Spot answer_data must contain exactly "target", "r_full" and "r_zero"'
+        )
+    target = answer_data["target"]
+    if (
+        not isinstance(target, dict)
+        or set(target) != {"x", "y"}
+        or not all(
+            _is_real_number(target[k]) and 0 <= target[k] <= 1 for k in ("x", "y")
+        )
+    ):
+        raise ValueError("Target must be {x, y} with numbers from 0 to 1")
+    r_full, r_zero = answer_data["r_full"], answer_data["r_zero"]
+    if not (_is_real_number(r_full) and _is_real_number(r_zero)):
+        raise ValueError("Radii must be numbers")
+    diagonal = math.sqrt(1 + (height / width) ** 2)
+    if not (0 < r_full < r_zero <= diagonal):
+        raise ValueError(
+            "Radii must satisfy 0 < full-credit radius < zero-credit radius <= image diagonal"
+        )
+
+
 class QuestionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: str = Field(
         ...,
-        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order)$",
+        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order|pin_the_spot)$",
     )
     grading_type: str = Field(..., pattern="^(ACCURACY|COMPLETENESS)$")
     prompt: str = Field(..., min_length=1, max_length=2000)
@@ -256,6 +351,8 @@ class QuestionCreate(BaseModel):
                     raise ValueError("answer_points values must be numbers")
         if self.type == "put_in_order":
             validate_put_in_order(self.grading_type, self.config, self.answer_data)
+        if self.type == "pin_the_spot":
+            validate_pin_the_spot(self.grading_type, self.config, self.answer_data)
         return self
 
 
@@ -263,7 +360,7 @@ class QuestionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: str | None = Field(
         None,
-        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order)$",
+        pattern="^(multiple_choice|true_false|fill_in_the_blank|multi_select|put_in_order|pin_the_spot)$",
     )
     grading_type: str | None = Field(None, pattern="^(ACCURACY|COMPLETENESS)$")
     prompt: str | None = Field(None, min_length=1, max_length=2000)

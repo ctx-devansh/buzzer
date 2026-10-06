@@ -24,23 +24,33 @@ over SQLAlchemy sessions and the Redis client, so both transports share one impl
   Canvas-gradebook-formatted one (SIS Login ID matching, optional per-question columns,
   roster-only filtering). Every points cell, total and "Points Possible" goes through `_pts`
   (round to 4 dp): points columns are single-precision `FLOAT`, and `put_in_order` partial
-  scores (e.g. 0.83) would otherwise print float noise.
+  scores (e.g. 0.83) would otherwise print float noise. Answers never appear in the CSV.
 - `game_service.py` — the core game/session logic: room code generation, host access checks
   (`assert_host_can_use_course/game`, plus `visible_games_query`, its list-side twin), session lifecycle (create/start/complete/abandon),
   player authorization against the course roster (`authorise_player`), answer scoring
   (`calculate_score` — one branch per question type × grading type; `put_in_order` scores
-  pairwise, half-up to 2 dp, clamped to `points_value`), `record_answer` (persists
+  pairwise, half-up to 2 dp, clamped to `points_value`; `pin_the_spot` delegates to
+  `pin_the_spot.py`), `record_answer` (persists
   to MySQL + updates Redis in one call; `put_in_order` writes one `"{item}@{position}"`
-  distribution key per item, under both grading types), and leaderboard/summary builders for
+  distribution key per item, `pin_the_spot` one `"x,y"` (4 dp) key per tap, under both grading
+  types), and leaderboard/summary builders for
   GAME_OVER payloads (their reveals are `_player_summary_reveal` / `_host_summary_reveal`; the
-  player summary also carries `isCorrect`).
+  player summary also carries `isCorrect`, and drops `config.image_url` for `pin_the_spot`).
+- `pin_the_spot.py` — pure rules for Pin the Spot (no DB/Redis): `is_valid_tap`, `tap_key` /
+  `parse_tap_key`, `aspect`, `answer_key`, `tap_distance`, `score`, `reveal`, `EDGE_EPSILON`, and
+  `half_up_points` (the half-up-to-2-dp helper `put_in_order` also uses). `calculate_score`,
+  `record_answer`, the host summary, the report and all four reveal builders call it.
 - `authoring_service.py` `update_question` — for `put_in_order` (stored or requested type) it
   checks the *merged* values before assigning anything: a question with `session_scores` rows
   can't change `type`, `config.items` or `correct_order` (409, `ConflictError`), then
-  `validate_put_in_order` must pass (422, `ValidationFailedError`). Other types keep the
-  unvalidated update path.
+  `validate_put_in_order` must pass (422, `ValidationFailedError`). `pin_the_spot` mirrors it: a
+  played question can't change `type` or `config` (the image; compared by value, so an identical
+  resend passes), target/radii/grading stay editable with no rescoring, then
+  `validate_pin_the_spot` on the merged type. Other types keep the unvalidated update path.
 - `report_service.py` — generates a standalone, self-contained HTML session report (aggregate
-  stats only, no PII) with inline CSS and hand-rolled bar-chart/word-cloud/histogram renderers.
+  stats only, no PII) with inline CSS and hand-rolled bar-chart/word-cloud/histogram renderers,
+  plus an inline-SVG board for `pin_the_spot` (`_render_pin_board`; the image URL is
+  `html.escape(..., quote=True)`d because the `https` check allows `"`).
   Duplicates `_answer_reveal` logic from `../websocket/gateway.py` by design (no player-request
   dependency at report-generation time) — keep both in sync if scoring/reveal rules change.
 - `roster_service.py` — parses Canvas gradebook CSV exports (and a pre-mapped row list from the
