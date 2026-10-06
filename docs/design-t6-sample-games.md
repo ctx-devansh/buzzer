@@ -5,7 +5,7 @@
 | Task | T6 (quiz/game JSON files), Satvik's two games |
 | Owner | Satvik Utkoori (utkoori) |
 | Branch | `feature/t7-redo` (both T7 types, `put_in_order` and `pin_the_spot`, are on this branch) |
-| Status | Draft from the design discussion, **before** the Goldfish test. No T6 code yet |
+| Status | Revised after the Goldfish test (holes G1–G10, §8). No T6 code yet |
 | Related | [instructions.md](../instructions.md) T6, [design-pin-the-spot.md](design-pin-the-spot.md), [design-put-in-order.md](design-put-in-order.md) |
 
 This replaces an earlier T6 design at this path, whose implementation was reverted in `8c26fb3`
@@ -95,6 +95,19 @@ Common to every question: keys exactly `type`, `grading_type`, `prompt`, `config
 `{"format": "buzzer/game", "version": 1, "game": {"title", "description", "max_players": 150},
 "questions": [...]}`. Files are written as `json.dumps(bundle, indent=2, ensure_ascii=False) + "\n"`.
 
+**Shapes verified against the code** (`QuestionCreate.validate_structure`,
+`backend/app/schemas/admin.py`; `calculate_score`, `services/game_service.py`; 2026-10-05):
+- MC, TF, FITB and MS check `answer_data` only under ACCURACY, so `{}` is valid for COMPLETENESS
+  (MC and MS still need ≥ 2 `options`).
+- TF `answer_points` must be a dict with exactly the keys `"true"` and `"false"`.
+- MC `answer_points` and FITB `answerPoints` must be ≥ 0; **MS `answer_points` may be negative**,
+  and `calculate_score` clamps the MS total with `max(0.0, raw)`.
+- FITB `editDistance` is a non-negative int (default 0).
+- `put_in_order` / `pin_the_spot` are checked by `validate_put_in_order` / `validate_pin_the_spot`.
+
+If the code disagrees with anything here at implementation time, the code wins and this spec is
+corrected.
+
 ### 5.1 Classroom: `sample_games/git_version_control_classroom.json`
 
 - **Title:** `Git & Version Control: Core Concepts Check`
@@ -107,7 +120,7 @@ Common to every question: keys exactly `type`, `grading_type`, `prompt`, `config
 | 1 | MC | ACC | 25 | 1 | `Which command creates a new branch called feature and switches to it?` | options `["git branch -d feature", "git switch -c feature", "git merge feature", "git fetch feature"]` | `answer_points [0, 1, 0, 0]` |
 | 2 | MC | ACC | 25 | 1 | `What does git fetch do?` | options `["Downloads remote commits and merges them into your current branch", "Uploads your local commits to the remote", "Downloads remote commits without changing your current branch", "Deletes local branches that no longer exist on the remote"]` | `answer_points [0, 0, 1, 0]` |
 | 3 | TF | ACC | 20 | 1 | `git commit sends your new commits to the remote repository.` | `{}` | `answer_points {"true": 0, "false": 1}` |
-| 4 | TF | ACC | 20 | 1 | `Every Git commit records the id (hash) of its parent commit or commits.` | `{}` | `answer_points {"true": 1, "false": 0}` |
+| 4 | TF | ACC | 20 | 1 | `Every Git commit except the very first records the id (hash) of its parent commit or commits.` | `{}` | `answer_points {"true": 1, "false": 0}` |
 | 5 | FITB | ACC | 30 | 1 | `Which command lists the files you have changed and the files Git is not tracking yet?` | `maxLength 30` | `acceptedAnswers ["git status", "status"]`, `answerPoints [1, 1]`, `editDistance 1` |
 | 6 | FITB | ACC | 30 | 1 | `Which file in a repository lists path patterns that Git should not track? (include the dot)` | `maxLength 30` | `acceptedAnswers [".gitignore", "gitignore"]`, `answerPoints [1, 1]`, `editDistance 1` |
 | 7 | MS | ACC | 40 | 2 | `Select every command that rewrites existing commit history. Incorrect selections cost a point.` | options `["git rebase", "git revert", "git commit --amend", "git status", "git fetch"]` | `answer_points [1, -1, 1, -1, -1]` |
@@ -120,7 +133,8 @@ Common to every question: keys exactly `type`, `grading_type`, `prompt`, `config
 
 Checks (all by hand during design, 2026-10-05):
 - **Facts:** `git switch -c` creates and switches (Git ≥ 2.23); `git fetch` updates
-  remote-tracking refs only; `git commit` is local; every commit stores its parent hashes;
+  remote-tracking refs only; `git commit` is local; every commit except a root commit stores its
+  parent hashes (a root commit has none, hence "except the very first" in Q4);
   `git rebase` and `git commit --amend` replace commits, `git revert` adds a new one.
 - **Q5/Q6 edit distance 1** doesn't reach a wrong command: `git stash` and `git stage` are ≥ 2
   from `git status`.
@@ -158,8 +172,9 @@ Checks (by hand, 2026-10-05):
 - **Q6 gaps are wide:** peregrine falcon (dive, > 300 km/h) > cheetah (~100–120) > grizzly bear
   (~55) > human (~45 peak sprint) > garden snail (< 0.1). The prompt says diving counts, so the
   falcon isn't a trick.
-- **Q4 edit distance 1** also accepts `block` and `blank`. Unlikely answers; accepted for typo
-  tolerance.
+- **Q4 edit distance 1** also accepts other words one edit from `black`, e.g. `block`, `blank`,
+  `back`, `lack`, `slack`, and `black.` (punctuation is kept). Unlikely answers; accepted for
+  typo tolerance.
 - **Q5:** the positive points sum to 900 = `points_value`.
 - **Totals:** ACCURACY 7 × 1000 + 900 = 7,900; COMPLETENESS 6 × 250 = 1,500; 9,400 in all.
 
@@ -171,8 +186,9 @@ touch (it applies to prompts only, not options).
 Each Pin the Spot question is first written with `config: {"image_url": "<filled by the
 generator>", "image_width": W, "image_height": H}` (W × H from §5.4), and for ACCURACY rows
 `answer_data: {"target": {"x": 0.5, "y": 0.5}, "r_full": …, "r_zero": …}` with the table's radii.
-The placeholder `image_url` fails `validate_pin_the_spot`, so it always counts as a difference
-and the first run rewrites it.
+The placeholder `image_url` isn't a `data:image/png;base64,` URL, so `--check` difference 1
+(§5.4) always fires for it and the first run rewrites it. (It would also fail
+`validate_pin_the_spot`, which is why a placeholder must never be committed or imported.)
 
 ### 5.4 Generator: `scripts/make_pin_images.py`
 
@@ -195,7 +211,12 @@ under `ROOT / "sample_games"` (module-level `GAMES_DIR`, so tests can point it e
   also a `PlanError`. The CLI prints it and exits **2** in both modes, writing nothing.
 - Importable without side effects: `render(key) -> (PIL.Image.Image, (x, y) | None)` returns
   the target **rounded to 4 dp** (`None` for an image without a target); `check() -> list[str]`
-  (raises `PlanError`); `write() -> list[(row, updated)]`; `main() -> int`.
+  (raises `PlanError`); `write() -> list[tuple[PlanRow, bool]]` (`bool` = updated);
+  `main(argv: list[str] | None = None) -> int` (`argv` defaults to `sys.argv[1:]`, so tests can
+  pass `["--check"]`).
+- **`PlanRow`** is a frozen `@dataclass` with fields `file: str` (file name in `GAMES_DIR`),
+  `index: int` (1-based), `prefix: str`, `key: str`, `grading: str`, `r_full: float | None`,
+  `r_zero: float | None`. `PLAN: tuple[PlanRow, ...]` holds the three rows below.
 
 **Plan table** (1-based index):
 
@@ -205,14 +226,15 @@ under `ROOT / "sample_games"` (module-level `GAMES_DIR`, so tests can point it e
 | party | 3 | `Spot the odd one out` | `odd_face` | ACCURACY | 0.09 | 0.15 |
 | party | 9 | `No wrong answers` | `party_room` | COMPLETENESS | — | — |
 
-**Safety:** before anything else, for every row the question at that index must have `type ==
-"pin_the_spot"`, the listed grading type, and a prompt starting with the prefix; otherwise
-`PlanError` naming the row.
+**Safety:** before anything else, for every row the question at that index must exist (an index
+past the end of `questions` is a `PlanError`), have `type == "pin_the_spot"`, the listed grading
+type, and a prompt starting with the prefix; otherwise `PlanError` naming the row. All rows are
+verified before any file is read for writing, so a `PlanError` leaves every file untouched.
 
 **What it writes per row:** `config` becomes exactly `{"image_url": "data:image/png;base64,<PNG>",
 "image_width": W, "image_height": H}`. ACCURACY: `answer_data` becomes `{"target": {"x": tx,
 "y": ty}, "r_full": …, "r_zero": …}` from `render` and the table. COMPLETENESS: `answer_data`
-is left as stored (`{}`). Nothing else changes. Encoding: `image.save(buf, "PNG",
+becomes `{}` (so a row `write()` updates always passes `--check` afterwards). Nothing else changes. Encoding: `image.save(buf, "PNG",
 optimize=True)`, then base64.
 
 **`--check` differences,** in order (the first hit is the row's difference):
@@ -225,7 +247,9 @@ optimize=True)`, then base64.
    versions.
 
 **Colours:** background `#1e293b`, light `#f8fafc`, dark `#0f172a`, line grey `#94a3b8`. Pixel
-coordinates, origin top-left.
+coordinates, origin top-left; rectangles and ellipses are Pillow `(x0, y0, x1, y1)` boxes. Each
+image is drawn **in the order its bullets list the shapes** (later shapes cover earlier ones,
+e.g. the couch seat over the backrest, the bowls over the table top).
 
 **`commit_graph`**, 800 × 400:
 - Background fill.
@@ -275,21 +299,32 @@ no branch label overlaps a link, and the room reads as a room.
 
 - **`tests/integration/test_sample_games.py`**: parametrized over
   `sorted((Path(__file__).resolve().parents[2] / "sample_games").glob("*.json"))`, ids = file
-  names, so it covers both new files **and** the 12 starters (all 12 pass `QuestionCreate` today;
-  checked 2026-10-05). It uses the `conftest.py` fixtures `base_url` and `admin_token`, and
-  `from .test_host_admin_restructure import Api, Cleanup`. Per file:
-  1. A module-scoped fixture makes one course: `POST /admin/courses` with
-     `{"name": f"T6 sample games {uuid.uuid4().hex[:6]}", "semester": "Test"}` → 201. The course
-     is left behind (no course DELETE exists).
-  2. `POST /host/games/import` (admin token), `files={"file": (name, bytes, "application/json")}`,
-     `data={"course_id": str(course_id)}` → 201, body `{"game_id": int}`; add it to
-     `cleanup.games` at once.
-  3. `GET /host/games/{id}/questions` → the same `type` sequence as the file.
-  4. `GET /host/games/{id}/export` → 200; every key of the file's `game` and of every file
-     question equals the exported value (import must not alter content).
-  5. Steps 2–4 run in a `try` whose `finally` calls `Cleanup(api, admin_token).run()`.
-  A separate test asserts the glob isn't empty. If a teammate's or starter file fails, stop and
-  report it; don't edit someone else's content.
+  names, so it covers both new files **and** the 12 starters. It uses the `conftest.py` fixtures
+  `base_url` and `admin_token`, and `from .test_host_admin_restructure import Api, Cleanup`
+  (`tests/integration/` is a package; `Api(base_url)` prefixes `/api`, so paths below omit it).
+  - **Module-scoped fixture:** one course for the whole module, `POST /admin/courses` with
+    `{"name": f"T6 sample games {uuid.uuid4().hex[:6]}", "semester": "Test"}` → 201. The course
+    is left behind (no course DELETE exists).
+  - **Per file:**
+    1. `cleanup = Cleanup(api, admin_token)`, created **before** the `try`.
+    2. In the `try`: `POST /host/games/import` (admin token),
+       `files={"file": (name, bytes, "application/json")}`, `data={"course_id": str(course_id)}`
+       → 201, body `{"game_id": int}`; `cleanup.games.append(game_id)` immediately.
+    3. `GET /host/games/{id}/questions` → the same `type` sequence as the file.
+    4. `GET /host/games/{id}/export` → 200. Compare these keys only:
+       `game.title`, `game.description`, `game.max_players`, and for each question (by position)
+       `type`, `grading_type`, `prompt`, `config`, `answer_data`, `time_limit_seconds`,
+       `points_value`, each with `==`. `order_index` (replaced by array position) and any
+       `game.course_id` (discarded by import) are deliberately not compared; a file key outside
+       this list is ignored.
+    5. `finally: cleanup.run()`.
+  - **Why the starters can take the full comparison** (checked 2026-10-05): all 12 pass
+    `QuestionCreate`; none has a `game` key besides `title`/`description`/`max_players` or a
+    question key besides the seven above; and all 164 starter prompts come back unchanged from
+    `sanitize_prompt` (bleach), as do every prompt in §5.1/§5.2 (quotes, apostrophes and `…`
+    included).
+  - A separate test asserts the glob isn't empty. If a teammate's or starter file fails, stop and
+    report it; don't edit someone else's content.
 - **`tests/unit/test_pin_images.py`**: `pytest.importorskip("PIL")`; load the script with
   `importlib.util.spec_from_file_location`, **registering it in `sys.modules` before
   `exec_module`** (`@dataclass` resolves its module there). Assert:
@@ -299,7 +334,9 @@ no branch label overlaps a link, and the room reads as a room.
   - on copies in `tmp_path` (`monkeypatch.setattr(module, "GAMES_DIR", tmp_path)`): `write()`
     reports every row unchanged and leaves the bytes identical; swapping party Q3 and Q4 makes
     `check()` and `write()` raise `PlanError` with the file unchanged; a non-JSON and a missing
-    plan file each raise `PlanError`; `main()` returns 2 with and without `--check`.
+    plan file each raise `PlanError`; with the swapped copy, `main([])` and `main(["--check"])`
+    both return 2 and leave the file unchanged; after `write()` on a copy whose party Q9
+    `answer_data` was set to `{"x": 1}`, `check() == []` and Q9's `answer_data == {}`.
 
 ### 5.6 README (`README.md`, "Quiz import and export")
 
@@ -324,8 +361,8 @@ No starter file and no other script changes (S7). `simulate_players.py`'s docstr
 
 ### 5.8 Live check (manual)
 
-1. `docker compose up -d`, `npm run build`; at `http://localhost:8080/host`, import both files
-   into one course.
+1. `docker compose up -d`, `npm run build`; at `http://localhost:8080/host`, **signed in as the
+   admin** (hosts can't delete games, and step 4 deletes them), import both files into one course.
 2. For each game, create a room **in that course** and run
    `python scripts/simulate_players.py --room <CODE> --players 20 --game-json sample_games/<file>
    --base-url http://localhost:8080`. The host may be driven by hand or by a Socket.IO script; if
@@ -339,7 +376,10 @@ No starter file and no other script changes (S7). `simulate_players.py`'s docstr
 1. This spec, **before** the Goldfish test.
 2. The Goldfish revisions, as their own commit.
 3. Both game files **together with** the generator and its output (so no commit contains a
-   placeholder; `--check` exits 0 and the faithfulness check has passed).
+   placeholder). Before this commit: `--check` exits 0, the faithfulness check has passed, and
+   **each file imports with 201** via `POST /api/host/games/import` (by hand with `curl`, or the
+   §5.5 integration test run from the working tree); delete the imported games afterwards. A file
+   that fails import is never committed.
 4. Tests. 5. README. 6. The live-check record in §8.
 
 Run the full `pytest` (root `pytest.ini`) and `ruff check scripts/make_pin_images.py tests` before
@@ -373,3 +413,4 @@ the last commit (findings already present in `tests/integration/conftest.py` and
 | Date | Change |
 |---|---|
 | 2026-10-05 | First draft, from the design discussion (S1–S10), committed before the Goldfish test |
+| 2026-10-05 | Goldfish revisions. **G1** classroom Q4 was false for a root commit → "except the very first". **G2** answer shapes verified against `validate_structure`/`calculate_score` and listed in §5; commit 3 now requires a 201 import. **G3** import test compares a fixed key list (not `order_index`/`course_id`); starters' round trip and every prompt's sanitiser stability checked. **G4** `Cleanup` created before the `try`, `cleanup.run()` in `finally`. **G5** `write()` sets COMPLETENESS `answer_data` to `{}` (it disagreed with `--check`), with a test. **G6** `main(argv)` signature; exit-2 test case named. **G7** `PlanRow` fields, out-of-range index is a `PlanError`, draw order = listed order. **G8** §5.3 reason corrected. **G9** party Q4 edit-distance list completed. **G10** live check signed in as admin. S9 defaults (frown, `git switch -c`) unchanged |
