@@ -417,3 +417,34 @@ the last commit (findings already present in `tests/integration/conftest.py` and
 | 2026-10-05 | Goldfish revisions. **G1** classroom Q4 was false for a root commit → "except the very first". **G2** answer shapes verified against `validate_structure`/`calculate_score` and listed in §5; commit 3 now requires a 201 import. **G3** import test compares a fixed key list (not `order_index`/`course_id`); starters' round trip and every prompt's sanitiser stability checked. **G4** `Cleanup` created before the `try`, `cleanup.run()` in `finally`. **G5** `write()` sets COMPLETENESS `answer_data` to `{}` (it disagreed with `--check`), with a test. **G6** `main(argv)` signature; exit-2 test case named. **G7** `PlanRow` fields, out-of-range index is a `PlanError`, draw order = listed order. **G8** §5.3 reason corrected. **G9** party Q4 edit-distance list completed. **G10** live check signed in as admin. S9 defaults (frown, `git switch -c`) unchanged |
 | 2026-10-05 | Goldfish round 2. Classroom Q4 reworded to the merge-commit statement (the G1 wording was still false for extra root commits). Confirmed `simulate_players.py --game-json` answers `put_in_order` and aims `pin_the_spot` taps at the target, so §5.8 needs no script change |
 | 2026-10-05 | Implemented (§5.1–5.7). `--check` exits 0; targets equal the drawings; images checked by eye; all 14 `sample_games/*.json` pass `test_sample_games.py`. **Live check (§5.8) passed** on :8080, signed in as admin, Socket.IO-scripted host, 20 simulated players (18 joined before start): every question in both games was shown and answered; both ACCURACY pin reveals equal the file's target and radii, with taps clustered on the target (classroom Q8 11/13, party Q3 7/14 inside `r_zero`; the rest are the simulator's deliberately inaccurate players); Game Over carries a summary for every question, including each pin's distribution and reveal. Imported games deleted afterwards |
+
+## 9. Mean-review findings (2026-10-05)
+
+Adversarial review of commits `783b427`, `b07da9c` and `bd87d54` against this spec, recorded before any fix.
+
+**Must fix**
+
+| # | Finding | Evidence |
+|---|---|---|
+| M1 | `scripts/make_pin_images.py` fails the MR pipeline's `ruff format --check backend/ scripts/`. §5.9 only asked for `ruff check`, so this was missed | `ruff format --check` → "Would reformat: scripts/make_pin_images.py". (`scripts/simulate_players.py` also fails, from the T7 commit `b77f123`; same MR, fixed with it) |
+| M2 | The §5.4 pixel tolerance (mean abs difference > 2.0) can't see drawing edits that change the answer, and `write()` uses the same test, so **re-running the generator after such an edit silently keeps the old image**. "The script is the source of truth" (S6) doesn't hold for small edits | Turning the odd face into a smile (no odd face left): mean 0.215. Swapping the `main`/`feature` labels (Q8's answer becomes wrong): 0.374. A per-pixel threshold doesn't separate them from font drift either: a 1 px label shift (stand-in for FreeType drift) changes 507 pixels by > 64, the two edits 664 and 708 |
+
+**Should fix**
+
+| # | Finding |
+|---|---|
+| S1 | README "Admin interface" table still lists **Games** (import, delete) and **Questions** (export) as admin-app sections. Those routes now redirect to the host app, which contradicts the rewritten import/export section just below it |
+| S2 | `--check`'s exit-1 path and "writes nothing when there are differences" are untested; so are the out-of-range-index and wrong-grading `PlanError`s that §5.4 specifies |
+| S3 | Classroom Q6 says "(include the dot)", but `gitignore` is accepted, both explicitly and through `editDistance 1`. The hint misleads (Goldfish round 2, C3, left unaddressed) |
+
+**Nice to have**
+
+| # | Finding |
+|---|---|
+| N1 | A bad CLI argument exits 2 (argparse), the same code as a plan mismatch |
+| N2 | A decoded PNG over Pillow's decompression-bomb limit raises out of `--check` instead of being reported as a difference |
+| N3 | README per-type table omits `r_zero ≤` image diagonal and the `put_in_order` item limits (≤ 200 chars, distinct ignoring case) |
+| N4 | Root `CLAUDE.md`'s Scripts list doesn't mention `make_pin_images.py` |
+| N5 | Each run of `test_sample_games.py` leaves a "T6 sample games …" course behind (accepted in §5.5; there is no course DELETE) |
+
+Checked and found correct: all question facts and totals; every §5.5 unit-test case; the safety ordering (verify before write); `write()` only writing files with updated rows; the import test's key list and cleanup; no placeholder in any commit; the README per-type cells against `validate_structure`, `validate_put_in_order`, `validate_pin_the_spot` and `calculate_score`.
