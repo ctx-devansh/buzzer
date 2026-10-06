@@ -1,0 +1,252 @@
+{
+  "format": "buzzer/game",
+  "version": 1,
+  "game": {
+    "title": "Git & Version Control: Core Concepts Check",
+    "description": "An in-class check on branches, fetching, commits, history rewriting, merge bases and the merge-request workflow, followed by a short self-assessment. One point per question (two for the multi-select).",
+    "max_players": 150
+  },
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "Which command creates a new branch called feature and switches to it?",
+      "config": {
+        "options": [
+          "git branch -d feature",
+          "git switch -c feature",
+          "git merge feature",
+          "git fetch feature"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          1,
+          0,
+          0
+        ]
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "What does git fetch do?",
+      "config": {
+        "options": [
+          "Downloads remote commits and merges them into your current branch",
+          "Uploads your local commits to the remote",
+          "Downloads remote commits without changing your current branch",
+          "Deletes local branches that no longer exist on the remote"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          0,
+          0,
+          1,
+          0
+        ]
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "git commit sends your new commits to the remote repository.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 0,
+          "false": 1
+        }
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "A merge commit records more than one parent commit.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1,
+          "false": 0
+        }
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "Which command lists the files you have changed and the files Git is not tracking yet?",
+      "config": {
+        "maxLength": 30
+      },
+      "answer_data": {
+        "acceptedAnswers": [
+          "git status",
+          "status"
+        ],
+        "answerPoints": [
+          1,
+          1
+        ],
+        "editDistance": 1
+      },
+      "time_limit_seconds": 30,
+      "points_value": 1
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "Which file in a repository lists path patterns that Git should not track? (include the dot)",
+      "config": {
+        "maxLength": 30
+      },
+      "answer_data": {
+        "acceptedAnswers": [
+          ".gitignore",
+          "gitignore"
+        ],
+        "answerPoints": [
+          1,
+          1
+        ],
+        "editDistance": 1
+      },
+      "time_limit_seconds": 30,
+      "points_value": 1
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Select every command that rewrites existing commit history. Incorrect selections cost a point.",
+      "config": {
+        "options": [
+          "git rebase",
+          "git revert",
+          "git commit --amend",
+          "git status",
+          "git fetch"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [
+          1,
+          -1,
+          1,
+          -1,
+          -1
+        ]
+      },
+      "time_limit_seconds": 40,
+      "points_value": 2
+    },
+    {
+      "type": "pin_the_spot",
+      "grading_type": "ACCURACY",
+      "prompt": "The branches main and feature have diverged. Tap the commit that git merge-base main feature returns.",
+      "config": {
+        "image_url": "data:image/png;base64,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",
+        "image_width": 800,
+        "image_height": 400
+      },
+      "answer_data": {
+        "target": {
+          "x": 0.275,
+          "y": 0.65
+        },
+        "r_full": 0.04,
+        "r_zero": 0.12
+      },
+      "time_limit_seconds": 40,
+      "points_value": 1
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "ACCURACY",
+      "prompt": "Put the steps of a merge-request workflow in order, first step first.",
+      "config": {
+        "items": [
+          "Open a merge request",
+          "Commit your changes",
+          "Merge into main",
+          "Create a branch",
+          "Get review approval",
+          "Push the branch"
+        ]
+      },
+      "answer_data": {
+        "correct_order": [
+          3,
+          1,
+          5,
+          0,
+          4,
+          2
+        ]
+      },
+      "time_limit_seconds": 60,
+      "points_value": 1
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "COMPLETENESS",
+      "prompt": "How confident are you resolving a merge conflict on your own?",
+      "config": {
+        "options": [
+          "Very confident",
+          "Somewhat confident",
+          "Not yet confident",
+          "I have never had one"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 25,
+      "points_value": 1
+    },
+    {
+      "type": "true_false",
+      "grading_type": "COMPLETENESS",
+      "prompt": "I had used git rebase before this course.",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 1
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Which Git tools have you used? Select all that apply.",
+      "config": {
+        "options": [
+          "The command line",
+          "VS Code Source Control",
+          "GitHub Desktop",
+          "The GitLab web interface",
+          "Another Git GUI"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 30,
+      "points_value": 1
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "COMPLETENESS",
+      "prompt": "In a word or two, which Git topic should we review next class?",
+      "config": {
+        "maxLength": 40
+      },
+      "answer_data": {},
+      "time_limit_seconds": 30,
+      "points_value": 1
+    }
+  ]
+}
