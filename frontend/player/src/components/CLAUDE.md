@@ -21,7 +21,9 @@ capture and `touch-action: none`: a tap that starts in the letterbox is ignored,
 image clamps to its edge, nothing before the image loads. Keyboard (`tabIndex=0`): the first
 arrow places the pin at the centre, arrows nudge 0.01 (Shift 0.05), Enter locks in. Read-only
 with `reveal` (target and circles) on the results screen. `role="application"` while it takes
-input, `role="img"` read-only. `--pin-*` colours; `data-loaded`.
+input, `role="img"` read-only. `--pin-*` colours; `data-loaded`. Callers pass
+`pinImageSrc(config)` (`../lib/pinTheSpot.ts`), so a library `image_id` canvas (T8) loads from
+`/api/images/{id}`.
 
 **How it fits in.** `../pages/JoinPage.tsx` and `NamePage.tsx` use `Button`/`Card`/`Input`.
 `../pages/game/QuestionPage.tsx` uses `TimerBar` (with `paused={questionLocked}`).

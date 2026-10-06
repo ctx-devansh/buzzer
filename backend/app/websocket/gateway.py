@@ -106,6 +106,7 @@ def _question_payload(q: Question, number: int, total: int) -> dict:
         "type": q.type,
         "gradingType": q.grading_type,
         "prompt": q.prompt,
+        "promptImageId": q.prompt_image_id,
         "config": q.config,
         "timeLimitSeconds": q.time_limit_seconds,
         "pointsValue": q.points_value,

@@ -31,8 +31,10 @@ course image library (T8 adds `image_id` later, section 10).
 ## 2. Decisions made in the design discussion (2026-10-05)
 
 - **D1. Image source = `config.image_url`.** An `https://` URL (G10: `http://` rejected) or a
-  `data:image/{png,jpeg,gif,webp};base64,` URL, plus `image_width`/`image_height`. T8 is not built on
-  this branch; when it lands it adds `image_id` as an *alternative*, without changing scoring.
+  `data:image/{png,jpeg,gif,webp};base64,` URL, plus `image_width`/`image_height`. T8 has since
+  added `image_id`, a course-library image, as an *alternative* (exactly one of the two; the
+  server sets the size from the image), without changing scoring (`docs/design-image-support.md`
+  §3.3).
 - **D2. Partial credit rounds half-up to 2 decimal places** (as `put_in_order` does), not whole points.
 - **D3. A played question's image is frozen (409)**; target and radii stay editable with no rescoring.
 - **D4. Marker = a map pin whose tip is the point**, head above it; drag to fine-tune. No magnifier.
@@ -102,6 +104,11 @@ Added after the second Goldfish pass (section 16, G18–G28):
    size; use a PNG, JPEG, GIF or WebP" and the previous image is kept.
    **Picking a new image clears the target** (and clamps radii); ACCURACY can't save until a new
    target is placed.
+   *Since T8* (`docs/design-image-support.md` §5.2): in a game attached to a course, "Choose file"
+   uploads the file to the course library (downscaled by `prepareUpload`) and stores `image_id`,
+   and "Choose from library" picks an existing library image. The data: URL path above is kept
+   for unattached games, and an existing `image_url` question is still resent unchanged.
+   Re-picking the library image that is already the canvas keeps the target.
 2. Click the image to place the target; click/drag to move.
 3. Two sliders, both circles previewed live. Defaults r_full 0.05, r_zero 0.20. r_full 0.005–0.5;
    r_zero 0.02–floor₂(diagonal), step 0.005. Moving one pushes the other so r_full < r_zero (gap ≥ 0.01). A new
@@ -261,8 +268,9 @@ keeps the report self-contained; an `https` URL is referenced and needs the netw
 
 ## 10. Dependencies
 
-- **T8 (later):** adds `config.image_id` as an alternative to `image_url` (server fills width/height),
-  a picker in the editor, and a 409 on replacing a played canvas. Scoring is unaffected.
+- **T8 (done, `docs/design-image-support.md`):** adds `config.image_id` as an alternative to
+  `image_url` (server fills width/height), a library picker in the editor, and a 409 on replacing
+  a played canvas. Scoring is unaffected.
 - **T4:** done; editor is `QuestionEditorPage`.
 
 ## 11. Files touched
@@ -408,3 +416,4 @@ Second Goldfish pass, 2026-10-05 (fresh session). Comprehension matched; remaini
 | 2026-10-05 | Second Goldfish revision: D9, gaps G18–G28 |
 | 2026-10-05 | Implemented (steps 1–10). Step 9's live round was played with the first T6 sample games (recorded in commit `331b366`; those games were later reverted for the T6 redesign): 20 simulated players per game through :8080, every reveal's target and radii equal to the file, taps clustered around each target |
 | 2026-10-05 | `mean-review` follow-ups, before the code: editor refuses a 0 × 0 image (§3 author flow); player canvas role is `application` while interactive (§8) |
+| 2026-10-06 | T8 landed: `config.image_id` (a course-library image) now exists as an alternative to `image_url` (D1; `docs/design-image-support.md` §3.3). Author flow (§3) and the T8 bullet (§10) updated. A played canvas is still frozen, now also against a library replace (409) |

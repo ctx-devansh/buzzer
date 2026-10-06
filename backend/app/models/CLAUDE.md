@@ -14,13 +14,19 @@ class here.
 - `game.py` — `Game` (a quiz), `Question` (belongs to a game; `type` +
   `grading_type` (`ACCURACY`/`COMPLETENESS`) + freeform `config`/`answer_data` JSON columns hold
   all per-type-specific shape — validated at the Pydantic layer in `../schemas/admin.py`, not
-  here), `UserGameAccess` (which users may host a given game, composite PK). `Game.course_id` is
+  here), `UserGameAccess` (which users may host a given game, composite PK).
+  `Question.prompt_image_id` (T8) is a nullable FK to `images.id` with `ON DELETE RESTRICT`. `Game.course_id` is
   a nullable FK to `courses` (NULL = "unattached", ADMIN-only) with a `course` relationship
   (`lazy="selectin"`) and a `course_name` property that `GameResponse`/`MyGameItem` read.
 - `session.py` — `GameSession` (one played instance of a `Game` in a `Course`, keyed by
   `room_code`; `status` is `LOBBY`/`IN_PROGRESS`/`COMPLETED`/`ABANDONED`), `SessionScore` (one row
   per player-question answer: points, correctness, timing, raw `answer_data`).
-- `__init__.py` — empty; models are imported directly from their modules, not re-exported here.
+- `image.py` — `Image` (T8 course image library): UUID `id` (also the public handle in
+  `/api/images/{id}`), `course_id`, `uploaded_by` (`users.id`, `SET NULL`), measured
+  `width`/`height`, `byte_size`, `sha256` of the stored bytes (non-unique index with
+  `course_id`), and `data` (`MEDIUMBLOB`, **`deferred`**). Option and canvas references live
+  in `Question.config` and have no FK; see `../services/image_service.py`.
+- `__init__.py` — imports every model in FK order (for Alembic); code imports from the modules.
 
 **How it fits in.** This is the persistent (MySQL) half of game state; `../services/state_service.py`
 holds the parallel *ephemeral* (Redis) representation used during an active game for low-latency
@@ -38,6 +44,8 @@ from wire format (e.g. `Question.answer_data` is never serialized to players).
   shape varies by `Question.type` and is enforced only by Pydantic validators in
   `../schemas/admin.py::QuestionCreate.validate_structure` and, for `put_in_order` updates, by
   `../services/authoring_service.py::update_question` — not by the DB or ORM layer.
+- `Image.data` is deferred so listing never loads the bytes. A lazy load of it on an async
+  session raises `MissingGreenlet`: every reader selects the column (or `undefer`s it).
 - Several FKs are `NOT NULL` without `ON DELETE CASCADE` (e.g. `game_sessions.game_id`,
   `session_scores.user_id`) — deleting a `Game` or `User` requires manually deleting/reassigning
   dependent rows first (see the gotcha in `../routers/CLAUDE.md` re: `admin.delete_game`/

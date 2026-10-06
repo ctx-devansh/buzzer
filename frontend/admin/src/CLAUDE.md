@@ -15,7 +15,7 @@ which the "Host tools" sidebar group links to.
   (`HOST_APP_URL`, `PLAYER_APP_URL`) and `cn`. See `lib/CLAUDE.md`.
 - `App.tsx` — `RequireAdmin` (token-presence only) → `AdminLayout`. Sidebar group
   **Administration** (Users, Courses, Guests) above a muted **Host tools** group (Sessions, then
-  outbound links: Games ↗, Rosters ↗, Host a game ↗, Join as player ↗) and Logout. The old
+  outbound links: Games ↗, Rosters & images ↗ (the host Courses page), Host a game ↗, Join as player ↗) and Logout. The old
   `/games`, `/games/:gameId/questions`, `/courses/:courseId/roster` routes are
   `ExternalRedirect`s to the same resource in the host app. Unknown routes → `/users`.
 - `main.tsx`, `index.css` — React root and Tailwind entry.

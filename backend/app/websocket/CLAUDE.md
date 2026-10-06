@@ -41,6 +41,11 @@ top of those services, mirroring how `../routers/` consumes the same services ov
 - `_question_timer_task`'s cleanup only pops `_timer_tasks[session_id]` if it's still *this*
   task (`is asyncio.current_task()`) — a blind `.pop()` would race a newer replacement timer.
   Preserve that check if touching timer cancellation logic.
+- Every question emit (`new_question` on advance, the re-sent `new_question` for a late or
+  reconnecting player, the host's `sync_state.currentQuestion`) goes through
+  `_question_payload`, which carries `promptImageId` (T8); `config` carries option image ids
+  and a Pin the Spot `image_id` as stored. A new emit site that builds its own dict would drop
+  them. No image bytes travel over Socket.IO for library images.
 - `_answer_reveal` here duplicates `../services/report_service.py::_answer_reveal` and the two
   summary reveals in `../services/game_service.py` — see the gotcha in `../services/CLAUDE.md`;
   keep all four in sync for any new question type.
