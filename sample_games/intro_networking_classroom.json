@@ -92,9 +92,15 @@
         "acceptedAnswers": [
           "32",
           "thirty-two",
-          "thirty two"
+          "thirty two",
+          "32 bits",
+          "32-bit",
+          "32 bit"
         ],
         "answerPoints": [
+          1,
+          1,
+          1,
           1,
           1,
           1
@@ -113,12 +119,14 @@
       },
       "answer_data": {
         "acceptedAnswers": [
-          "DHCP"
+          "DHCP",
+          "Dynamic Host Configuration Protocol"
         ],
         "answerPoints": [
+          1,
           1
         ],
-        "editDistance": 0
+        "editDistance": 1
       },
       "time_limit_seconds": 25,
       "points_value": 1
