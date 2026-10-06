@@ -468,7 +468,9 @@ async def upload_image(
 ) -> dict:
     img = new_image_row(course_id, user_id, filename, await _process_or_raise(raw))
     db.add(img)
-    await db.flush()
+    # Commit here, not in get_db (which commits after the response is sent): the
+    # library page reloads the list as soon as this returns (mean review R10).
+    await db.commit()
     await db.refresh(img, ["created_at", "updated_at", "uploader"])
     return image_response(img, [])
 
@@ -532,7 +534,9 @@ async def replace_image(
                 q.answer_data = answer_data
                 clamped.append(q.id)
 
-    await db.flush()
+    # Commit before responding: the library page reloads right after the 200, and
+    # get_db would commit only after the response (mean review R10).
+    await db.commit()
     await db.refresh(img, ["updated_at", "uploader"])
     return {
         **image_response(img, uses),
@@ -551,10 +555,11 @@ async def delete_image(db: AsyncSession, course_id: int, image_id: str) -> None:
             + describe_uses(uses)
         )
     await db.delete(img)
-    # Flush here, not in get_db (which commits after the 204): a prompt reference
-    # added since the scan is caught by the FK and must be a 409, not a silent failure.
+    # Commit here, not in get_db (which commits after the 204): a prompt reference
+    # added since the scan is caught by the FK and must be a 409, not a silent
+    # failure, and the page's reload must not still see the row (mean review R10).
     try:
-        await db.flush()
+        await db.commit()
     except IntegrityError as exc:
         raise ConflictError(
             "This image was just used by a question. Reload the library to see where."
