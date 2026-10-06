@@ -406,5 +406,5 @@ Second Goldfish pass, 2026-10-05 (fresh session). Comprehension matched; remaini
 | 2026-10-05 | First draft, from the user's draft + design discussion (D1–D4, codebase corrections) |
 | 2026-10-05 | Goldfish revision: D5–D8, gaps G1–G17 (section 16) |
 | 2026-10-05 | Second Goldfish revision: D9, gaps G18–G28 |
-| 2026-10-05 | Implemented (steps 1–10). Step 9's live round was played during T6 (`docs/design-t6-sample-games.md` §8): 20 simulated players per game through :8080, every reveal's target and radii equal to the file, taps clustered around each target |
+| 2026-10-05 | Implemented (steps 1–10). Step 9's live round was played with the first T6 sample games (recorded in commit `331b366`; those games were later reverted for the T6 redesign): 20 simulated players per game through :8080, every reveal's target and radii equal to the file, taps clustered around each target |
 | 2026-10-05 | `mean-review` follow-ups, before the code: editor refuses a 0 × 0 image (§3 author flow); player canvas role is `application` while interactive (§8) |

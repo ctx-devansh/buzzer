@@ -37,7 +37,7 @@ Usage:
 
     # Pass the game JSON so players give realistic per-question answers
     python scripts/simulate_players.py --room ABCDE1 --players 30 \\
-        --game-json sample_games/intro_networking_classroom.json
+        --game-json sample_games/cs_first_day.json
 
     # Custom FITB word pool — repeat a word to weight it higher in the cloud
     python scripts/simulate_players.py --room ABCDE1 --players 25 \\
