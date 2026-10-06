@@ -279,13 +279,18 @@ class SimPlayer:
                 # Taps are fractions of the image; radii are fractions of its width, so
                 # the vertical scatter is divided by aspect (height / width).
                 config = q.get("config", {})
-                aspect = (config.get("image_height") or 1) / (config.get("image_width") or 1)
+                aspect = (config.get("image_height") or 1) / (
+                    config.get("image_width") or 1
+                )
                 spread = key.get("r_full", 0.05)
                 x = random.gauss(target["x"], spread)
                 y = random.gauss(target["y"], spread / aspect)
             else:
                 x, y = random.random(), random.random()
-            return {"x": round(min(1.0, max(0.0, x)), 4), "y": round(min(1.0, max(0.0, y)), 4)}
+            return {
+                "x": round(min(1.0, max(0.0, x)), 4),
+                "y": round(min(1.0, max(0.0, y)), 4),
+            }
 
         return None  # unknown type
 
