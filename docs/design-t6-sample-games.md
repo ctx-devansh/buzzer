@@ -122,7 +122,7 @@ corrected.
 | 3 | TF | ACC | 20 | 1 | `git commit sends your new commits to the remote repository.` | `{}` | `answer_points {"true": 0, "false": 1}` |
 | 4 | TF | ACC | 20 | 1 | `A merge commit records more than one parent commit.` | `{}` | `answer_points {"true": 1, "false": 0}` |
 | 5 | FITB | ACC | 30 | 1 | `Which command lists the files you have changed and the files Git is not tracking yet?` | `maxLength 30` | `acceptedAnswers ["git status", "status"]`, `answerPoints [1, 1]`, `editDistance 1` |
-| 6 | FITB | ACC | 30 | 1 | `Which file in a repository lists path patterns that Git should not track? (include the dot)` | `maxLength 30` | `acceptedAnswers [".gitignore", "gitignore"]`, `answerPoints [1, 1]`, `editDistance 1` |
+| 6 | FITB | ACC | 30 | 1 | `Which file in a repository lists path patterns that Git should not track?` | `maxLength 30` | `acceptedAnswers [".gitignore", "gitignore"]`, `answerPoints [1, 1]`, `editDistance 1` |
 | 7 | MS | ACC | 40 | 2 | `Select every command that rewrites existing commit history. Incorrect selections cost a point.` | options `["git rebase", "git revert", "git commit --amend", "git status", "git fetch"]` | `answer_points [1, -1, 1, -1, -1]` |
 | 8 | Pin | ACC | 40 | 1 | `The branches main and feature have diverged. Tap the commit that git merge-base main feature returns.` | generator (`commit_graph`) | generator: target (0.275, 0.65), `r_full 0.04`, `r_zero 0.12` |
 | 9 | PIO | ACC | 60 | 1 | `Put the steps of a merge-request workflow in order, first step first.` | items `["Open a merge request", "Commit your changes", "Merge into main", "Create a branch", "Get review approval", "Push the branch"]` | `correct_order [3, 1, 5, 0, 4, 2]` |
@@ -243,9 +243,12 @@ optimize=True)`, then base64.
    `data:image/png;base64,` URL that decodes to a PNG.
 2. The stored width/height or the decoded PNG's size differs from the render's.
 3. ACCURACY: `answer_data` != the expected dict (exact `==`). COMPLETENESS: `answer_data != {}`.
-4. Pixels: decoded PNG and render, both `.convert("RGB")`, differ by a mean absolute difference
-   over all channels > **2.0** (0–255). This tolerates antialiasing changes between Pillow
-   versions.
+4. Pixels: decoded PNG and render, both `.convert("RGB")`, differ in **any** pixel
+   (`ImageChops.difference(...).getbbox() is not None`). Exact, because no tolerance separates
+   font drift from answer-changing edits (§9 M2). The script records the Pillow version the
+   committed images were generated with (`GENERATED_WITH_PILLOW`); when the running version
+   differs, the reason adds "generated with Pillow X, running Y: re-run the generator and update
+   GENERATED_WITH_PILLOW". `check(pixels: bool = True)`: `pixels=False` skips difference 4.
 
 **Colours:** background `#1e293b`, light `#f8fafc`, dark `#0f172a`, line grey `#94a3b8`. Pixel
 coordinates, origin top-left; rectangles and ellipses are Pillow `(x0, y0, x1, y1)` boxes. Each
@@ -329,7 +332,10 @@ no branch label overlaps a link, and the room reads as a room.
 - **`tests/unit/test_pin_images.py`**: `pytest.importorskip("PIL")`; load the script with
   `importlib.util.spec_from_file_location`, **registering it in `sys.modules` before
   `exec_module`** (`@dataclass` resolves its module there). Assert:
-  - `check() == []`;
+  - `check(pixels=False) == []` always; `check() == []` only when `PIL.__version__ ==
+    GENERATED_WITH_PILLOW`, otherwise skipped with that reason;
+  - an edit that keeps the target (the odd face drawn as a smile) is reported by `check()` as a
+    pixel difference, and `write()` updates that row;
   - `render(...)` sizes and targets: `commit_graph` (800, 400), (0.275, 0.65); `odd_face`
     (800, 600), (0.625, 0.5); `party_room` (800, 500), `None`;
   - on copies in `tmp_path` (`monkeypatch.setattr(module, "GAMES_DIR", tmp_path)`): `write()`
@@ -383,8 +389,9 @@ No starter file and no other script changes (S7). `simulate_players.py`'s docstr
    that fails import is never committed.
 4. Tests. 5. README. 6. The live-check record in §8.
 
-Run the full `pytest` (root `pytest.ini`) and `ruff check scripts/make_pin_images.py tests` before
-the last commit (findings already present in `tests/integration/conftest.py` and
+Run the full `pytest` (root `pytest.ini`), `ruff check scripts/make_pin_images.py tests`, and the
+MR pipeline's own lint (`ruff check backend/ scripts/` and `ruff format --check backend/ scripts/`)
+before the last commit (findings already present in `tests/integration/conftest.py` and
 `tests/integration/scenarios/edge_cases.py` are out of scope).
 
 ## 6. Out of scope
@@ -403,9 +410,10 @@ the last commit (findings already present in `tests/integration/conftest.py` and
   exit 2 without writing, and the table needs a manual update.
 - **Pillow isn't a declared dependency.** The unit test skips without it, so an environment
   without Pillow silently doesn't check the images.
-- **Font rendering differs between Pillow/FreeType versions.** Only `commit_graph` has text, and
-  it's a small part of the image, so the 2.0 tolerance should absorb it; if not, re-run the
-  generator rather than raising the tolerance.
+- **Font rendering differs between Pillow/FreeType versions.** With exact pixel comparison, a
+  different Pillow makes `--check` report `commit_graph` (the only image with text). The fix is
+  to re-run the generator and update `GENERATED_WITH_PILLOW`; the unit test skips its pixel check
+  on a different version rather than failing.
 - **The import test also runs the starter files** (and later, teammates' files). A failure in
   someone else's file blocks the suite; the rule is to stop and ask.
 
@@ -417,6 +425,7 @@ the last commit (findings already present in `tests/integration/conftest.py` and
 | 2026-10-05 | Goldfish revisions. **G1** classroom Q4 was false for a root commit → "except the very first". **G2** answer shapes verified against `validate_structure`/`calculate_score` and listed in §5; commit 3 now requires a 201 import. **G3** import test compares a fixed key list (not `order_index`/`course_id`); starters' round trip and every prompt's sanitiser stability checked. **G4** `Cleanup` created before the `try`, `cleanup.run()` in `finally`. **G5** `write()` sets COMPLETENESS `answer_data` to `{}` (it disagreed with `--check`), with a test. **G6** `main(argv)` signature; exit-2 test case named. **G7** `PlanRow` fields, out-of-range index is a `PlanError`, draw order = listed order. **G8** §5.3 reason corrected. **G9** party Q4 edit-distance list completed. **G10** live check signed in as admin. S9 defaults (frown, `git switch -c`) unchanged |
 | 2026-10-05 | Goldfish round 2. Classroom Q4 reworded to the merge-commit statement (the G1 wording was still false for extra root commits). Confirmed `simulate_players.py --game-json` answers `put_in_order` and aims `pin_the_spot` taps at the target, so §5.8 needs no script change |
 | 2026-10-05 | Implemented (§5.1–5.7). `--check` exits 0; targets equal the drawings; images checked by eye; all 14 `sample_games/*.json` pass `test_sample_games.py`. **Live check (§5.8) passed** on :8080, signed in as admin, Socket.IO-scripted host, 20 simulated players (18 joined before start): every question in both games was shown and answered; both ACCURACY pin reveals equal the file's target and radii, with taps clustered on the target (classroom Q8 11/13, party Q3 7/14 inside `r_zero`; the rest are the simulator's deliberately inaccurate players); Game Over carries a summary for every question, including each pin's distribution and reveal. Imported games deleted afterwards |
+| 2026-10-05 | Mean-review fixes (§9): exact pixel comparison with a Pillow version guard (§5.4, §5.5, §7); the MR pipeline's lint added to §5.9; classroom Q6 hint removed (S3) |
 
 ## 9. Mean-review findings (2026-10-05)
 
