@@ -5,7 +5,7 @@
 | Task | T6 (quiz/game JSON files), Satvik's two games |
 | Owner | Satvik Utkoori (utkoori) |
 | Branch | `feature/t7-redo` (both T7 types, `put_in_order` and `pin_the_spot`, are on this branch) |
-| Status | Revised after the Goldfish test (holes G1–G10, §8). No T6 code yet |
+| Status | Revised after two Goldfish rounds (§8). Implementation in progress |
 | Related | [instructions.md](../instructions.md) T6, [design-pin-the-spot.md](design-pin-the-spot.md), [design-put-in-order.md](design-put-in-order.md) |
 
 This replaces an earlier T6 design at this path, whose implementation was reverted in `8c26fb3`
@@ -120,7 +120,7 @@ corrected.
 | 1 | MC | ACC | 25 | 1 | `Which command creates a new branch called feature and switches to it?` | options `["git branch -d feature", "git switch -c feature", "git merge feature", "git fetch feature"]` | `answer_points [0, 1, 0, 0]` |
 | 2 | MC | ACC | 25 | 1 | `What does git fetch do?` | options `["Downloads remote commits and merges them into your current branch", "Uploads your local commits to the remote", "Downloads remote commits without changing your current branch", "Deletes local branches that no longer exist on the remote"]` | `answer_points [0, 0, 1, 0]` |
 | 3 | TF | ACC | 20 | 1 | `git commit sends your new commits to the remote repository.` | `{}` | `answer_points {"true": 0, "false": 1}` |
-| 4 | TF | ACC | 20 | 1 | `Every Git commit except the very first records the id (hash) of its parent commit or commits.` | `{}` | `answer_points {"true": 1, "false": 0}` |
+| 4 | TF | ACC | 20 | 1 | `A merge commit records more than one parent commit.` | `{}` | `answer_points {"true": 1, "false": 0}` |
 | 5 | FITB | ACC | 30 | 1 | `Which command lists the files you have changed and the files Git is not tracking yet?` | `maxLength 30` | `acceptedAnswers ["git status", "status"]`, `answerPoints [1, 1]`, `editDistance 1` |
 | 6 | FITB | ACC | 30 | 1 | `Which file in a repository lists path patterns that Git should not track? (include the dot)` | `maxLength 30` | `acceptedAnswers [".gitignore", "gitignore"]`, `answerPoints [1, 1]`, `editDistance 1` |
 | 7 | MS | ACC | 40 | 2 | `Select every command that rewrites existing commit history. Incorrect selections cost a point.` | options `["git rebase", "git revert", "git commit --amend", "git status", "git fetch"]` | `answer_points [1, -1, 1, -1, -1]` |
@@ -133,8 +133,9 @@ corrected.
 
 Checks (all by hand during design, 2026-10-05):
 - **Facts:** `git switch -c` creates and switches (Git ≥ 2.23); `git fetch` updates
-  remote-tracking refs only; `git commit` is local; every commit except a root commit stores its
-  parent hashes (a root commit has none, hence "except the very first" in Q4);
+  remote-tracking refs only; `git commit` is local; a merge commit stores two or more parent hashes (Q4; the
+  earlier "every commit except the very first" wording was false, since orphan branches and
+  unrelated-history merges create further root commits);
   `git rebase` and `git commit --amend` replace commits, `git revert` adds a new one.
 - **Q5/Q6 edit distance 1** doesn't reach a wrong command: `git stash` and `git stage` are ≥ 2
   from `git status`.
@@ -414,3 +415,4 @@ the last commit (findings already present in `tests/integration/conftest.py` and
 |---|---|
 | 2026-10-05 | First draft, from the design discussion (S1–S10), committed before the Goldfish test |
 | 2026-10-05 | Goldfish revisions. **G1** classroom Q4 was false for a root commit → "except the very first". **G2** answer shapes verified against `validate_structure`/`calculate_score` and listed in §5; commit 3 now requires a 201 import. **G3** import test compares a fixed key list (not `order_index`/`course_id`); starters' round trip and every prompt's sanitiser stability checked. **G4** `Cleanup` created before the `try`, `cleanup.run()` in `finally`. **G5** `write()` sets COMPLETENESS `answer_data` to `{}` (it disagreed with `--check`), with a test. **G6** `main(argv)` signature; exit-2 test case named. **G7** `PlanRow` fields, out-of-range index is a `PlanError`, draw order = listed order. **G8** §5.3 reason corrected. **G9** party Q4 edit-distance list completed. **G10** live check signed in as admin. S9 defaults (frown, `git switch -c`) unchanged |
+| 2026-10-05 | Goldfish round 2. Classroom Q4 reworded to the merge-commit statement (the G1 wording was still false for extra root commits). Confirmed `simulate_players.py --game-json` answers `put_in_order` and aims `pin_the_spot` taps at the target, so §5.8 needs no script change |
