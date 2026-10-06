@@ -294,6 +294,54 @@ async def where_used(db: AsyncSession, course_id: int, image_id: str) -> list[di
     return (await usage_map(db, course_id)).get(image_id, [])
 
 
+async def validate_question_images(
+    db: AsyncSession,
+    game: Game,
+    prompt_image_id: str | None,
+    q_type: str,
+    config: dict | None,
+) -> dict:
+    """
+    The ownership rule (design 3.4): every image a question refers to exists and
+    belongs to the question's game's course. Raises a 422 naming the field. Returns
+    the config to store, always a new dict: for pin_the_spot with image_id,
+    image_width/image_height are overwritten with the image row's measured size.
+    Call after validate_image_keys.
+    """
+    if not isinstance(config, dict):
+        # Not ours to judge (legacy or malformed shapes keep their old update path);
+        # it can hold no image reference, so only a prompt image is checked below.
+        config_out: object = config
+        config = {}
+    else:
+        config = config_out = dict(config)
+    refs = question_image_refs(q_type, prompt_image_id, config)
+    if not refs:
+        return config_out
+    if game.course_id is None:
+        raise ValidationFailedError(
+            f"{refs[0][0]}: images can only be used in a game attached to a course"
+        )
+    rows = {
+        row.id: row
+        for row in (
+            await db.execute(
+                select(Image.id, Image.course_id, Image.width, Image.height).where(
+                    Image.id.in_({image_id for _, image_id, _ in refs})
+                )
+            )
+        ).all()
+    }
+    for field, image_id, _role in refs:
+        row = rows.get(image_id)
+        if row is None or row.course_id != game.course_id:
+            raise ValidationFailedError(f"{field}: image not found in this course")
+    if q_type == "pin_the_spot" and "image_id" in config:
+        row = rows[config["image_id"]]
+        config["image_width"], config["image_height"] = row.width, row.height
+    return config_out
+
+
 def _is_played_canvas(use: dict) -> bool:
     return "canvas" in use["roles"] and use["answer_count"] > 0
 

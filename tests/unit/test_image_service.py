@@ -15,7 +15,7 @@ import math
 import struct
 
 import pytest
-from app.schemas.admin import validate_pin_the_spot
+from app.schemas.admin import validate_image_keys, validate_pin_the_spot
 from app.services.image_service import (
     MAX_UPLOAD_BYTES,
     ImageRejected,
@@ -273,3 +273,80 @@ def test_clamp_leaves_fitting_radii_alone():
 
 def test_clamp_without_target_is_untouched():
     assert clamp_radii({}, 400, 100) == {}
+
+
+# ---------------------------------------------------------------------------
+# validate_image_keys (design 3.2, 3.3)
+# ---------------------------------------------------------------------------
+
+IMG = "0b9b6a52-3f9e-4c1a-9a43-2f1d5e6c7b80"
+NON_CANONICAL = {
+    "upper_case": IMG.upper(),
+    "no_hyphens": IMG.replace("-", ""),
+    "braces": "{" + IMG + "}",
+    "not_a_uuid": "not-a-uuid",
+}
+TWO = {"options": ["a", "b"]}
+
+
+@pytest.mark.parametrize(
+    "q_type, prompt_image_id, config",
+    [
+        ("true_false", None, {"option_image_ids": [IMG, None]}),
+        ("fill_in_the_blank", None, {"option_image_ids": [IMG]}),
+        ("put_in_order", None, {"items": ["a", "b", "c"], "option_image_ids": [IMG]}),
+        ("pin_the_spot", None, {"option_image_ids": [IMG]}),
+        ("multiple_choice", None, {**TWO, "image_id": IMG}),
+        ("pin_the_spot", IMG, {"image_id": IMG}),
+        ("multiple_choice", None, {**TWO, "option_image_ids": [IMG]}),
+        ("multiple_choice", None, {**TWO, "option_image_ids": "x"}),
+    ],
+    ids=[
+        "option_ids_on_tf",
+        "option_ids_on_fitb",
+        "option_ids_on_pio",
+        "option_ids_on_pin",
+        "image_id_on_mc",
+        "prompt_image_on_pin",
+        "option_ids_wrong_length",
+        "option_ids_not_a_list",
+    ],
+)
+def test_validate_image_keys_rejects(q_type, prompt_image_id, config):
+    with pytest.raises(ValueError):
+        validate_image_keys(q_type, prompt_image_id, config)
+
+
+@pytest.mark.parametrize("bad", sorted(NON_CANONICAL))
+def test_non_canonical_ids_rejected_in_every_position(bad):
+    bad_id = NON_CANONICAL[bad]
+    with pytest.raises(ValueError, match="prompt_image_id"):
+        validate_image_keys("multiple_choice", bad_id, TWO)
+    with pytest.raises(ValueError, match=r"option_image_ids\[1\]"):
+        validate_image_keys(
+            "multiple_choice", None, {**TWO, "option_image_ids": [IMG, bad_id]}
+        )
+    config = {"image_id": bad_id, "image_width": 10, "image_height": 10}
+    with pytest.raises(ValueError, match="image_id"):
+        validate_pin_the_spot("COMPLETENESS", config, {})
+
+
+@pytest.mark.parametrize(
+    "q_type, prompt_image_id, config",
+    [
+        ("multiple_choice", IMG, {**TWO, "option_image_ids": [IMG, None]}),
+        ("multi_select", None, {**TWO, "option_image_ids": [None, None]}),
+        ("true_false", IMG, {}),
+        ("pin_the_spot", None, {"image_id": IMG}),
+    ],
+)
+def test_validate_image_keys_accepts(q_type, prompt_image_id, config):
+    validate_image_keys(q_type, prompt_image_id, config)
+
+
+def test_pin_accepts_image_id_and_rejects_both_sources():
+    sized = {"image_width": 10, "image_height": 10}
+    validate_pin_the_spot("COMPLETENESS", {"image_id": IMG, **sized}, {})
+    both = {"image_id": IMG, "image_url": PIN_URL, **sized}
+    with pytest.raises(ValueError, match="exactly"):
+        validate_pin_the_spot("COMPLETENESS", both, {})

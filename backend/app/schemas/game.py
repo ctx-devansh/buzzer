@@ -14,6 +14,7 @@ class QuestionPublic(BaseModel):
     id: int
     type: str
     prompt: str
+    prompt_image_id: str | None = None
     config: dict
     time_limit_seconds: int
     points_value: float

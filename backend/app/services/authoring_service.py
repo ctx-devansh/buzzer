@@ -24,9 +24,11 @@ from ..schemas.admin import (
     GameCreate,
     QuestionCreate,
     QuestionUpdate,
+    validate_image_keys,
     validate_pin_the_spot,
     validate_put_in_order,
 )
+from . import image_service
 
 logger = structlog.get_logger()
 
@@ -74,12 +76,24 @@ async def create_question(
     else:
         order_index = body.order_index
 
+    config = await _checked_image_config(
+        db, game_id, body.prompt_image_id, body.type, body.config
+    )
+    if body.type == "pin_the_spot" and "image_id" in config:
+        # QuestionCreate checked the radii against the client's size; the server has
+        # just replaced it with the image's, so check again (design 4.1).
+        try:
+            validate_pin_the_spot(body.grading_type, config, body.answer_data)
+        except ValueError as exc:
+            raise ValidationFailedError(str(exc)) from exc
+
     question = Question(
         game_id=game_id,
         type=body.type,
         grading_type=body.grading_type,
         prompt=sanitize_prompt(body.prompt),
-        config=body.config,
+        prompt_image_id=body.prompt_image_id,
+        config=config,
         answer_data=body.answer_data,
         time_limit_seconds=body.time_limit_seconds,
         points_value=body.points_value,
@@ -90,6 +104,22 @@ async def create_question(
     await db.refresh(question)
     await db.commit()
     return question
+
+
+async def _checked_image_config(
+    db: AsyncSession,
+    game_id: int,
+    prompt_image_id: str | None,
+    q_type: str,
+    config: dict | None,
+) -> dict:
+    """image_service.validate_question_images for a game id: the config to store."""
+    game = await db.get(Game, game_id)
+    if game is None:
+        raise NotFoundError(f"Game {game_id} not found")
+    return await image_service.validate_question_images(
+        db, game, prompt_image_id, q_type, config
+    )
 
 
 async def _get_question_in_game(
@@ -123,6 +153,12 @@ async def update_question(
     at play time; then the merged question must pass validate_put_in_order (422).
     pin_the_spot follows the same shape: a played question's config (the image) and type
     are frozen (409), then validate_pin_the_spot must pass (422).
+
+    Image references (T8) are checked first, for every type, right after the merge:
+    validate_image_keys, then validate_question_images, which also overwrites a
+    pin_the_spot image_id's size, so a stale size can't cause a false 409. An image
+    error is therefore always a 422 that comes before any guard's 409. Leaving
+    prompt_image_id out keeps the stored value; an explicit null clears it.
     """
     question = await _get_question_in_game(db, game_id, question_id)
 
@@ -136,6 +172,19 @@ async def update_question(
     new_answer_data = (
         body.answer_data if body.answer_data is not None else old_answer_data
     ) or {}
+    new_prompt_image_id = (
+        body.prompt_image_id
+        if "prompt_image_id" in body.model_fields_set
+        else question.prompt_image_id
+    )
+
+    try:
+        validate_image_keys(new_type, new_prompt_image_id, new_config)
+    except ValueError as exc:
+        raise ValidationFailedError(str(exc)) from exc
+    new_config = await _checked_image_config(
+        db, game_id, new_prompt_image_id, new_type, new_config
+    )
 
     if question.type == "put_in_order" or new_type == "put_in_order":
         frozen_changed = (
@@ -177,8 +226,11 @@ async def update_question(
         question.grading_type = body.grading_type
     if body.prompt is not None:
         question.prompt = sanitize_prompt(body.prompt)
-    if body.config is not None:
-        question.config = body.config
+    if "prompt_image_id" in body.model_fields_set:
+        question.prompt_image_id = body.prompt_image_id
+    if body.config is not None or new_config != old_config:
+        # A new dict, never an in-place edit (design 3.3, "Writing config").
+        question.config = new_config
     if body.answer_data is not None:
         question.answer_data = body.answer_data
     if body.time_limit_seconds is not None:
