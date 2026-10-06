@@ -336,6 +336,20 @@ Q2, Q3, Q5, Q6, Q7, Q8, Q9, Q11) + 2×3.0 (multi_select) + 3×1.0 (COMPLETENESS)
 
 ### Open items
 
+- **Canvas type (T7 Pin the Spot).** Now implemented. Q2 is being replaced by a Pin the Spot
+  question, which makes this file version 2. See
+  [`cell-biology-pin-the-spot.md`](cell-biology-pin-the-spot.md). For this file it supersedes:
+  - Q2
+  - the coverage table
+  - the layout rules
+  - the Problem bullets "ship as `version: 1`" and "import cleanly via the Admin UI"
+  - the Alternatives entry "Bumping `version`"
+  - Verification step 1's version/layout checks
+  - Verification step 2 (admin import, expect 201). A version-2 file with images gets a 422
+    there by design.
+
+  T6's "import cleanly via the Admin UI or API" is still met through the host import API
+  (`POST /api/host/games/import`) and the host app.
 - **Prometaphase.** Confirm with the course's terminology. If four phases are taught, use
   `items ["Telophase", "Prophase", "Anaphase", "Metaphase"]` with `correct_order [1, 3, 2, 0]`
   (c = 2 of 6, ≤ 3 ✓, not the identity ✓), and keep `points_value`/time unchanged.
