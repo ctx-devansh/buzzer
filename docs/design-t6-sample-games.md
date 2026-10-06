@@ -361,6 +361,32 @@ Run the full `pytest` (root `pytest.ini`) and `ruff check scripts/make_pin_image
 the last commit. The ruff findings already present in `tests/integration/conftest.py` and
 `tests/integration/scenarios/edge_cases.py` predate this work and are out of scope.
 
+### 5.8 Mean-review fixes (2026-10-05)
+
+The `mean-review` pass after implementation found these; they land in their own commits after
+this section.
+
+- **Classroom free-text keys were too strict.** Scoring lowercases and collapses whitespace but
+  keeps punctuation, so `DHCP.` scored 0.
+  - Q5 (IPv4 bits) `acceptedAnswers` becomes `["32", "thirty-two", "thirty two", "32 bits",
+    "32-bit", "32 bit"]`, `answerPoints` all `1`, `editDistance` stays `0` (1 would accept 31
+    and 33).
+  - Q6 (DHCP) becomes `["DHCP", "Dynamic Host Configuration Protocol"]`, `answerPoints`
+    `[1, 1]`, `editDistance` `1` (accepts a trailing period or one typo; no other protocol
+    name is within 1 of either).
+- **The import test checks content, not just types.** After step 3 of §5.4 it exports the game
+  (`GET /host/games/{id}/export`, expect 200) and asserts that the exported `game` equals the
+  file's and that every key of every file question equals the exported value. (Checked by hand
+  on 2026-10-05: both files round-trip exactly.)
+- **Generator robustness.** A plan file that is missing or isn't valid JSON raises `PlanError`
+  (exit 2), like a reordered question, instead of a traceback.
+- **Generator tests** (`tests/unit/test_pin_images.py`, on copies in `tmp_path` via
+  `monkeypatch.setattr(module, "GAMES_DIR", …)`): a swapped question makes `check()` raise
+  `PlanError` and `write()` leave the file byte-identical; `write()` on clean copies reports
+  every row `unchanged` and leaves the bytes identical.
+- **README:** the per-question key list also names the optional `order_index` (accepted, then
+  replaced by array position).
+
 ## 6. Out of scope
 
 - Devansh's two games. They are his own T6 deliverable.
@@ -396,3 +422,4 @@ the last commit. The ruff findings already present in `tests/integration/conftes
 | 2026-10-05 | Second Goldfish pass + user decision: `PlanError` from `verify_plan()` (exit 2 in both modes, `check()` raises); paths from `__file__`; faithfulness check reads `git show HEAD` and also pins the radii; nginx limit corrected to 10m; label-tap partial credit and a one-time visual check noted; `try/finally` wraps steps 2–3; room must be in the import course; S7 deletes the 12 starter files |
 | 2026-10-05 | **Implemented.** First generator run: clock and topology `updated`; rainbow and number line `unchanged` (the hand-made PNGs are within the 2.0 pixel tolerance, so their bytes stay); second run all `unchanged`, `--check` exits 0. Faithfulness check passed (all three targets and radii exact). Loading the script with `importlib` needs it registered in `sys.modules` before `exec_module` (`@dataclass` looks its module up there); the unit test does this |
 | 2026-10-05 | **Live check (§5.6), passed.** Both games imported via `POST :8080/api/host/games/import` into a fresh course; each played with `simulate_players.py --players 20 --game-json` and a scripted host over Socket.IO (two runs). Every question was shown and answered; every pin reveal's target and radii equal the file; tap medians sit at ≤ ½ of a uniform-random baseline (e.g. topology 0.151 vs 0.303, number line 0.141 vs 0.256); Game Over carried 14/14 and 13/13 summaries with all 5 pin boards. Rendering in a browser is covered by the e2e Pin the Spot play-through, which passed (full `pytest`: 345 passed, 3 `--fast`-only skips). Found, out of scope: `host_advance` has no per-room lock and emits `question_results` before saving `phase=RESULTS`, so a second advance within ~10 ms re-shows results instead of advancing (not reachable by hand) |
+| 2026-10-05 | `mean-review` findings recorded as §5.8 (strict FITB keys, content-level import test, generator robustness and tests, README `order_index`) before the fixes |

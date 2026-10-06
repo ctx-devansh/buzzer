@@ -8,7 +8,7 @@
 | Owner | Satvik Utkoori (utkoori) |
 | Reviewer / Goldfish | Devansh Gupta (dgupta57) |
 | Branch | `feature/t7-redo`, from `main` |
-| Status | Revised after two Goldfish passes (section 16). Implementing |
+| Status | Implemented 2026-10-05; live-checked during T6 (section 17) |
 
 ## 1. Problem
 
@@ -97,7 +97,9 @@ Added after the second Goldfish pass (section 16, G18–G28):
    `canvas.toDataURL('image/jpeg', 0.85)`; an animated GIF keeps its first frame) or paste an
    `https` URL (kept as-is). If the result exceeds 1,500,000 characters the editor retries at
    quality 0.7 then 0.5, then shows "Image too large" and keeps the previous image. The editor
-   measures `naturalWidth`/`naturalHeight` (integers) for width/height.
+   measures `naturalWidth`/`naturalHeight` (integers) for width/height. An image whose natural
+   size is 0 × 0 (e.g. an SVG URL without dimensions) is refused in the editor with "Image has no
+   size; use a PNG, JPEG, GIF or WebP" and the previous image is kept.
    **Picking a new image clears the target** (and clamps radii); ACCURACY can't save until a new
    target is placed.
 2. Click the image to place the target; click/drag to move.
@@ -234,7 +236,9 @@ letterbox → null on pointer-down, clamped during a drag; pin tip on point, hea
 point when the point is within one pin height (≈ 40 CSS px) of the top of the drawn rect; colours
 from CSS custom properties `--pin-*` with fallbacks (T9); `tabIndex=0`; `aria-label` = the prompt as plain text;
 keyboard: with no pin, the first arrow key places it at (0.5, 0.5); arrows nudge 0.01 (Shift: 0.05),
-clamped; Enter locks in only when a pin exists. Read-only mode for results.
+clamped; Enter locks in only when a pin exists. While interactive the canvas has
+`role="application"` (it is a focusable control, not a static picture); read-only it is
+`role="img"`. Read-only mode for results.
 
 **Host `components/PinBoard.tsx` + its own `lib/pinTheSpot.ts`** (apps share nothing): same drawing,
 plus taps and circles; with `onPick` it is the editor's target picker. Image load failure → a
@@ -402,3 +406,5 @@ Second Goldfish pass, 2026-10-05 (fresh session). Comprehension matched; remaini
 | 2026-10-05 | First draft, from the user's draft + design discussion (D1–D4, codebase corrections) |
 | 2026-10-05 | Goldfish revision: D5–D8, gaps G1–G17 (section 16) |
 | 2026-10-05 | Second Goldfish revision: D9, gaps G18–G28 |
+| 2026-10-05 | Implemented (steps 1–10). Step 9's live round was played during T6 (`docs/design-t6-sample-games.md` §8): 20 simulated players per game through :8080, every reveal's target and radii equal to the file, taps clustered around each target |
+| 2026-10-05 | `mean-review` follow-ups, before the code: editor refuses a 0 × 0 image (§3 author flow); player canvas role is `application` while interactive (§8) |
