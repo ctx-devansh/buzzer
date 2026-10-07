@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 3, revised after two Goldfish passes** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **revision 4, revised after two Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -153,7 +153,8 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   - **Placeholders are not covered by the preset.** Tailwind 3's preflight hardcodes
     `input::placeholder, textarea::placeholder { color: theme('colors.gray.400', #9ca3af) }` (`tailwindcss/src/css/preflight.css`
     around line 333), and `placeholderColor.DEFAULT` doesn't feed it. Once the palette is replaced, that becomes `#9ca3af`, about
-    2.5:1 on white, which fails AA. So `tokens.css` sets `::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`, which covers
+    2.5:1 on white, which fails AA. So each app's `@layer base` (below) sets
+    `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`, which covers
     every raw page `<input>`/`<textarea>` (11 raw `<textarea>`/`<select>` exist outside the primitives).
   - `extend.boxShadow`: `brutal-sm`, `brutal`, `brutal-lg` (hard offsets in `rgb(var(--shadow))`).
   - `extend.borderWidth`: `3`.
@@ -168,14 +169,17 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
 `frontend/theme/tokens.css` also defines, outside Tailwind:
 - `:root, [data-theme=light] { color-scheme: light }` / `[data-theme=dark] { color-scheme: dark }`, so native scrollbars and form controls follow.
 - `body { background: rgb(var(--canvas)); color: rgb(var(--ink)); }`. This replaces the hardcoded body colours in each `index.css`.
-- `::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`. See above.
+- **Not** the placeholder rule. A bare `::placeholder` (specificity 0,0,1) in `tokens.css` loses to preflight's
+  `input::placeholder` (0,0,2), which also comes later. The rule goes in `@layer base` (below).
 - `<meta name="theme-color">` is not set in CSS. Each `index.html` carries two of them,
   `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFF8E7">` and the dark one with `#1B1C20`, and
   `theme.ts` updates a single un-media'd `theme-color` meta on every `setTheme` and attribute change, so mobile browser chrome
   matches the chosen theme rather than only the OS setting.
 
 Each app's `src/index.css` (same block in all three, under 40 lines, every value a token or density variable):
-- **`@layer base`** (after `@tailwind base`): `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }`.
+- **`@layer base`** (after `@tailwind base`): `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }` and
+  `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`. The placeholder rule uses preflight's
+  exact selector, so equal specificity plus later position means it wins.
   It lives here, not in `tokens.css`. `tokens.css` is `@import`ed before `@tailwind base`, so preflight would follow it. Putting it
   in `@layer base` places it after preflight and before every utility. Utilities still beat it, which is why the deletions and the
   scan rule in §4.1 are what really guarantee focus visibility.
@@ -390,6 +394,61 @@ background vanishes on the charcoal surface. **Decision: every image well has a 
 - Pin the Spot canvases fill the image rectangle with `--pin-image-bg` before drawing (§4.5).
 - `image-bg` is softened in dark mode (`#EDE9E0`) to limit glare. It's skipped by the contrast test, since no text sits on it.
 
+### 4.10 Test plan: what's needed, and what was deliberately left out
+
+**The filter.** A test is added only if:
+- it guards a T9/R9 requirement;
+- the failure it catches is plausible during or after an ~860-edit migration; and
+- nothing cheaper already catches it (the static scan, the screenshots, or the manual checks in §7).
+
+Everything else is checked by hand in §7 and shown in the screenshots.
+
+**Integration tests (`tests/integration/`): none.** T9 changes no backend code, REST endpoint or socket event, and R5 scopes
+integration coverage to T4, T7 and T8. All existing integration tests must stay green, unchanged.
+
+**Unit tests: one file, `tests/unit/test_theme_tokens.py`** (pure Python, fast, no Docker):
+
+| Test | Guards | Why it's needed |
+|---|---|---|
+| `test_no_raw_palette_or_forbidden_classes` (the §4.6 scan; `xfail` until the end of step 4) | R9 "hardcoded palette colours are gone"; focus never removed; no translucent text fills; no unloaded weights | ~860 manual edits. After the palette is replaced, a missed class renders as *nothing* rather than failing, so this test is the only thing that notices. |
+| `test_scan_patterns` (parametrized known-bad and known-good strings: `border-t-slate-700`, `focus:outline-none`, `bg-accent/40`, `'white'`, `cssVar(c,'--x','#fff')` → allowed, `bg-surface/80` → allowed, …) | The scan itself | The scan is the safety net, and a regex bug makes it pass silently. The second Goldfish pass already found regex gaps. Cheap. |
+| `test_token_contrast[light/dark]` | R9 "both themes meet the accessibility bar" (token pairs) | The values are hand-picked and will be tuned after screenshots (§8). Every tweak must re-prove AA. |
+| `test_token_parity` | Complete dark theme | A token missing from `[data-theme=dark]` silently inherits the light value from `:root`. That's plausible every time a token is added. It shares the parser with the contrast test, so it costs almost nothing. |
+
+**E2E tests: one new file, `tests/e2e/test_theme_ui.py`** (Playwright against nginx :8080, built `dist/`). Each test opens only a
+login or join page and needs no game, so they're fast.
+
+| Test | Guards | Why it's needed |
+|---|---|---|
+| `test_theme_defaults_to_os_and_persists[app × scheme]` (apps: host `/host/login`, player `/player/join`, admin `/admin/login`; schemes: light, dark) | R9 "toggle that defaults to the OS preference and persists" (graded explicitly) | The defaulting logic is an inline script copied into three `index.html` files, and `tokens.css` reaches each app through a relative `@import`, so each app can break on its own. Steps: (1) new context with `color_scheme=<scheme>` → `html[data-theme=<scheme>]`, and `body` computed background equals that theme's `canvas`, which proves the tokens actually load; (2) click the toggle → attribute flips, `aria-pressed` flips, the accessible name stays "Dark theme"; (3) reload → still flipped; (4) `page.emulate_media(color_scheme=<scheme>)` again → still flipped (stored beats OS). |
+| `test_focus_outline_and_placeholder[app]` (each app's login/join page, plus host `QuestionEditorPage` for the raw `<textarea>`/`<select>`) | R9 "visible focus states"; placeholder contrast | Both depend on cascade order (§4.3), which is exactly what went wrong twice in review, and the static scan can't see cascade order. Steps: Tab through every focusable element and assert the computed `outline-style` isn't `none` and `outline-width` is ≥ 2px; read `getComputedStyle(input, '::placeholder').color` and assert it equals `ink-muted`. One theme is enough, since the colours are already proven by the contrast unit test. |
+
+**Rendered-contrast check: an axe-core assertion inside the capture module, not a separate test.** Token contrast doesn't
+prove that pages *use* the right pairs. For example, `bg-accent` with inherited `ink` text is 1.7:1 in dark mode, and neither the
+scan nor the unit test sees it. R9 graders check the running app. So at every screenshot point in `tests/e2e/capture_ui_screens.py`
+(30 screens × 2 themes, §4.6), run axe-core's `color-contrast` rule and fail on violations. The module already drives every key
+screen in both themes, so this adds no game setup. It adds one dependency, `axe-playwright-python`, in
+`tests/e2e/requirements.txt`. Because the capture module isn't part of the normal `pytest` run, this check runs whenever screenshots
+are produced, which is the moment the evidence for R9 gets created.
+
+**Fixture changes, `tests/e2e/conftest.py`** (needed for the above, and they fix an existing gap):
+- `page_as(token, *, color_scheme=None)`: pass `color_scheme` to `browser.new_context`. Existing call sites are unchanged.
+- `_built_apps_are_current` today checks only `host` and `admin` `src/`. Extend it to `player`, and for every app, include
+  `index.html`, `tailwind.config.ts`, and the shared `frontend/theme/` folder in the "newest source" time. Otherwise, editing a token
+  leaves a stale `dist/` that the e2e tests silently run against.
+
+**Existing e2e tests.** Checked: no selector relies on colour classes. The selectors that count buttons are scoped to a table row
+(`test_host_admin_ui.py:159`, `:184`). The option-image test matches `name=re.compile("Blue")`, which still matches with an "A"/"B"
+letter badge in front. So the new toggle and badges don't break them. They must stay green.
+
+**Left out on purpose (covered by §7 manual checks or the screenshots):**
+- live OS-change following and cross-tab sync (not required by T9);
+- the no-flash init (polish, not graded);
+- Pin the Spot repaint on toggle (rare in practice; manual check);
+- QR and image-well backings, tap-target sizes, `theme-color` (visible in the screenshots, and set once with little room to regress);
+- answer-bar encoding (one shared helper, `barClasses()`, makes the two pages unable to diverge);
+- a JS unit-test runner for `theme.ts` (the repo has none, and the e2e test exercises the real logic in a real browser).
+
 ## 5. Implementation steps (in order)
 
 Each step is one or more atomic commits on `feature/better-ui`. **This doc and `docs/ui/before/` are committed before step 1**
@@ -506,7 +565,8 @@ mid-question repaints the canvas without a reload.
 - **New:** `frontend/theme/tokens.css`, `frontend/theme/preset.ts`, `frontend/theme/theme.ts`,
   `frontend/{host,player,admin}/src/lib/theme.ts`, `frontend/{host,player,admin}/src/components/ThemeToggle.tsx`,
   `frontend/host/src/lib/answerBars.ts`,
-  `tests/unit/test_theme_tokens.py`, `tests/e2e/capture_ui_screens.py`, `docs/ui/README.md`, `docs/ui/after/**`.
+  `tests/unit/test_theme_tokens.py`, `tests/e2e/test_theme_ui.py`, `tests/e2e/capture_ui_screens.py`,
+  edits to `tests/e2e/conftest.py` and `tests/e2e/requirements.txt` (`axe-playwright-python`), `docs/ui/README.md`, `docs/ui/after/**`.
 - **Config per app:** `index.html`, `tailwind.config.ts`, `postcss.config.js`, `vite.config.ts`, `tsconfig.json`,
   `tsconfig.node.json`, `package.json` (+ lockfile), `src/index.css`, `src/main.tsx`, `src/lib/utils.ts` (tailwind-merge). **Root:** `.gitignore`.
 - **Host (20):** `components/{HostShell,PinBoard,ImagePicker}.tsx`, `components/ui/{button,card,input,TimerBar}.tsx`,
@@ -523,6 +583,8 @@ The authoritative list of files to migrate is whatever the scan test reports. Th
 ## 7. Verification (definition of done)
 
 1. `pytest tests/unit` passes, including `test_theme_tokens.py` with no `xfail`.
+   `pytest tests/e2e/test_theme_ui.py` passes, and `pytest tests/e2e/capture_ui_screens.py` passes (axe finds no contrast
+   violations on any key screen in either theme).
 2. CI parity: `ruff check backend/ scripts/ tests/`, `ruff format --check backend/ scripts/`, and `npx tsc --noEmit` in all three apps.
 3. `npm run build` succeeds and leaves no emitted `.js`/`.d.ts` next to the configs or in `frontend/theme/`. `pytest tests/integration`
    and `pytest tests/e2e` pass against the Docker stack.
@@ -606,3 +668,11 @@ the code first.
 | 9c | Toggle `aria-label` changes with state | Yes | Fixed name plus `aria-pressed` (§4.4) |
 | 9d | Capture module needs a `test_*` function; two games; timers | Yes | Parametrized `test_capture_ui_screens`, one room per theme, `time_limit_seconds = 600`, host lock control (§4.6) |
 | 9e | No `theme-color` meta | Yes (none in any `index.html`) | Two media-scoped metas plus a runtime update in `theme.ts` (§4.3) |
+
+**Revision 4** came from planning which tests T9 actually needs (§4.10). Applying the "is this test needed?" filter exposed one
+real defect in revision 3:
+
+| # | Finding | Verified? | Change |
+|---|---|---|---|
+| 1 | Revision 3's `::placeholder` rule in `tokens.css` can never win. Preflight's `input::placeholder, textarea::placeholder` has higher specificity (0,0,2 vs 0,0,1) and comes later. | Yes (`preflight.css` ~333) | Rule moved to each app's `@layer base` with preflight's exact selector (§4.3) |
+| 2 | No test plan. The e2e build guard ignores the player app and would ignore `frontend/theme/` | Yes (`conftest.py::_built_apps_are_current` checks host and admin only) | §4.10: four unit tests, two e2e tests, an axe contrast check in the capture module, fixture fixes, and an explicit list of what is *not* tested and why |
