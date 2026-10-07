@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 8, revised after six Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **revision 9, revised after seven Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -173,9 +173,18 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   - `theme.colors` / `theme.extend.colors`: see "staging" below.
   - **Defaults that Tailwind derives from the palette, set explicitly** (otherwise replacing the palette makes a bare
     `border` fall back to `currentColor`, which is off-white in dark mode and causes the halation this design rejects):
-    `borderColor.DEFAULT = line`, `divideColor.DEFAULT = line`, `ringColor.DEFAULT = focus`,
-    `outlineColor.DEFAULT = focus`, `ringOffsetColor.DEFAULT = canvas`. (51 bare `border`/`border-x` uses exist today.)
-    `ringOffsetColor` matters because Tailwind's own default is `#fff`, which would show as a white halo in dark mode.
+    `theme.extend.borderColor.DEFAULT = line`, `theme.extend.ringColor.DEFAULT = focus`, `theme.extend.outlineColor.DEFAULT = focus`,
+    `theme.extend.ringOffsetColor.DEFAULT = canvas`. (51 bare `border`/`border-x` uses exist today.)
+    - **Always under `theme.extend`, never `theme`, both during staging and after the palette is replaced.** Tailwind's own
+      `borderColor`, `ringColor`, `outlineColor` and `ringOffsetColor` are functions that spread `theme('colors')`. That's what
+      generates `border-line`, `ring-focus` and so on. Setting `theme.borderColor = { DEFAULT }` would replace that function and
+      silently delete every `border-<token>` class, and the scan couldn't notice, since those classes are still valid names.
+      `extend` merges `DEFAULT` into the function's result. Once `theme.colors` is replaced, the spread picks up the tokens automatically.
+    - `divideColor` needs no entry: Tailwind derives it from `theme('borderColor')`, `DEFAULT` included. Preflight's
+      `* { border-color: theme('borderColor.DEFAULT') }` also picks up `line` from the same setting.
+    - `ringOffsetColor` matters because Tailwind's own default is `#fff`, which would show as a white halo in dark mode.
+    - **Step 2 check:** the compiled CSS of each app contains `.border-line`, `.border-accent` and `.ring-focus`, and preflight's `*`
+      rule uses the `line` colour.
   - **Placeholders are not covered by the preset.** Tailwind 3's preflight hardcodes
     `input::placeholder, textarea::placeholder { color: theme('colors.gray.400', #9ca3af) }` (`tailwindcss/src/css/preflight.css`
     around line 333), and `placeholderColor.DEFAULT` doesn't feed it. Once the palette is replaced, that becomes `#9ca3af`, about
@@ -186,7 +195,9 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
     `boxShadow = { none: 'none', 'brutal-sm', brutal, 'brutal-lg' }` (hard offsets in `rgb(var(--shadow))`) and
     `borderRadius = { none: '0', DEFAULT: '4px', full: '9999px' }`.
   - `extend.borderWidth`: `3`.
-  - `extend.fontFamily`: `display: ['"Space Grotesk"', 'system-ui', 'sans-serif']`, `sans: ['Inter', 'system-ui', 'sans-serif']`.
+  - `extend.fontFamily`: `display: DISPLAY_STACK`, `sans: SANS_STACK`. These are two `const` arrays exported from `preset.ts`,
+    `['"Space Grotesk"', 'system-ui', 'sans-serif']` and `['Inter', 'system-ui', 'sans-serif']`. The plugin uses the same constants
+    (joined with `', '`), so the font stack is written exactly once.
 
 **Staging (the apps stay usable during migration):**
 - **Steps 2–4:** the preset uses `theme.extend` for colours, the brutal shadows and the radius tokens. Tailwind's own palette,
@@ -211,8 +222,18 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   through one internal `applyTheme(t)` that does both.
 
 **Shared base and component CSS lives in one place: a plugin inside `frontend/theme/preset.ts`** (decided). The preset's
-`plugins: [nbPlugin]` entry is a plain function `({ addBase, addComponents }) => { … }`. Its parameter is typed by hand (a small local
-interface with the two methods taking `Record<string, Record<string, string>>`), because `preset.ts` may not import from `tailwindcss`.
+`plugins: [nbPlugin]` entry is a plain function `({ addBase, addComponents }) => { … }`. Its parameter is typed by hand, because
+`preset.ts` may not import from `tailwindcss`. The type must be **recursive**, since the CSS nests `@media (hover: hover)` and
+`@media (prefers-reduced-motion: reduce)` blocks around selectors with their own declarations, three levels deep:
+
+```
+type CSSRule = { [key: string]: string | CSSRule };
+interface NbPluginApi { addBase(rules: CSSRule): void; addComponents(rules: CSSRule): void; }
+```
+
+A flat `Record<string, Record<string, string>>` would make `tsc -b` (which checks `preset.ts` through `tsconfig.node.json`) reject the
+nested media rules. The plugin **does not use `theme()`**, neither the CSS function nor the plugin API helper: font stacks come from the
+shared constants above, and every colour is `rgb(var(--token))`.
 Tailwind emits `addBase` output with the base layer (after preflight) and `addComponents` output with the components layer, which is
 the same ordering `@layer base` / `@layer components` would give, without three copies.
 - **`addBase`:**
@@ -265,7 +286,7 @@ Classes added by the preset plugin's `addComponents` (one definition, used by al
     - It lives in the plugin rather than as an arbitrary `shadow-[inset…]` class in `.tsx`, because that class would trip the scan's `rgb(` rule.
   - `.nb-chip`: `border: 2px solid rgb(var(--line))`, small padding, `rounded` (4px), and `font-semibold text-sm`. It has no shadow, at any density.
 - **Typography:**
-  - `.nb-h1`, `.nb-h2`: `font-family: theme(fontFamily.display); font-weight: 700; font-size: var(--nb-h1 | --nb-h2); line-height: 1.1;`
+  - `.nb-h1`, `.nb-h2`: `font-family: DISPLAY_STACK.join(', ')` (also used by `.nb-stat`, `.nb-hero` and `.nb-code`); `font-weight: 700; font-size: var(--nb-h1 | --nb-h2); line-height: 1.1;`
   - `.nb-h3`: Inter, `font-weight: 600; font-size: var(--nb-h3); line-height: 1.3;`
   - `.nb-body`: Inter 400, `var(--nb-body)`, `line-height: 1.5`.
   - `.nb-prompt`: Inter 600, `var(--nb-prompt)`, `line-height: 1.3`.
@@ -402,7 +423,7 @@ exact selector text.
    - focus removal and rings: `\boutline-none\b`, `\b(focus|focus-visible|focus-within):ring\b`, `\bring-offset\b` (§4.1);
    - opacity on fill tokens: `\b(bg|border|text)-(accent|accent-2|info|success|danger|warning|option-\d)/\d+`; opacity on any
      text colour: `\btext-[a-z-]+/\d+`; element opacity without `disabled:`: `(?<!disabled:)\bopacity-\d+` (§4.2);
-   - `\bmin-h-screen\b` in `frontend/player/src/pages/**` (§4.11 layout contract);
+   - `\bmin-h-(screen|full)\b` in `frontend/player/src/pages/**` (§4.11 layout contract: pages size by `flex-1`);
    - radius and soft shadows: `\brounded-(?:[trblse]{1,2}-)?(sm|md|lg|xl|2xl|3xl)\b`,
      `\bshadow(?:-(sm|md|lg|xl|2xl|inner))?(?![-\w])` (bare `shadow` or a soft size; `shadow-brutal*`/`shadow-none` pass), and
      `\b(backdrop-blur|blur|drop-shadow)(-[a-z0-9]+)?\b`;
@@ -691,9 +712,23 @@ never pick their own sizes. The table shows the equivalent Tailwind sizes, for r
 
 **Player layout contract** (needed because of the in-flow header row, §4.4). There are 11 `min-h-screen` uses in the player app
 today, and with a 56px header above them, every centred screen would scroll by 56px.
-- `App.tsx`: the root is `flex flex-col h-[100dvh]`. The header is `shrink-0` and padded by `env(safe-area-inset-top)`. The routes
-  wrapper is `<main class="flex-1 min-h-0 overflow-y-auto">`.
-- Pages replace `min-h-screen` with `min-h-full`, which centres within `main`, not the viewport.
+The whole chain, from the viewport down to each page, is **flex, not percentage heights**. That way no step depends on
+percentage `min-height` resolving against a parent whose height is only determined by flex:
+
+| Level | Element | Classes |
+|---|---|---|
+| 1 | `App.tsx` root `<div>` | `flex flex-col h-[100dvh]` |
+| 2 | header row | `shrink-0`, padded by `env(safe-area-inset-top)` |
+| 3 | `<main>` wrapping `<Routes>` | `flex-1 min-h-0 overflow-y-auto flex flex-col` |
+| 4a | non-game page root (`JoinPage`, `NamePage`, `LoginPage`) | `flex-1 flex flex-col` + its own centring (`items-center justify-center`), replacing `min-h-screen` |
+| 4b | `GameLayout` | **renders no wrapper element** (today it returns `GameContext.Provider` → banner → `<Outlet/>`). Keep it that way, so its children are direct flex children of `<main>`. The "Host disconnected" banner is `shrink-0`. Its error branch (`GameLayout.tsx:182`, `min-h-screen`) becomes `flex-1 flex items-center justify-center`. |
+| 5 | game page root (`LobbyPage`, `QuestionPage`, `FeedbackPage`, `ResultsPage`, `GameOverPage`) | `flex-1 flex flex-col` + its own centring, replacing `min-h-screen` |
+
+- Content taller than the viewport scrolls inside `<main>` (level 3), never the document.
+- If `GameLayout` ever gains a wrapper `<div>`, that div must itself be `flex-1 flex flex-col`, or levels 5 lose their height. Say so in
+  a comment at `GameLayout`'s return.
+- **Step 4 check (in the browser, both themes, 390×844):** on Join, Lobby, Feedback and Results, the content is vertically centred,
+  and `main.scrollHeight === main.clientHeight`.
 - The `22vh` option-image sizing (`QuestionPage.tsx:21`, `:29`) and the Pin the Spot canvas must still fit at 390×844 without
   scrolling `main`. Recheck them, and switch `22vh` to `22dvh` if needed.
 
@@ -798,7 +833,7 @@ Mechanical mapping (applies to every file the scan lists):
 | `shadow`, `shadow-xl` (5), `backdrop-blur-sm` (1, the corner QR panel) | `.nb-box` / `shadow-brutal*`; drop the blur (the panel is an opaque `surface`) |
 | `disabled:opacity-*`, conditional `opacity-50 cursor-not-allowed` | `disabled:` state per §4.11, plus the `disabled` attribute |
 | `opacity-*` on content (fallback letter, roster rows) | `text-on-fill` / `text-ink-muted` + `line-through` / "Inactive" chip (§4.2) |
-| player `min-h-screen` | `min-h-full` (§4.11 layout contract) |
+| player `min-h-screen` | `flex-1 flex flex-col` on the page root (§4.11 layout contract) |
 | spinners (`animate-spin` with palette borders) | §4.11 spinner classes |
 | `<img>` of an uploaded image | add `bg-image-bg` to it or its box (§4.9) |
 | Player `OPTION_COLORS` (`pages/game/QuestionPage.tsx:9`) | Keep a `const OPTION_FILLS = ['bg-option-1', …, 'bg-option-8']` array of **literal strings**, so Tailwind's content scan sees all eight; never build `bg-option-${n}`. Each tile uses `OPTION_FILLS[i % 8]` with `text-on-fill border-line`, and drops the per-option `hover:`/`border-` colours. Past 8 options the colours repeat, as they do today (the backend has no option limit); the letter badge (A, B, C, …, which keeps counting) tells repeated colours apart. |
@@ -1017,3 +1052,12 @@ during design with a Playwright Chromium probe, rather than deferred.
 | 10 | `.nb-caption` on a fill is ~1.1:1 | Yes | Never on a fill; `text-on-fill` override (§4.3.1) |
 | 11 | Options past 8; dynamic `bg-option-${n}` dropped by the content scan | Yes (backend has no limit; player cycles `i % 8`) | Literal-string array, cycling, letter badge disambiguates (step 4 mapping) |
 | 12 | HTML session summary scope unstated | n/a | Explicitly out of scope (§1) |
+
+**Revision 9** was revised after a seventh Goldfish pass, checked against Tailwind's own default config (`stubs/config.full.js`)
+and the player component tree.
+
+| # | Goldfish finding | Verified? | Change |
+|---|---|---|---|
+| C1 | Default border, ring and outline colours under `theme` would wipe every `border-<token>` class | Yes: `borderColor`, `ringColor`, `outlineColor` and `ringOffsetColor` are functions spreading `theme('colors')` (config.full.js :82, :743, :761, :765) | Always `theme.extend.*.DEFAULT`; `divideColor` inherits; a compiled-CSS check in step 2 (§4.3) |
+| C2 | Hand-written plugin type can't hold nested `@media`; `theme()` resolution unstated | Yes | Recursive `CSSRule` type; no `theme()` in the plugin; shared `DISPLAY_STACK`/`SANS_STACK` constants (§4.3, §4.3.1) |
+| C3 | `min-h-full` inside `GameLayout`'s root resolves to nothing | **Partly:** `GameLayout` has no wrapper element (Provider → banner → Outlet), so pages are already `<main>`'s children. But `min-h-full` relied on fragile percentage resolution. | Full flex chain table from viewport to page; `flex-1` replaces `min-h-full`; scan forbids both; a browser check in step 4 (§4.11) |
