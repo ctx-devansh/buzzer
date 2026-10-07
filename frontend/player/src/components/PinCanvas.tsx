@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { fitRect, nudge, toFraction } from '../lib/pinTheSpot';
+import { useTheme } from '../lib/theme';
 import type { PinKey, PinPoint, PinRect } from '../lib/pinTheSpot';
 
 /** Pin height in CSS px: tip at the point, head above it (below near the top edge). */
@@ -87,6 +88,9 @@ export function PinCanvas({
     };
   }, [aspect, maxHeight]);
 
+  // Colours are read from CSS variables while drawing, so a theme change must trigger a redraw.
+  const [theme] = useTheme();
+
   // Draw.
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -104,6 +108,9 @@ export function PinCanvas({
     ctx.fillStyle = cssVar(canvas, '--pin-letterbox', '#020617');
     ctx.fillRect(0, 0, box.w, box.h);
     if (image) {
+      // A light backing first, so a transparent image stays visible in dark mode (§4.9).
+      ctx.fillStyle = cssVar(canvas, '--pin-image-bg', '#ffffff');
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       // Stretched into the stored aspect on purpose (D6).
       ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
     } else {
@@ -166,11 +173,11 @@ export function PinCanvas({
       ctx.fillStyle = cssVar(canvas, '--pin-target', '#ef4444');
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = cssVar(canvas, '--pin-marker-stroke', '#ffffff');
       ctx.stroke();
       ctx.restore();
     }
-  }, [box, aspect, image, pin, reveal]);
+  }, [box, aspect, image, pin, reveal, theme]);
 
   function localPoint(e: PointerEvent<HTMLCanvasElement>) {
     const r = e.currentTarget.getBoundingClientRect();
@@ -232,14 +239,14 @@ export function PinCanvas({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onKeyDown={handleKeyDown}
-        className={`block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+        className={`block ${
           interactive ? 'cursor-crosshair' : ''
         }`}
         style={{ width: box.w, height: box.h, touchAction: 'none' }}
       />
       {failed && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-800/90">
-          <p className="text-slate-300 font-semibold">Image failed to load</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-surface">
+          <p className="text-ink-muted font-semibold">Image failed to load</p>
         </div>
       )}
     </div>
