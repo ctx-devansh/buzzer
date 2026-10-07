@@ -1,0 +1,218 @@
+{
+  "format": "buzzer/game",
+  "version": 1,
+  "game": {
+    "title": "Absurd but True",
+    "description": "Real facts that sound completely made up — with a few famous myths hiding among them. Trust nothing except the scoreboard.",
+    "max_players": 150
+  },
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Warm-up: how gullible are you, honestly?",
+      "config": {
+        "options": [
+          "Very — I believe everything I read online",
+          "Somewhat — depends who is telling me",
+          "Barely — I fact-check my own family",
+          "Not at all — I don't even believe this question"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "Wombat poop is cube-shaped.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1.0,
+          "false": 0.0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1.0
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "In 1932, the Australian military went to war against which animal — and lost?",
+      "config": {
+        "options": [
+          "Kangaroos",
+          "Emus",
+          "Rabbits",
+          "Cane toads"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [0.0, 1.0, 0.0, 0.0]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "Bubble wrap was originally invented in 1957 to be sold as ___. (One word)",
+      "config": {},
+      "answer_data": {
+        "acceptedAnswers": [
+          "wallpaper",
+          "wallpaper.",
+          "wall paper",
+          "wall-paper",
+          "wallpapers",
+          "textured wallpaper",
+          "textured wall paper"
+        ],
+        "answerPoints": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        "editDistance": 0
+      },
+      "time_limit_seconds": 25,
+      "points_value": 1.0
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "Bulls charge at a matador's cape because the colour red makes them angry.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 0.0,
+          "false": 1.0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1.0
+    },
+    {
+      "type": "multi_select",
+      "grading_type": "ACCURACY",
+      "prompt": "Absurd but true, or just absurd? Select every statement that is TRUE.",
+      "config": {
+        "options": [
+          "A cat named Tama was officially made stationmaster of a Japanese train station",
+          "Napoleon was unusually short for a Frenchman of his time",
+          "In the 1830s, tomato pills were sold in America as a cure-all medicine",
+          "Bats are blind",
+          "In 18th-century Britain, people rented pineapples to show off at parties"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [1.0, -1.0, 1.0, -1.0, 1.0]
+      },
+      "time_limit_seconds": 30,
+      "points_value": 3.0
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "ACCURACY",
+      "prompt": "Put these in the order they happened, oldest first.",
+      "config": {
+        "items": [
+          "Sliced bread first sold in stores",
+          "Telephone patented",
+          "First fax machine patented",
+          "Nintendo founded (as a playing-card company)"
+        ]
+      },
+      "answer_data": {
+        "correct_order": [2, 1, 3, 0]
+      },
+      "time_limit_seconds": 45,
+      "points_value": 1.0
+    },
+    {
+      "type": "multiple_choice",
+      "grading_type": "ACCURACY",
+      "prompt": "What is a group of owls called?",
+      "config": {
+        "options": [
+          "A council",
+          "A committee",
+          "A parliament",
+          "A senate"
+        ]
+      },
+      "answer_data": {
+        "answer_points": [0.0, 0.0, 1.0, 0.0]
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "ACCURACY",
+      "prompt": "How many years did the Hundred Years' War actually last? (Answer with a number.)",
+      "config": {},
+      "answer_data": {
+        "acceptedAnswers": [
+          "116",
+          "116.",
+          "116 years",
+          "one hundred sixteen",
+          "one hundred and sixteen",
+          "one hundred sixteen years",
+          "one hundred and sixteen years"
+        ],
+        "answerPoints": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        "editDistance": 0
+      },
+      "time_limit_seconds": 20,
+      "points_value": 1.0
+    },
+    {
+      "type": "true_false",
+      "grading_type": "ACCURACY",
+      "prompt": "There is a real village in Norway called Hell.",
+      "config": {},
+      "answer_data": {
+        "answer_points": {
+          "true": 1.0,
+          "false": 0.0
+        }
+      },
+      "time_limit_seconds": 15,
+      "points_value": 1.0
+    },
+    {
+      "type": "true_false",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Be honest: before today, did you already know wombat poop is cube-shaped?",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 15,
+      "points_value": 1.0
+    },
+    {
+      "type": "fill_in_the_blank",
+      "grading_type": "COMPLETENESS",
+      "prompt": "In one word, how would you describe today's facts?",
+      "config": {},
+      "answer_data": {},
+      "time_limit_seconds": 25,
+      "points_value": 1.0
+    },
+    {
+      "type": "put_in_order",
+      "grading_type": "COMPLETENESS",
+      "prompt": "Rank these from MOST absurd to LEAST absurd.",
+      "config": {
+        "items": [
+          "The Emu War",
+          "Cube-shaped wombat poop",
+          "Nintendo being older than sliced bread",
+          "Bubble wrap starting life as wallpaper"
+        ]
+      },
+      "answer_data": {},
+      "time_limit_seconds": 40,
+      "points_value": 1.0
+    }
+  ]
+}
