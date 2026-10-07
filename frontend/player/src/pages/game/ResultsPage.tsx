@@ -86,11 +86,11 @@ export default function ResultsPage() {
       {isCompleteness ? (
         <p className="nb-h1 nb-box bg-info text-on-fill px-6 py-3">Answer recorded!</p>
       ) : isCorrect ? (
-        <p className="nb-h1 nb-box bg-success text-on-fill px-6 py-3">✓ Correct!</p>
+        <p className="nb-h1 nb-box bg-success text-on-fill px-6 py-3"><span aria-hidden="true">✓ </span><span>Correct!</span></p>
       ) : isPartial ? (
-        <p className="nb-h1 nb-box bg-warning text-on-fill px-6 py-3">◐ Partially correct</p>
+        <p className="nb-h1 nb-box bg-warning text-on-fill px-6 py-3"><span aria-hidden="true">◐ </span><span>Partially correct</span></p>
       ) : (
-        <p className="nb-h1 nb-box bg-danger text-on-fill px-6 py-3">✗ Incorrect</p>
+        <p className="nb-h1 nb-box bg-danger text-on-fill px-6 py-3"><span aria-hidden="true">✗ </span><span>Incorrect</span></p>
       )}
 
       {/* pin_the_spot: the player's pin (from this phone's submission) against the reveal */}
