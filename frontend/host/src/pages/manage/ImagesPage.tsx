@@ -153,7 +153,7 @@ export default function ImagesPage() {
   const backLink = (
     <button
       onClick={() => navigate('/courses')}
-      className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm mb-2"
+      className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm mb-2"
     >
       <ArrowLeft size={14} /> Back to Courses
     </button>
@@ -161,25 +161,25 @@ export default function ImagesPage() {
 
   if (!loaded) {
     return (
-      <div className="p-8 max-w-5xl mx-auto space-y-4">
+      <div className="nb-page nb-stack max-w-5xl mx-auto">
         {backLink}
-        {loadError ? <p className="text-red-400 text-sm">{loadError}</p> : <p className="text-slate-400">Loading…</p>}
+        {loadError ? <p className="text-danger-text text-sm">{loadError}</p> : <p className="text-ink-muted">Loading…</p>}
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
+    <div className="nb-page nb-stack max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div>
           {backLink}
-          <h2 className="text-2xl font-bold text-slate-100">Images</h2>
-          {course && <p className="text-indigo-300 text-sm mt-0.5">{course.name} · {course.semester}</p>}
-          <p className="text-slate-400 text-sm mt-0.5">
+          <h1 className="nb-h1 text-ink">Images</h1>
+          {course && <p className="text-ink text-sm font-semibold mt-0.5">{course.name} · {course.semester}</p>}
+          <p className="text-ink-muted text-sm mt-0.5">
             Shared by every host of this course. Use them as question prompts, answer options and Pin the Spot maps.
           </p>
         </div>
-        <label className="inline-flex shrink-0 items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer">
+        <label className="nb-box nb-press inline-flex shrink-0 items-center bg-accent px-3 py-1.5 text-sm font-display font-bold text-on-fill cursor-pointer">
           <Upload size={14} className="mr-1" /> {uploading ? 'Uploading…' : 'Upload images'}
           <input
             type="file"
@@ -198,13 +198,13 @@ export default function ImagesPage() {
       </div>
 
       {uploadErrors.length > 0 && (
-        <ul className="text-red-400 text-sm space-y-1">
+        <ul className="text-danger-text text-sm space-y-1">
           {uploadErrors.map((e) => <li key={e}>{e}</li>)}
         </ul>
       )}
 
       {images.length === 0 ? (
-        <p className="text-slate-400">No images yet. Upload PNG, JPEG, GIF or WebP files up to 5 MB.</p>
+        <p className="text-ink-muted">No images yet. Upload PNG, JPEG, GIF or WebP files up to 5 MB.</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {images.map((img) => {
@@ -217,7 +217,7 @@ export default function ImagesPage() {
                 <button
                   type="button"
                   onClick={() => setViewing(img)}
-                  className="block w-full rounded-lg bg-slate-900"
+                  className="block w-full bg-canvas"
                   aria-label={`View ${img.filename} at full size`}
                 >
                   {/* Full images scaled by CSS; lazy, in a fixed box so the grid doesn't jump. */}
@@ -226,16 +226,16 @@ export default function ImagesPage() {
                     alt={img.filename}
                     loading="lazy"
                     decoding="async"
-                    className="h-40 w-full object-contain"
+                    className="h-40 w-full bg-image-bg object-contain"
                   />
                 </button>
                 <div className="flex items-center gap-2">
-                  <p className="flex-1 truncate text-sm font-medium text-slate-100" title={img.filename}>{img.filename}</p>
+                  <p className="flex-1 truncate text-sm font-medium text-ink" title={img.filename}>{img.filename}</p>
                   {playedCanvas && (
-                    <span className="rounded bg-amber-900/60 px-1.5 py-0.5 text-xs text-amber-300">Played</span>
+                    <span className="nb-chip bg-warning text-on-fill">Played</span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ink-muted">
                   {img.width} × {img.height} · {formatBytes(img.byte_size)}
                   {img.uploaded_by_name && ` · ${img.uploaded_by_name}`}
                 </p>
@@ -243,16 +243,16 @@ export default function ImagesPage() {
                   <div className="text-xs">
                     <button
                       type="button"
-                      className="text-indigo-300 hover:underline"
+                      className="text-ink underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent"
                       onClick={() => setExpanded(expanded === img.id ? null : img.id)}
                     >
                       Used in {uses.length} question{uses.length !== 1 ? 's' : ''}
                     </button>
                     {expanded === img.id && (
-                      <ul className="mt-1 space-y-0.5 text-slate-400">
+                      <ul className="mt-1 space-y-0.5 text-ink-muted">
                         {uses.map((u) => (
                           <li key={u.question_id}>
-                            <Link to={`/games/${u.game_id}/questions`} className="hover:text-slate-200 hover:underline">
+                            <Link to={`/games/${u.game_id}/questions`} className="hover:text-ink hover:underline">
                               {questionLabel(u)}
                             </Link>{' '}
                             ({u.roles.join(', ')}){u.played && ' · played'}
@@ -262,22 +262,22 @@ export default function ImagesPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500">Used in 0 questions</p>
+                  <p className="text-xs text-ink-muted">Used in 0 questions</p>
                 )}
 
                 {notice && (
-                  <p className={`text-xs ${notice.kind === 'error' ? 'text-red-400' : 'text-amber-300'}`}>{notice.text}</p>
+                  <p className={`text-xs ${notice.kind === 'error' ? 'text-danger-text' : 'text-warning-text'}`}>{notice.text}</p>
                 )}
 
                 {confirming === 'delete' && (
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <div className="flex items-center gap-2 text-xs text-ink-muted">
                     Delete this image?
                     <Button size="sm" variant="destructive" onClick={() => void deleteImage(img)} data-testid="library-confirm-delete">Delete</Button>
                     <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
                   </div>
                 )}
                 {confirming === 'replace' && (
-                  <div className="space-y-1 text-xs text-amber-300">
+                  <div className="space-y-1 text-xs text-warning-text">
                     <p>Past results of played questions will show the new image.</p>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => startReplace(img)}>Choose new file</Button>
@@ -334,7 +334,7 @@ export default function ImagesPage() {
 
       {viewing && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/80 p-6"
           role="dialog"
           aria-modal="true"
           aria-label={viewing.filename}
@@ -343,7 +343,7 @@ export default function ImagesPage() {
           <img
             src={src(viewing)}
             alt={viewing.filename}
-            className="max-h-full max-w-full object-contain"
+            className="max-h-full max-w-full border-2 border-line bg-image-bg object-contain"
           />
         </div>
       )}

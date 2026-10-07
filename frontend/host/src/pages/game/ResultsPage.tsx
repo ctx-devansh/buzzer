@@ -6,6 +6,7 @@ import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder
 import { PinBoard } from '../../components/PinBoard';
 import { aspectOf, pinImageSrc, revealKey } from '../../lib/pinTheSpot';
 import { imageUrl } from '../../lib/images';
+import { barClasses, CORRECT_CHIP } from '../../lib/answerBars';
 
 const RESULTS_DISPLAY_SECONDS = 10;
 
@@ -61,7 +62,7 @@ function WordCloud({ distribution, answerReveal, totalAnswered, totalPlayers }: 
 
   function sizeClass(count: number): string {
     const f = count / maxCount;
-    if (f > 0.75) return 'text-5xl font-black';
+    if (f > 0.75) return 'text-5xl font-bold';
     if (f > 0.5)  return 'text-4xl font-bold';
     if (f > 0.25) return 'text-3xl font-semibold';
     if (f > 0.1)  return 'text-2xl font-medium';
@@ -76,35 +77,42 @@ function WordCloud({ distribution, answerReveal, totalAnswered, totalPlayers }: 
   return (
     <div className="w-full max-w-3xl flex flex-col gap-4">
       {isAccuracy && acceptedAnswers.length > 0 && (
-        <p className="text-center text-slate-400 text-base">
+        <p className="nb-body text-center text-ink-muted">
           Correct answer:{' '}
-          <span className="text-green-400 font-semibold">
+          <span className="text-success-text font-semibold">
             {(answerReveal as { acceptedAnswers: string[] }).acceptedAnswers.join(' / ')}
             {editDistance > 0 && (
-              <span className="text-slate-500 font-normal text-sm ml-1">(±{editDistance})</span>
+              <span className="text-ink-muted font-normal text-sm ml-1">(±{editDistance})</span>
             )}
           </span>
         </p>
       )}
 
-      <div className="flex flex-wrap gap-x-5 gap-y-3 justify-center items-center min-h-32 p-4 bg-slate-800/40 rounded-2xl">
+      <div className="nb-box flex flex-wrap gap-x-5 gap-y-3 justify-center items-center min-h-32 p-4">
         {entries.map(([word, count]) => (
           <span
             key={word}
             title={`${count} player${count !== 1 ? 's' : ''}`}
-            className={`${sizeClass(count)} transition-colors ${
-              isCorrectWord(word) ? 'text-green-400' : 'text-slate-300'
+            className={`${sizeClass(count)} ${
+              isCorrectWord(word) ? 'text-success-text font-bold underline decoration-2 underline-offset-4' : 'text-ink-muted'
             }`}
           >
+            {/* Colour is never the only cue (WCAG 1.4.1): correct words also get a check and an underline. */}
+            {isCorrectWord(word) && (
+              <>
+                <span aria-hidden="true">✓ </span>
+                <span className="sr-only">correct: </span>
+              </>
+            )}
             {word}
           </span>
         ))}
         {entries.length === 0 && (
-          <p className="text-slate-600 text-sm">No answers submitted</p>
+          <p className="text-ink-muted text-sm">No answers submitted</p>
         )}
       </div>
 
-      <p className="text-slate-500 text-sm text-right">
+      <p className="nb-caption text-right">
         {totalAnswered} / {totalPlayers} answered
       </p>
     </div>
@@ -125,15 +133,10 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
   const maxCount = Math.max(...bars.map(b => b.count), 1);
 
   return (
-    <div className="w-full max-w-2xl space-y-3">
+    <div className="w-full max-w-4xl space-y-3">
       {bars.map((bar, i) => {
         const pct = Math.round((bar.count / maxCount) * 100);
-        const barColor =
-          bar.correct === true
-            ? 'bg-green-500'
-            : bar.correct === false
-            ? 'bg-slate-600'
-            : 'bg-indigo-500';
+        const { bar: barClass, label: barLabel } = barClasses(bar.correct);
 
         return (
           <div key={i} className="flex items-center gap-3" data-testid={bar.testId}>
@@ -141,21 +144,21 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
               <img
                 src={imageUrl(bar.imageId)}
                 alt=""
-                className="h-12 w-16 shrink-0 rounded object-contain"
+                className="h-12 w-16 shrink-0 border-2 border-line bg-image-bg object-contain"
                 data-testid="bar-thumb"
               />
             )}
-            <span className="text-slate-300 font-bold font-mono w-8 text-right shrink-0">
+            <span className="font-display font-bold text-2xl text-ink w-64 shrink-0 truncate" title={bar.label}>
               {bar.label}
             </span>
-            <div className="flex-1 bg-slate-800 rounded-full h-10 overflow-hidden">
+            <div className="flex-1 h-12">
               <div
-                className={`h-full rounded-full flex items-center justify-end pr-3 transition-all duration-500 ${barColor}`}
+                className={`h-full flex items-center justify-end pr-3 transition-all duration-500 ${bar.count > 0 ? barClass : ''}`}
                 style={{ width: `${Math.max(pct, bar.count > 0 ? 4 : 0)}%` }}
               >
                 {bar.count > 0 && (
                   <span
-                    className="text-white font-bold text-sm"
+                    className={`font-display font-bold text-lg tabular-nums ${barLabel}`}
                     data-testid={bar.testId ? `${bar.testId}-count` : undefined}
                   >
                     {bar.count}
@@ -164,11 +167,11 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
               </div>
             </div>
             {bar.correct === true && (
-              <span className="text-green-400 text-sm font-semibold shrink-0">✓ Correct</span>
+              <span className={`${CORRECT_CHIP} shrink-0`}>✓ Correct</span>
             )}
             {bar.count === 0 && (bar.correct !== true || bar.testId) && (
               <span
-                className="text-slate-600 text-sm shrink-0"
+                className="text-ink-muted font-display font-bold text-lg shrink-0"
                 data-testid={bar.testId ? `${bar.testId}-count` : undefined}
               >
                 0
@@ -178,7 +181,7 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
         );
       })}
 
-      <p className="text-slate-500 text-sm text-right pt-1">
+      <p className="nb-caption text-right pt-1">
         {totalAnswered} / {totalPlayers} answered
       </p>
     </div>
@@ -297,24 +300,24 @@ export default function ResultsPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-8">
-      <h2 className="text-3xl font-bold text-slate-100">
+      <h1 className="nb-h1 text-ink">
         Question {currentQuestion?.questionNumber} Results
-      </h2>
+      </h1>
 
       {currentQuestion && (
-        <p className="text-slate-300 text-xl text-center max-w-2xl">
+        <p className="nb-body text-ink-muted text-center max-w-3xl">
           {currentQuestion.prompt}
         </p>
       )}
 
       {questionResults && isPio && bars.length > 0 && (
-        <p className="text-slate-400 text-base -mb-4">{pioCaption(questionResults.answerReveal)}</p>
+        <p className="nb-caption -mb-4">{pioCaption(questionResults.answerReveal)}</p>
       )}
 
       {questionResults && isPin ? (
         <div className="w-full max-w-4xl flex flex-col gap-2">
           {pinAspect === null ? (
-            <p className="text-center text-slate-400">Image failed to load</p>
+            <p className="text-center text-ink-muted">Image failed to load</p>
           ) : (
             <PinBoard
               imageUrl={pinImageSrc(currentQuestion?.config)}
@@ -326,7 +329,7 @@ export default function ResultsPage() {
               testId="pin-board-results"
             />
           )}
-          <p className="text-slate-500 text-sm text-right">
+          <p className="nb-caption text-right">
             {questionResults.totalAnswered} / {questionResults.totalPlayers} answered
           </p>
         </div>
@@ -346,8 +349,8 @@ export default function ResultsPage() {
       ) : null}
 
       {pioOrderText && (
-        <p className="text-slate-400 text-lg">
-          Correct order: <span className="text-green-400 font-semibold">{pioOrderText}</span>
+        <p className="nb-body text-ink-muted">
+          Correct order: <span className="text-success-text font-semibold">{pioOrderText}</span>
         </p>
       )}
 
@@ -356,7 +359,7 @@ export default function ResultsPage() {
           {isLast ? 'Show Final Results' : 'Next Question'}
         </Button>
         {autoAdvance && (
-          <p className="text-slate-500 text-sm tabular-nums">
+          <p className="text-ink-muted text-sm tabular-nums">
             Auto-advancing in {countdown}s
           </p>
         )}

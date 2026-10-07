@@ -2,8 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Buzzer</title>
+    <meta name="theme-color" content="#FFF8E7" />
+    <script>
+      // First-paint theme, before CSS and React load (docs/design-better-ui.md §4.4). Same rule as
+      // frontend/theme/theme.ts: the stored choice, else the OS preference. Keep the two in sync.
+      (function () {
+        var theme = null;
+        try { theme = localStorage.getItem('buzzer-theme'); } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#1B1C20' : '#FFF8E7');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -18,7 +18,7 @@ export default function QuestionPage() {
   if (!currentQuestion) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-400">Loading question…</p>
+        <p className="text-ink-muted">Loading question…</p>
       </div>
     );
   }
@@ -46,20 +46,20 @@ export default function QuestionPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-8">
-      <div className="flex items-center gap-3 text-sm uppercase tracking-wider">
-        <span className="text-slate-400">
+      <div className="nb-caption flex flex-wrap items-center justify-center gap-3">
+        <span className="text-ink-muted">
           Question {currentQuestion.questionNumber} of {currentQuestion.totalQuestions}
         </span>
-        <span className="text-slate-600">·</span>
-        <span className="text-slate-400">{typeLabel[currentQuestion.type] ?? currentQuestion.type}</span>
-        <span className="text-slate-600">·</span>
-        <span className={currentQuestion.gradingType === 'COMPLETENESS' ? 'text-amber-400' : 'text-indigo-400'}>
+        <span className="text-ink-muted">·</span>
+        <span className="text-ink-muted">{typeLabel[currentQuestion.type] ?? currentQuestion.type}</span>
+        <span className="text-ink-muted">·</span>
+        <span className={`nb-chip ${currentQuestion.gradingType === 'COMPLETENESS' ? 'bg-warning' : 'bg-info'} text-on-fill`}>
           {currentQuestion.gradingType === 'COMPLETENESS' ? 'Participation' : 'Accuracy'}
         </span>
         {currentQuestion.type === 'fill_in_the_blank' && currentQuestion.gradingType === 'ACCURACY' && (
           <>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400 normal-case">
+            <span className="text-ink-muted">·</span>
+            <span className="text-ink-muted normal-case">
               {editDistanceLabel(currentQuestion.editDistance ?? 0)}
             </span>
           </>
@@ -77,7 +77,8 @@ export default function QuestionPage() {
 
       {!questionLocked && (
         <>
-          <h2 className="text-4xl font-bold text-slate-100 text-center max-w-3xl leading-tight">
+          {/* Inter, not the display face: prompts are running text (§4.1). */}
+          <h2 className="nb-prompt text-ink text-center max-w-4xl">
             {currentQuestion.prompt}
           </h2>
           {/* The prompt image: on this screen only, never on phones; hidden while locked. */}
@@ -85,7 +86,7 @@ export default function QuestionPage() {
             <img
               src={imageUrl(currentQuestion.promptImageId)}
               alt={plainText(currentQuestion.prompt)}
-              className="max-h-[45vh] max-w-full rounded-xl object-contain"
+              className="max-h-[45vh] max-w-full border-4 border-line bg-image-bg object-contain"
               data-testid="prompt-image"
               // A deleted image (the accepted delete race) hides rather than showing a
               // broken-image icon on the projector; the prompt text stands alone.
@@ -98,9 +99,11 @@ export default function QuestionPage() {
               {(currentQuestion.config.items ?? []).map((item, i) => (
                 <li
                   key={i}
-                  className="flex items-center gap-4 rounded-2xl bg-slate-800 border border-slate-700 px-5 py-3 text-2xl text-slate-100"
+                  className="nb-box nb-body flex items-center gap-4 px-5 py-3 text-ink"
                 >
-                  <span className="font-black text-indigo-400 w-8 shrink-0">{String.fromCharCode(65 + i)}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-line bg-accent font-display font-bold text-on-fill">
+                    {String.fromCharCode(65 + i)}
+                  </span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -113,7 +116,7 @@ export default function QuestionPage() {
       {currentQuestion.type === 'pin_the_spot' && (
         <div className="w-full max-w-4xl">
           {aspectOf(currentQuestion.config) === null ? (
-            <p className="text-center text-slate-400">Image failed to load</p>
+            <p className="text-center text-ink-muted">Image failed to load</p>
           ) : (
             <PinBoard
               imageUrl={pinImageSrc(currentQuestion.config)}
@@ -126,10 +129,10 @@ export default function QuestionPage() {
         </div>
       )}
 
-      <div className="text-slate-300 text-xl">
-        {answeredCount} / {playerCount} answered
-        {allAnswered && <span className="ml-3 text-green-400 font-semibold">All answered!</span>}
-        {questionLocked && <span className="ml-3 text-amber-400 font-semibold">· Answers locked</span>}
+      <div className="nb-body text-ink-muted">
+        <span className="nb-stat text-ink">{answeredCount} / {playerCount}</span> answered
+        {allAnswered && <span className="ml-3 text-success-text font-semibold">All answered!</span>}
+        {questionLocked && <span className="ml-3 text-warning-text font-semibold">· Answers locked</span>}
       </div>
 
       <div className="flex gap-4">
@@ -137,7 +140,7 @@ export default function QuestionPage() {
           size="lg"
           variant="outline"
           onClick={emitLockQuestion}
-          className={`px-10 ${questionLocked ? 'border-amber-500 text-amber-400 hover:bg-amber-500/10' : ''}`}
+          className={`px-10 ${questionLocked ? 'bg-warning text-on-fill hover:bg-warning' : ''}`}
         >
           {questionLocked ? 'Unlock Question' : 'Lock Question'}
         </Button>

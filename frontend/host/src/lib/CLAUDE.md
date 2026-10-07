@@ -17,9 +17,15 @@ the backend's `/api` routes, cross-app links, and the Tailwind class-merging hel
   `Content-Disposition`, saves the blob). Both bypass `apiFetch` on purpose.
 - `links.ts` — `ADMIN_APP_URL` (`VITE_ADMIN_APP_URL`, else `http://localhost:5175` in dev and
   `/admin` in a build).
-- `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`.
+- `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`, extended so `shadow-brutal*` merges as
+  a shadow size (T9). The `.nb-*` classes are deliberately not registered.
+- `theme.ts` (T9) — re-exports `getTheme`/`setTheme` from `frontend/theme/theme.ts` and adds the
+  `useTheme()` hook (`useSyncExternalStore`).
+- `answerBars.ts` (T9) — `barClasses(correct)` (`{ bar, label }`), `HISTOGRAM_BAR`, `CORRECT_CHIP`:
+  the one answer-bar encoding (correct = success fill, thick outline and a ✓ chip; wrong = muted;
+  no key = accent) shared by `ResultsPage` and `GameOverPage`.
 - `putInOrder.ts` — `buildPioBars(reveal, distribution, items)` (one bar per correct position,
-  counting `"{item}@{position}"` keys; green for ACCURACY, neutral for COMPLETENESS, `[]`
+  counting `"{item}@{position}"` keys; `correct: true` for ACCURACY, `null` for COMPLETENESS (colours come from `answerBars.ts`), `[]`
   without `correctOrder`), `pioCaption(reveal)` and `correctOrderText(reveal, items)`. Used by
   `ResultsPage` and `GameOverPage` so the live and game-over charts can't drift.
 
@@ -41,7 +47,9 @@ outside a live game. In-game traffic uses Socket.IO directly in `../pages/game/G
 (which takes its socket token from `getToken()`). `../components/ui/` imports `cn`.
 
 **Gotchas.**
-- Keep `grep -rn localStorage src` returning hits only in `auth.ts`.
+- Keep `grep -rn localStorage src` returning hits only in `auth.ts`. The one exception is the theme
+  key `buzzer-theme`, owned by `frontend/theme/theme.ts` (outside `src/`) and the first-paint script
+  in `index.html`.
 - Never use `getRole()` for a real access decision — that would be a security bug.
 - No 401 handling: an expired token surfaces as a thrown error on the calling page (the shell
   shows it with Retry), not a redirect to `/login`.

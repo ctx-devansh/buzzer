@@ -15,6 +15,28 @@ Each `src/` has the same shape: `pages/` (screens; `game/` subfolder for live pl
 player), `components/ui/` (shadcn-style primitives), `lib/` (`api.ts` + `cn`), and `App.tsx`
 (routes, `BrowserRouter basename={BASE_URL}`).
 
+**`theme/` — the one shared folder (T9, `docs/design-better-ui.md`).** Not an app; source only,
+imported by all three:
+- `tokens.css` — every colour as a semantic CSS variable (RGB channels) for light
+  (`:root, [data-theme=light]`) and dark (`[data-theme=dark]`), the density variables
+  (`--nb-*`, overridden under `[data-density=compact|projector]`) and the Pin the Spot canvas
+  colours. Each app's `src/index.css` `@import`s it first. Its block order and selectors are
+  parsed by `tests/unit/test_theme_tokens.py` — keep them.
+- `preset.ts` — the Tailwind preset: token colours **replace** Tailwind's palette, radii and
+  shadows (so `bg-slate-800`, `rounded-xl`, `shadow-xl` emit nothing), plus a plugin that adds the
+  focus/placeholder/checkbox base rules and every `.nb-*` component class (`nb-box`, `nb-press`,
+  `nb-selected`, `nb-chip`, `nb-h1/h2/h3`, `nb-body`, `nb-prompt`, `nb-caption`, `nb-stat`,
+  `nb-hero`, `nb-code`, `nb-page`, `nb-card`, `nb-stack`). It must import nothing.
+- `theme.ts` — the light/dark runtime (`getTheme`, `setTheme`, `subscribe`; OS and cross-tab
+  listeners), React-free because `frontend/theme/` has no `node_modules`. Each app's
+  `src/lib/theme.ts` adds `useTheme()`; each `index.html` has the first-paint script (same rule,
+  keep in sync) and the `theme-color` meta.
+
+**Adding a colour:** define it in both theme blocks of `tokens.css`, add it to `TOKENS` in
+`preset.ts`, use it as `bg-<name>`/`text-<name>`, and run `pytest -c pytest.ini tests/unit`.
+Never use a raw Tailwind palette class, hex colour, `outline-none` or `focus:ring*` in `src/`:
+the scan test fails on them.
+
 **How it fits in.** All three call the FastAPI backend at `/api` (proxied to `:8000` by Vite in
 dev, by nginx in Docker; see `nginx/nginx.dev.conf`). Host and player also open Socket.IO at
 `/socket.io` for live games. Event names and payloads mirror `backend/app/websocket/`. The host
@@ -25,7 +47,7 @@ role checks (`require_admin`, `require_user` plus course/game access in
 guard just checks that a token exists.
 
 **Gotchas.**
-- **Nothing is shared between apps.** `lib/api.ts`, `lib/utils.ts`, and `components/ui/*` are
+- **Only `theme/` is shared.** `lib/api.ts`, `lib/utils.ts`, and `components/ui/*` are
   copy-pasted and have drifted: host's `api.ts` is now the fullest (`ApiError` with status), only the player has
   `isTokenExpired`, and admin and host `ui/` files are identical while the player's differ. A
   fix in one app must be applied by hand to the others.
@@ -42,5 +64,10 @@ guard just checks that a token exists.
   `lib/images.ts::imageUrl(id)` → `/api/images/{id}`, and `lib/pinTheSpot.ts::pinImageSrc`
   (library `image_id` first, else `image_url`). Phones get option images and Pin the Spot
   canvases, never prompt images.
+- **Theme key.** `localStorage['buzzer-theme']` is one key for all apps; under nginx a toggle in
+  one app changes the others (live, via the storage event). No stored value = follow the OS.
+- **Build config.** `tsc -b` emits into `node_modules/.tmp` and the scripts pass `--config
+  vite.config.ts` / PostCSS points at `tailwind.config.ts`: a stray emitted `.js` config would
+  otherwise silently shadow the `.ts` one.
 - `npm run dev` at the repo root runs all three via `concurrently`. `npm run build` builds each
   into its own `dist/`, which docker-compose mounts into nginx.

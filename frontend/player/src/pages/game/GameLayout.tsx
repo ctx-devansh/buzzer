@@ -179,10 +179,10 @@ export default function GameLayout() {
 
   if (error && phase !== 'gameover') {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="flex flex-1 flex-col items-center justify-center p-4">
         <div className="text-center space-y-4">
-          <p className="text-red-400 text-lg">{error}</p>
-          <button className="text-indigo-400 underline" onClick={() => navigate('/join')}>
+          <p className="text-danger-text text-lg">{error}</p>
+          <button className="min-h-11 text-ink underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent" onClick={() => navigate('/join')}>
             Back to Join
           </button>
         </div>
@@ -190,12 +190,14 @@ export default function GameLayout() {
     );
   }
 
+  // No wrapper element here (docs/design-better-ui.md §4.11): the banner and the routed page are direct
+  // flex children of App's <main>. If a wrapper is ever added, it must be `flex-1 flex flex-col`.
   return (
     <GameContext.Provider
       value={{ phase, gameStatus, roomCode: code, playerCount, hostDisconnected, currentQuestion, questionLocked, lastAnswerData, answerResult, questionResults, gameOver, emitAnswer }}
     >
       {hostDisconnected && phase !== 'gameover' && (
-        <div className="fixed top-0 inset-x-0 bg-yellow-600/90 text-yellow-100 text-center py-2 text-sm z-50">
+        <div role="status" className="shrink-0 border-y-2 border-line bg-warning text-on-fill text-center py-2 text-sm font-semibold">
           Host disconnected — waiting for them to reconnect…
         </div>
       )}

@@ -64,32 +64,34 @@ export default function NamePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex flex-1 flex-col items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <h1 className="text-xl font-bold text-slate-100 text-center">Join Room {code}</h1>
+          <h1 className="nb-h2 text-ink text-center">Join Room {code}</h1>
 
           {/* Mode toggle — hidden when already authenticated */}
           {!isAuthenticated && (
-            <div className="flex mt-3 bg-slate-700/50 rounded-xl p-1 gap-1">
+            <div className="flex mt-3 border-2 border-line bg-surface-muted p-1 gap-1">
               <button
                 type="button"
+                aria-pressed={mode === 'guest'}
                 onClick={() => { setMode('guest'); setError(''); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex-1 min-h-11 text-sm font-semibold border-2 transition-colors ${
                   mode === 'guest'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'border-line bg-accent text-on-fill'
+                    : 'border-transparent text-ink'
                 }`}
               >
                 Join as Guest
               </button>
               <button
                 type="button"
+                aria-pressed={mode === 'netid' || mode === 'local'}
                 onClick={() => { setMode('netid'); setError(''); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex-1 min-h-11 text-sm font-semibold border-2 transition-colors ${
                   mode === 'netid' || mode === 'local'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'border-line bg-accent text-on-fill'
+                    : 'border-transparent text-ink'
                 }`}
               >
                 Sign In
@@ -102,7 +104,7 @@ export default function NamePage() {
           {mode === 'guest' && (
             <form onSubmit={handleGuest} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Display Name</label>
+                <label className="block text-sm font-medium text-ink-muted mb-1">Display Name</label>
                 <Input
                   type="text"
                   value={displayName}
@@ -114,7 +116,7 @@ export default function NamePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
+                <label className="block text-sm font-medium text-ink-muted mb-1">Email</label>
                 <Input
                   type="email"
                   value={email}
@@ -123,7 +125,7 @@ export default function NamePage() {
                   required
                 />
               </div>
-              {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+              {error && <p className="text-danger-text text-sm text-center">{error}</p>}
               <Button
                 type="submit"
                 className="w-full"
@@ -151,17 +153,17 @@ export default function NamePage() {
                 <a
                   href="/api/auth/oauth2-callback?redirect_to=/player/login"
                   onClick={() => sessionStorage.setItem('joinRoomCode', code)}
-                  className="flex items-center justify-center w-full py-3 px-4 rounded-lg font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                  className="nb-box nb-press flex items-center justify-center w-full min-h-12 px-4 font-display font-bold bg-accent text-on-fill"
                 >
                   Sign in with UW NetID
                 </a>
               )}
-              {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+              {error && <p className="text-danger-text text-sm text-center">{error}</p>}
               {!isAuthenticated && (
                 <button
                   type="button"
                   onClick={() => { setMode('local'); setError(''); }}
-                  className="w-full text-slate-500 text-sm hover:text-slate-300 transition-colors"
+                  className="w-full min-h-11 text-ink text-sm underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent"
                 >
                   Use local account instead
                 </button>
@@ -188,7 +190,7 @@ export default function NamePage() {
                 autoComplete="current-password"
                 required
               />
-              {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+              {error && <p className="text-danger-text text-sm text-center">{error}</p>}
               <Button
                 type="submit"
                 className="w-full"
@@ -200,7 +202,7 @@ export default function NamePage() {
               <button
                 type="button"
                 onClick={() => { setMode('netid'); setError(''); }}
-                className="w-full text-slate-500 text-sm hover:text-slate-300 transition-colors"
+                className="w-full min-h-11 text-ink text-sm underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent"
               >
                 ← Back to NetID sign in
               </button>
@@ -210,7 +212,7 @@ export default function NamePage() {
           <button
             type="button"
             onClick={() => navigate('/join')}
-            className="w-full mt-3 text-slate-500 text-sm hover:text-slate-300 transition-colors"
+            className="w-full min-h-11 mt-3 text-ink text-sm underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent"
           >
             ← Different room code
           </button>

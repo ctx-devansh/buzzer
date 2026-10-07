@@ -17,8 +17,13 @@ join a room and answer questions.
 - `App.tsx` — routes `/join`, `/login`, `/name/:code`, and
   `/game/:code/{lobby,question,feedback,results,gameover}`; `*` → `/join`. There is no route
   guard; `GameLayout` checks the token itself.
-- `main.tsx`, `index.css` — React root and Tailwind entry; `index.css` also defines the
-  `--pin-*` colour hooks `PinCanvas` reads (T9).
+- `main.tsx`, `index.css` — React root (also imports the self-hosted fonts) and Tailwind entry;
+  `index.css` `@import`s `../../theme/tokens.css` (colours and `--pin-*`, T9).
+- Layout (T9 §4.11): `App.tsx` is a flex chain — `h-[100dvh]` column, a 56 px header row holding
+  `ThemeToggle`, then `<main class="flex-1 min-h-0 overflow-y-auto flex flex-col">`. Pages are
+  direct flex children sized with `flex-1` (never `min-h-screen`/`min-h-full`; the scan test
+  forbids them). `GameLayout` renders no wrapper element, and its "Host disconnected" banner is
+  in-flow. The viewport allows pinch-zoom and uses `viewport-fit=cover`.
 
 **How it fits in.** Sibling of the host and admin apps under `frontend/`. Players arrive from
 the host's QR code. The backend authorises each player against the session's course

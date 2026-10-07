@@ -9,6 +9,7 @@ import { buildPioBars, correctOrderText, pioCaption } from '../../lib/putInOrder
 import { PinBoard } from '../../components/PinBoard';
 import { aspectOf, pinImageSrc, revealKey } from '../../lib/pinTheSpot';
 import { imageUrl } from '../../lib/images';
+import { barClasses, CORRECT_CHIP, HISTOGRAM_BAR } from '../../lib/answerBars';
 
 const TARGET_BUCKETS = 8;
 
@@ -59,29 +60,29 @@ function buildBuckets(scores: number[], maxPossibleScore: number): Bucket[] {
 
 function optionLabel(i: number) { return String.fromCharCode(65 + i); }
 
-function AnswerBar({ label, count, total, correct, colorClass, testId }: {
-  label: string; count: number; total: number; correct: boolean; colorClass: string; testId?: string;
+/** One answer bar, in the same encoding as ResultsPage (lib/answerBars.ts, docs/design-better-ui.md §4.8). */
+function AnswerBar({ label, count, total, correct, testId }: {
+  label: string; count: number; total: number; correct: boolean | null; testId?: string;
 }) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
     <div className="flex items-center gap-3" data-testid={testId}>
-      <span className={`w-6 text-center font-bold text-sm shrink-0 ${correct ? 'text-green-400' : 'text-slate-400'}`}>
+      <span className="w-8 text-center font-display font-bold text-lg text-ink shrink-0">
         {label}
       </span>
-      <div className="flex-1 h-6 bg-slate-800 rounded overflow-hidden">
+      <div className="flex-1 h-8">
         <div
-          className={`h-full rounded transition-all duration-500 ${colorClass}`}
+          className={`h-full transition-all duration-500 ${count > 0 ? barClasses(correct).bar : ''}`}
           style={{ width: `${Math.max(pct, count > 0 ? 2 : 0)}%` }}
         />
       </div>
       <span
-        className={`w-8 text-right text-sm font-semibold shrink-0 ${correct ? 'text-green-400' : 'text-slate-400'}`}
+        className="w-10 text-right font-display font-bold text-lg tabular-nums text-ink shrink-0"
         data-testid={testId ? `${testId}-count` : undefined}
       >
         {count}
       </span>
-      {correct && <span className="text-green-500 text-xs font-bold shrink-0">✓</span>}
-      {!correct && <span className="w-4 shrink-0" />}
+      {correct === true ? <span className={`${CORRECT_CHIP} shrink-0`}>✓ Correct</span> : <span className="w-28 shrink-0" />}
     </div>
   );
 }
@@ -124,34 +125,35 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
   }
 
   return (
-    <div className="w-full bg-slate-800/60 border border-slate-700 rounded-2xl p-5 space-y-4">
+    <div className="nb-card w-full">
+      <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-slate-500 text-xs uppercase tracking-widest font-semibold">
+          <span className="text-ink-muted text-xs uppercase tracking-widest font-semibold">
             Q{index + 1}
           </span>
-          <span className="text-slate-600">·</span>
-          <span className="text-slate-400 text-xs uppercase tracking-widest">
+          <span className="text-ink-muted">·</span>
+          <span className="text-ink-muted text-xs uppercase tracking-widest">
             {typeLabel[type] ?? type}
           </span>
-          <span className="text-slate-600">·</span>
-          <span className={`text-xs uppercase tracking-widest font-semibold ${gradingType === 'COMPLETENESS' ? 'text-amber-400' : 'text-indigo-400'}`}>
+          <span className="text-ink-muted">·</span>
+          <span className={`nb-chip ${gradingType === 'COMPLETENESS' ? 'bg-warning' : 'bg-info'} text-on-fill`}>
             {gradingType === 'COMPLETENESS' ? 'Participation' : 'Accuracy'}
           </span>
-          <span className="text-slate-600">·</span>
-          <span className="text-slate-400 text-xs">{pointsValue.toLocaleString()} {pointsValue === 1 ? 'pt' : 'pts'}</span>
+          <span className="text-ink-muted">·</span>
+          <span className="text-ink-muted text-xs">{pointsValue.toLocaleString()} {pointsValue === 1 ? 'pt' : 'pts'}</span>
         </div>
-        <div className="text-right text-xs text-slate-500 shrink-0">
-          <span className="text-slate-300 font-semibold">{totalAnswered}</span>/{totalPlayers} answered
+        <div className="text-right text-xs text-ink-muted shrink-0">
+          <span className="text-ink-muted font-semibold">{totalAnswered}</span>/{totalPlayers} answered
           {avgAnswerTimeMs !== null && (
-            <span className="ml-2 text-slate-500">· avg {(avgAnswerTimeMs / 1000).toFixed(1)}s</span>
+            <span className="ml-2 text-ink-muted">· avg {(avgAnswerTimeMs / 1000).toFixed(1)}s</span>
           )}
         </div>
       </div>
 
       {/* Prompt */}
-      <p className="text-slate-100 text-lg font-semibold leading-snug">{prompt}</p>
+      <h3 className="nb-h3 text-ink">{prompt}</h3>
 
       {/* Distribution */}
       <div className="space-y-2">
@@ -167,24 +169,23 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
           />
         )}
         {isPio && pioBars.length > 0 && (
-          <p className="text-slate-400 text-sm">{pioCaption(reveal)}</p>
+          <p className="text-ink-muted text-sm">{pioCaption(reveal)}</p>
         )}
         {isPio && pioBars.map((bar, p) => (
           <div key={p} className="space-y-0.5">
-            <div className={`text-xs ${bar.correct ? 'text-green-300' : 'text-slate-400'}`}>{bar.label}</div>
+            <div className="text-sm text-ink-muted">{bar.label}</div>
             <AnswerBar
               label={String(p + 1)}
               count={bar.count}
               total={totalPlayers}
-              correct={bar.correct === true}
-              colorClass={bar.correct ? 'bg-green-500' : 'bg-indigo-500'}
+              correct={bar.correct}
               testId={bar.testId}
             />
           </div>
         ))}
         {pioOrderText && (
-          <p className="text-slate-400 text-sm">
-            Correct order: <span className="text-green-300 font-medium">{pioOrderText}</span>
+          <p className="text-ink-muted text-sm">
+            Correct order: <span className="text-success-text font-medium">{pioOrderText}</span>
           </p>
         )}
 
@@ -195,19 +196,18 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
           const imageId = config.option_image_ids?.[i];
           return (
             <div key={i} className="space-y-0.5">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
+              <div className="flex items-center gap-2 text-xs text-ink-muted">
                 {imageId && (
-                  <img src={imageUrl(imageId)} alt="" className="h-12 w-16 rounded object-contain" />
+                  <img src={imageUrl(imageId)} alt="" className="h-12 w-16 border-2 border-line bg-image-bg object-contain" />
                 )}
-                <span className={`font-bold ${correct ? 'text-green-400' : ''}`}>{optionLabel(i)}.</span>
-                <span className={correct ? 'text-green-300' : ''}>{opt}</span>
+                <span className={`font-bold ${correct ? 'text-success-text' : 'text-ink'}`}>{optionLabel(i)}.</span>
+                <span className={correct ? 'text-success-text font-semibold' : 'text-ink'}>{opt}</span>
               </div>
               <AnswerBar
                 label={optionLabel(i)}
                 count={count}
                 total={totalPlayers}
                 correct={correct}
-                colorClass={correct ? 'bg-green-500' : 'bg-slate-600'}
               />
             </div>
           );
@@ -223,7 +223,6 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
               count={count}
               total={totalPlayers}
               correct={correct}
-              colorClass={correct ? 'bg-green-500' : 'bg-red-700'}
             />
           );
         })}
@@ -231,16 +230,16 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
         {type === 'fill_in_the_blank' && (
           <div className="space-y-2">
             {reveal.type === 'fill_in_the_blank' && (
-              <p className="text-slate-400 text-sm">
+              <p className="text-ink-muted text-sm">
                 Accepted:{' '}
                 {(reveal as { type: 'fill_in_the_blank'; acceptedAnswers: string[]; editDistance: number }).acceptedAnswers.map((a, i, arr) => (
                   <span key={i}>
-                    <span className="text-green-300 font-mono">"{a}"</span>
-                    {i < arr.length - 1 && <span className="text-slate-500">, </span>}
+                    <span className="text-success-text font-mono">"{a}"</span>
+                    {i < arr.length - 1 && <span className="text-ink-muted">, </span>}
                   </span>
                 ))}
                 {(reveal as { type: 'fill_in_the_blank'; acceptedAnswers: string[]; editDistance: number }).editDistance > 0 && (
-                  <span className="text-slate-500 ml-1">
+                  <span className="text-ink-muted ml-1">
                     (±{(reveal as { type: 'fill_in_the_blank'; acceptedAnswers: string[]; editDistance: number }).editDistance} typo)
                   </span>
                 )}
@@ -251,22 +250,23 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
       </div>
 
       {/* Footer stats */}
-      <div className="flex items-center gap-4 pt-1 border-t border-slate-700 text-sm">
+      <div className="flex items-center gap-4 pt-3 border-t-2 border-line text-sm">
         {gradingType === 'ACCURACY' ? (
           <>
-            <span className="text-green-400 font-semibold">{correctCount} correct</span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">{correctPct}% accuracy</span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">{answeredPct}% responded</span>
+            <span className="text-success-text font-semibold">{correctCount} correct</span>
+            <span className="text-ink-muted">·</span>
+            <span className="text-ink-muted">{correctPct}% accuracy</span>
+            <span className="text-ink-muted">·</span>
+            <span className="text-ink-muted">{answeredPct}% responded</span>
           </>
         ) : (
           <>
-            <span className="text-amber-400 font-semibold">{totalAnswered} completed</span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">{answeredPct}% response rate</span>
+            <span className="text-warning-text font-semibold">{totalAnswered} completed</span>
+            <span className="text-ink-muted">·</span>
+            <span className="text-ink-muted">{answeredPct}% response rate</span>
           </>
         )}
+      </div>
       </div>
     </div>
   );
@@ -300,7 +300,7 @@ export default function GameOverPage() {
   if (!gameOver) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-400">Loading final results…</p>
+        <p className="nb-body text-ink-muted">Loading final results…</p>
       </div>
     );
   }
@@ -317,48 +317,48 @@ export default function GameOverPage() {
   return (
     <div className="min-h-screen flex flex-col items-center p-8 gap-8">
       <div className="text-center">
-        <h1 className="text-5xl font-black text-slate-100">Game Over!</h1>
-        <p className="text-slate-400 mt-2">{playerCount} players · Max possible: {maxPossibleScore.toLocaleString()} pts</p>
+        <h1 className="nb-h1 text-ink">Game Over!</h1>
+        <p className="nb-body text-ink-muted mt-2">{playerCount} players · Max possible: {maxPossibleScore.toLocaleString()} pts</p>
       </div>
 
       {/* Histogram */}
       <div className="w-full max-w-3xl">
-        <p className="text-slate-400 text-sm uppercase tracking-widest text-center mb-4">Score Distribution</p>
+        <h2 className="nb-caption text-center mb-4">Score Distribution</h2>
         <div className="flex items-end gap-2 h-48">
           {buckets.map((bucket, i) => {
             const heightPct = (bucket.count / maxCount) * 100;
             return (
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-slate-300 text-sm font-semibold">
+                <span className="text-ink font-display font-bold text-lg tabular-nums">
                   {bucket.count > 0 ? bucket.count : ''}
                 </span>
-                <div className="w-full bg-slate-800 rounded-t-lg relative" style={{ height: '160px' }}>
+                <div className="w-full border-b-2 border-line relative" style={{ height: '160px' }}>
                   <div
-                    className="absolute bottom-0 left-0 right-0 bg-indigo-500 rounded-t-lg transition-all duration-700"
+                    className={`absolute bottom-0 left-0 right-0 transition-all duration-700 ${HISTOGRAM_BAR}`}
                     style={{ height: `${Math.max(heightPct, bucket.count > 0 ? 4 : 0)}%` }}
                   />
                 </div>
-                <span className="text-slate-500 text-xs">{bucket.label}</span>
+                <span className="text-ink-muted text-sm">{bucket.label}</span>
               </div>
             );
           })}
         </div>
-        <p className="text-slate-600 text-xs text-center mt-1">Score (points) →</p>
+        <p className="nb-caption text-center mt-2">Score (points) →</p>
       </div>
 
       {/* Summary stats */}
       <div className="flex gap-12 text-center">
         <div>
-          <p className="text-slate-400 text-xs uppercase tracking-widest">Average</p>
-          <p className="text-white text-2xl font-bold">{avg.toLocaleString()}</p>
+          <p className="nb-caption">Average</p>
+          <p className="nb-stat text-ink">{avg.toLocaleString()}</p>
         </div>
         <div>
-          <p className="text-slate-400 text-xs uppercase tracking-widest">High Score</p>
-          <p className="text-white text-2xl font-bold">{high.toLocaleString()}</p>
+          <p className="nb-caption">High Score</p>
+          <p className="nb-stat text-ink">{high.toLocaleString()}</p>
         </div>
         <div>
-          <p className="text-slate-400 text-xs uppercase tracking-widest">Players</p>
-          <p className="text-white text-2xl font-bold">{playerCount}</p>
+          <p className="nb-caption">Players</p>
+          <p className="nb-stat text-ink">{playerCount}</p>
         </div>
       </div>
 
@@ -380,15 +380,15 @@ export default function GameOverPage() {
             <Download size={16} className="mr-1" /> Download scores (CSV)
           </Button>
         </div>
-        {downloadError && <p className="text-red-400 text-sm">{downloadError}</p>}
+        {downloadError && <p className="text-danger-text text-sm">{downloadError}</p>}
       </div>
 
       {/* Per-question breakdown */}
       {questionSummary.length > 0 && (
         <div className="w-full max-w-3xl space-y-4 pb-8">
-          <p className="text-slate-400 text-sm uppercase tracking-widest text-center">
+          <h2 className="nb-caption text-center">
             Question Breakdown
-          </p>
+          </h2>
           {questionSummary.map((item, i) => (
             <QuestionCard key={item.questionId} item={item} index={i} />
           ))}
