@@ -133,7 +133,7 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
   const maxCount = Math.max(...bars.map(b => b.count), 1);
 
   return (
-    <div className="w-full max-w-2xl space-y-3">
+    <div className="w-full max-w-4xl space-y-3">
       {bars.map((bar, i) => {
         const pct = Math.round((bar.count / maxCount) * 100);
         const { bar: barClass, label: barLabel } = barClasses(bar.correct);
@@ -148,12 +148,12 @@ function AnswerBarChart({ bars, totalAnswered, totalPlayers }: BarChartProps) {
                 data-testid="bar-thumb"
               />
             )}
-            <span className="font-display font-bold text-2xl text-ink w-10 text-right shrink-0">
+            <span className="font-display font-bold text-2xl text-ink w-64 shrink-0 truncate" title={bar.label}>
               {bar.label}
             </span>
             <div className="flex-1 h-12">
               <div
-                className={`h-full flex items-center justify-end pr-3 transition-all duration-500 ${barClass}`}
+                className={`h-full flex items-center justify-end pr-3 transition-all duration-500 ${bar.count > 0 ? barClass : ''}`}
                 style={{ width: `${Math.max(pct, bar.count > 0 ? 4 : 0)}%` }}
               >
                 {bar.count > 0 && (

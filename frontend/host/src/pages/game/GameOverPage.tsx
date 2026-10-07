@@ -72,7 +72,7 @@ function AnswerBar({ label, count, total, correct, testId }: {
       </span>
       <div className="flex-1 h-8">
         <div
-          className={`h-full transition-all duration-500 ${barClasses(correct).bar}`}
+          className={`h-full transition-all duration-500 ${count > 0 ? barClasses(correct).bar : ''}`}
           style={{ width: `${Math.max(pct, count > 0 ? 2 : 0)}%` }}
         />
       </div>
@@ -153,7 +153,7 @@ function QuestionCard({ item, index }: { item: HostQuestionSummaryItem; index: n
       </div>
 
       {/* Prompt */}
-      <p className="nb-prompt text-ink">{prompt}</p>
+      <h3 className="nb-h3 text-ink">{prompt}</h3>
 
       {/* Distribution */}
       <div className="space-y-2">

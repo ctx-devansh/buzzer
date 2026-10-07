@@ -225,7 +225,8 @@ export function PinCanvas({
   }
 
   return (
-    <div ref={boxRef} className="relative w-full" style={{ height: box.h || undefined }}>
+    // An outline, not a border: the box is measured to size the canvas, and outlines take no space.
+    <div ref={boxRef} className="relative w-full outline outline-2 outline-line" style={{ height: box.h || undefined }}>
       <canvas
         ref={canvasRef}
         data-testid="pin-canvas"
