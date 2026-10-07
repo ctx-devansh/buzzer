@@ -64,19 +64,19 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="nb-page max-w-4xl">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-slate-100">Users</h2>
+        <h1 className="nb-h1 text-ink">Users</h1>
         <Button onClick={() => setShowForm(!showForm)} size="sm">
           <Plus size={16} className="mr-1" /> New User
         </Button>
       </div>
 
-      {error && <p className="text-red-400 mb-4 text-sm">{error}</p>}
+      {error && <p className="text-danger-text mb-4 text-sm">{error}</p>}
 
       {showForm && (
         <Card className="mb-6">
-          <CardHeader><h3 className="text-lg font-semibold text-slate-100">Create Local Account</h3></CardHeader>
+          <CardHeader><h2 className="nb-h3 text-ink">Create Local Account</h2></CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3">
               <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
@@ -93,23 +93,23 @@ export default function UsersPage() {
       )}
 
       {loading ? (
-        <p className="text-slate-400">Loading\u2026</p>
+        <p className="text-ink-muted">Loading\u2026</p>
       ) : (
         <div className="space-y-2">
           {users.map((u) => (
             <div
               key={u.id}
               onClick={() => navigate(`/users/${u.id}`)}
-              className="flex items-center justify-between px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/40 cursor-pointer hover:bg-slate-700/50"
+              className="flex items-center justify-between px-4 py-3 border-2 border-line bg-surface cursor-pointer hover:bg-surface-muted"
             >
               <div>
-                <span className="font-medium text-slate-100">{u.display_name ?? u.username ?? u.netid}</span>
-                <span className="text-slate-400 text-sm ml-3">{u.username ?? u.netid}</span>
-                <span className={`ml-3 text-xs px-2 py-0.5 rounded-full ${u.role === 'ADMIN' ? 'bg-indigo-900 text-indigo-300' : 'bg-slate-700 text-slate-300'}`}>
+                <span className="font-medium text-ink">{u.display_name ?? u.username ?? u.netid}</span>
+                <span className="text-ink-muted text-sm ml-3">{u.username ?? u.netid}</span>
+                <span className={`nb-chip ml-3 ${u.role === 'ADMIN' ? 'bg-accent text-on-fill' : 'bg-surface-muted text-ink'}`}>
                   {u.role}
                 </span>
               </div>
-              <span className="text-slate-500 text-xs">{u.email ?? ''}</span>
+              <span className="text-ink-muted text-xs">{u.email ?? ''}</span>
             </div>
           ))}
         </div>

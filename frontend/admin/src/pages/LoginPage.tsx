@@ -29,12 +29,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div data-density="compact" className="min-h-screen flex items-center justify-center p-4">
       <ThemeToggle className="fixed top-4 right-4" />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <h1 className="text-2xl font-bold text-slate-100">Admin Login</h1>
-          <p className="text-slate-400 text-sm mt-1">Buzzer Administration</p>
+          <h1 className="nb-h1 text-ink">Admin Login</h1>
+          <p className="text-ink-muted text-sm mt-1">Buzzer Administration</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -53,7 +53,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               required
             />
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && <p className="text-danger-text text-sm">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in\u2026' : 'Sign In'}
             </Button>
