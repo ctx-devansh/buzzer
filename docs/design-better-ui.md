@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 7, revised after five Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **revision 8, revised after six Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -25,6 +25,9 @@ T9 requires:
 
 The chosen visual direction is **neo-brutalism**.
 
+**Out of scope:** the backend-generated HTML session summary that hosts download (T4). It's a standalone file with its own inline
+styles, opened outside the apps, and T9 changes no backend code. It is not themed.
+
 ## 2. Technical plan (summary)
 
 - **Visual language.** Neo-brutalism expressed through *structure*: solid outlines, hard offset shadows with no blur, flat
@@ -46,6 +49,7 @@ The chosen visual direction is **neo-brutalism**.
 | Alternative | Why it lost |
 |---|---|
 | Keep Tailwind's default palette and add `dark:` variants everywhere | Fails T9's token requirement outright, and doubles the class count. |
+| Copy the base and component CSS (`.nb-*`, focus, placeholder, checkbox rules, ~80 lines) into each app's `index.css` `@layer` blocks | Same drift problem the shared folder exists to solve. Plain CSS is easier to read than JS objects, but a Tailwind plugin inside the preset needs no `tailwindcss` import and gives one source. Chosen: the plugin (§4.3). |
 | Copy `tokens.css` and the preset into each app, following the repo's "nothing is shared" convention | The three copies would drift, as `lib/api.ts` and `ui/*` already have. `frontend/theme/` holds only CSS and dependency-free TS, which resolve from any importer. |
 | Put `useTheme` (React) in the shared `theme.ts` | Bare imports resolve from the *importing file's* directory. Nothing in `frontend/theme/` or above has `react` (the root `node_modules` has only `concurrently`), so `import 'react'` there fails in both tsc and Vite. The hook lives in each app's `lib/theme.ts`. |
 | Share the `ui/` primitives too | The player's primitives are deliberately different (bigger touch targets). Primitives stay per app and only *consume* the shared tokens. |
@@ -73,7 +77,7 @@ The chosen visual direction is **neo-brutalism**.
 | Text on fills | Always `text-on-fill` (dark in **both** themes), never white. That keeps every fill at AA or better. The same applies to text inside an `image-bg` or `qr-bg` box (§4.9). Text that sits *beside* a fill (not on it) uses `ink`/`ink-muted`. |
 | Type | Display face **Space Grotesk 700** for page and section titles, numbers, scores, timers, room codes and button labels. It is **not** used for running text: question prompts and paragraphs use Inter, because a display face reads poorly over several lines. Sizes and spacing come from the scale in §4.11. **`font-display` always means weight 700.** The `fontFamily.display` entry can't carry a weight, so every `font-display` use pairs with `font-bold`, or comes through a class that sets it. The scan forbids `font-display` alongside `font-normal`, `font-medium` or `font-semibold`. Body face **Inter 400/500/600/700** (700 so `font-bold` is real bold, not faux-bold). Both come from `@fontsource`. Scores and timers use `tabular-nums`. |
 | Weight mapping | `font-black` (24 uses today) on headings, scores and room codes → `font-display` (Space Grotesk 700). Any other `font-black` → `font-bold`. After migration, `font-black` and `font-extrabold` appear nowhere (the scan test checks this, since those weights aren't loaded). `font-bold` on headings may become `font-display`; on body text it stays Inter 700. |
-| Focus | `:focus-visible` gives a 3px solid `focus` outline with a 2px offset, defined in each app's `@layer base` (§4.3). It is **enforced, not just stated**: all 15 `focus:outline-none` and all 40 `focus:ring*`/`ring-offset*` classes are deleted during migration, and the scan forbids `outline-none`, `focus:ring`, `focus-visible:ring` and `ring-offset` from then on. Why the deletion is required: a utility like `focus:outline-none` (specificity 0,1,1) beats a bare `:focus-visible` rule (0,1,0) no matter where that rule sits, so any surviving `outline-none` silently removes the focus state. |
+| Focus | `:focus-visible` gives a 3px solid `focus` outline with a 2px offset, defined in the preset's plugin `addBase` (§4.3). It is **enforced, not just stated**: all 15 `focus:outline-none` and all 40 `focus:ring*`/`ring-offset*` classes are deleted during migration, and the scan forbids `outline-none`, `focus:ring`, `focus-visible:ring` and `ring-offset` from then on. Why the deletion is required: a utility like `focus:outline-none` (specificity 0,1,1) beats a bare `:focus-visible` rule (0,1,0) no matter where that rule sits, so any surviving `outline-none` silently removes the focus state. |
 | Status meaning | Colour never carries meaning alone. Right/wrong pairs colour with an icon or word (✓/✗, "Correct"). Option tiles carry a letter (A, B, …) as well as their colour. This includes the fill-in-the-blank word cloud (§4.8). |
 | States | Hover, active, disabled and selected are defined once, in §4.11. Pages don't invent their own. |
 
@@ -175,7 +179,7 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   - **Placeholders are not covered by the preset.** Tailwind 3's preflight hardcodes
     `input::placeholder, textarea::placeholder { color: theme('colors.gray.400', #9ca3af) }` (`tailwindcss/src/css/preflight.css`
     around line 333), and `placeholderColor.DEFAULT` doesn't feed it. Once the palette is replaced, that becomes `#9ca3af`, about
-    2.5:1 on white, which fails AA. So each app's `@layer base` (below) sets
+    2.5:1 on white, which fails AA. So the preset plugin's `addBase` (below) sets
     `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`, which covers
     every raw page `<input>`/`<textarea>` (11 raw `<textarea>`/`<select>` exist outside the primitives).
   - `boxShadow` and `borderRadius`: see "staging". The tokens are
@@ -193,10 +197,11 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   palette, radius or soft-shadow class produces no CSS and fails the scan.
 
 `frontend/theme/tokens.css` also defines, outside Tailwind:
-- `:root, [data-theme=light] { color-scheme: light }` / `[data-theme=dark] { color-scheme: dark }`, so native scrollbars and form controls follow.
+- `html { color-scheme: light }` / `html[data-theme=dark] { color-scheme: dark }`, so native scrollbars and form controls follow. This is
+  block 5 in §4.3.3; it uses `html`, not `:root`, so no selector repeats block 2.
 - `body { background: rgb(var(--canvas)); color: rgb(var(--ink)); }`. This replaces the hardcoded body colours in each `index.css`.
 - **Not** the placeholder rule. A bare `::placeholder` (specificity 0,0,1) in `tokens.css` loses to preflight's
-  `input::placeholder` (0,0,2), which also comes later. The rule goes in `@layer base` (below).
+  `input::placeholder` (0,0,2), which also comes later. The rule goes in the plugin's `addBase` (below).
 - `theme-color` (mobile browser chrome) is not set in CSS. Each `index.html` has **exactly one**
   `<meta name="theme-color" content="#FFF8E7">`, with no `media` attribute. Browsers use the first matching meta, so two
   media-scoped metas would always follow the OS and ignore the toggle. The no-flash script sets its `content` from the resolved theme
@@ -205,15 +210,21 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   after setting the attribute and writes `rgb(<channels>)`. `theme.ts` updates it every time it sets the attribute (`setTheme`, OS change, storage event),
   through one internal `applyTheme(t)` that does both.
 
-Each app's `src/index.css` (same block in all three, about 80 lines, every value a token or density variable):
-- **`@layer base`** (after `@tailwind base`): `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }` and
-  `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`. The placeholder rule uses preflight's
-  exact selector, so equal specificity plus later position means it wins.
-  It lives here, not in `tokens.css`. `tokens.css` is `@import`ed before `@tailwind base`, so preflight would follow it. Putting it
-  in `@layer base` places it after preflight and before every utility. Utilities still beat it, which is why the deletions and the
-  scan rule in §4.1 are what really guarantee focus visibility.
-- **`@layer components`** (after `@tailwind components`): the `.nb-*` box, state, typography and spacing classes listed in
-  §4.3.1, all reading the density variables. `@layer` needs the Tailwind directives in the same file, which is why these aren't in `tokens.css`.
+**Shared base and component CSS lives in one place: a plugin inside `frontend/theme/preset.ts`** (decided). The preset's
+`plugins: [nbPlugin]` entry is a plain function `({ addBase, addComponents }) => { … }`. Its parameter is typed by hand (a small local
+interface with the two methods taking `Record<string, Record<string, string>>`), because `preset.ts` may not import from `tailwindcss`.
+Tailwind emits `addBase` output with the base layer (after preflight) and `addComponents` output with the components layer, which is
+the same ordering `@layer base` / `@layer components` would give, without three copies.
+- **`addBase`:**
+  - `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }`
+  - `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`. This uses preflight's exact selector,
+    so equal specificity plus later position means it wins.
+  - the checkbox and radio rule (§4.11).
+
+  These don't go in `tokens.css`, which is `@import`ed before `@tailwind base`, so preflight would follow it. Utilities still beat base
+  rules, which is why the deletions and the scan rule in §4.1 are what really guarantee focus visibility.
+- **`addComponents`:** every `.nb-*` class in §4.3.1, reading the density variables.
+- Each app's `src/index.css` becomes just four lines: `@import '../../theme/tokens.css';` then the three `@tailwind` directives.
 
 #### 4.3.1 Density variables and the layout/typography classes
 
@@ -237,15 +248,21 @@ Each app's `src/index.css` (same block in all three, about 80 lines, every value
 | `--nb-card-pad` | 0.75rem | 1.25rem | 2rem |
 | `--nb-gap` | 0.75rem | 1rem | 2rem |
 
-Classes in each app's `@layer components` (same block in all three apps):
+Classes added by the preset plugin's `addComponents` (one definition, used by all three apps):
 
 - **Box and press:**
   - `.nb-box`: `background: rgb(var(--surface)); border: var(--nb-border) solid rgb(var(--line)); box-shadow: var(--nb-offset) var(--nb-offset) 0 0 rgb(var(--shadow));`
   - `.nb-press`: `transition: transform 80ms, box-shadow 80ms`. Hover lifts and `:active` presses, per §4.11. `:disabled` resets transform and shadow.
     Under `prefers-reduced-motion: reduce`, `transition: none` and no translate.
-  - `.nb-selected`: `box-shadow: inset 0 0 0 3px rgb(var(--line)), var(--nb-offset) var(--nb-offset) 0 0 rgb(var(--shadow));`
-    The selected state is drawn **inside** a constant border, so tiles never change size (§4.11). It lives here rather than as an
-    arbitrary `shadow-[inset…]` class in `.tsx` because that class would trip the scan's `rgb(` rule.
+  - `.nb-selected`: `box-shadow: inset 0 0 0 3px rgb(var(--on-fill)), var(--nb-offset) var(--nb-offset) 0 0 rgb(var(--shadow));`
+    The selected state is drawn **inside** a constant border, so tiles never change size (§4.11).
+    - The ring is `on-fill`, not `line`. `line` would be 1.3–2.1:1 on the dark fills, while `on-fill` is ≥ 6.1:1 on every fill in both
+      themes. So `.nb-selected` is **only used on filled elements**: option tiles, put-in-order picks, and selected list rows, which
+      become `bg-accent text-on-fill`.
+    - **Selected wins over hover and disabled:** the plugin also emits `.nb-press.nb-selected:hover` (same ring plus the lifted shadow)
+      and `.nb-press.nb-selected:disabled` (`box-shadow: inset 0 0 0 3px rgb(var(--on-fill)); transform: none;`). At specificity 0,3,0
+      these beat `.nb-press:hover` / `.nb-press:disabled` (0,2,0), so hovering a selected row, or the host locking a question, never hides the ring.
+    - It lives in the plugin rather than as an arbitrary `shadow-[inset…]` class in `.tsx`, because that class would trip the scan's `rgb(` rule.
   - `.nb-chip`: `border: 2px solid rgb(var(--line))`, small padding, `rounded` (4px), and `font-semibold text-sm`. It has no shadow, at any density.
 - **Typography:**
   - `.nb-h1`, `.nb-h2`: `font-family: theme(fontFamily.display); font-weight: 700; font-size: var(--nb-h1 | --nb-h2); line-height: 1.1;`
@@ -253,6 +270,8 @@ Classes in each app's `@layer components` (same block in all three apps):
   - `.nb-body`: Inter 400, `var(--nb-body)`, `line-height: 1.5`.
   - `.nb-prompt`: Inter 600, `var(--nb-prompt)`, `line-height: 1.3`.
   - `.nb-caption`: Inter 500, `var(--nb-caption)`, `color: rgb(var(--ink-muted))`, `text-transform: uppercase; letter-spacing: 0.05em`.
+    **Never on a fill**: `ink-muted` on a dark fill is about 1.1:1. On tiles, chips and active items, a caption is `.nb-caption text-on-fill`.
+    The colour utility overrides the class colour, and colour utilities are allowed alongside `.nb-*`.
   - `.nb-stat` (scores, timers, counts): display 700, `var(--nb-stat)`, `font-variant-numeric: tabular-nums`, `line-height: 1.1`.
   - `.nb-hero` (the one big thing on a screen): display 700, `var(--nb-hero)`, tabular-nums, `line-height: 1`, `letter-spacing: 0.08em`.
   - `.nb-code` (small room code in the projector's corner QR panel): display 700, `var(--nb-h3)`, tabular-nums, `letter-spacing: 0.15em`.
@@ -260,7 +279,7 @@ Classes in each app's `@layer components` (same block in all three apps):
   - `.nb-page`: `padding: var(--nb-page-pad)`.
   - `.nb-card`: `.nb-box` plus `padding: var(--nb-card-pad)`.
   - `.nb-stack`: `display: flex; flex-direction: column; gap: var(--nb-gap)`.
-- **Rule:** an element using an `.nb-h*`/`.nb-body`/`.nb-prompt`/`.nb-caption`/`.nb-stat`/`.nb-hero`/`.nb-code` class adds no `text-{size}`/`font-{weight}`
+- **Rule:** an element using an `.nb-h*`/`.nb-body`/`.nb-prompt`/`.nb-caption`/`.nb-stat`/`.nb-hero`/`.nb-code` class adds no `text-{size}`/`font-{weight}`/`tracking-*`/`leading-*`
   utility, and `.nb-page`/`.nb-card`/`.nb-stack` add no `p-*`/`gap-*`/`space-y-*`. tailwind-merge doesn't know these classes, so
   `cn('nb-h1', 'text-xl')` would keep both and the utility would silently win. The scan enforces the rule per class string (§4.6).
   Colour, margin, alignment and width utilities may still be combined with them. **Known limitation:** a `className` *prop* passed
@@ -388,16 +407,20 @@ exact selector text.
      `\bshadow(?:-(sm|md|lg|xl|2xl|inner))?(?![-\w])` (bare `shadow` or a soft size; `shadow-brutal*`/`shadow-none` pass), and
      `\b(backdrop-blur|blur|drop-shadow)(-[a-z0-9]+)?\b`;
    - within one class string: a `className="…"` value, one template literal, or **all the arguments of one `cn(…)` call taken
-     together** (so `cn('nb-h1', cond && 'text-xl')` is caught): `nb-(h1|h2|h3|body|prompt|caption|stat)` together
-     with `\btext-(xs|sm|base|lg|[2-9]?xl)\b` or `\bfont-(normal|medium|semibold|bold)\b`, and `nb-(page|card|stack)` together with
+     together** (so `cn('nb-h1', cond && 'text-xl')` is caught): `nb-(h1|h2|h3|body|prompt|caption|stat|hero|code)` together
+     with `\btext-(xs|sm|base|lg|[2-9]?xl)\b`, `\bfont-(normal|medium|semibold|bold)\b`, `\btracking-[\w-]+` or `\bleading-[\w-]+`, and `nb-(page|card|stack)` together with
      `\b(p|px|py|pt|pb|pl|pr)-\d` or `\b(gap|space-y|space-x)-\d` (§4.3.1);
    - `font-black` or `font-extrabold` (weights that aren't loaded), and `font-display` on the same line as
      `font-(normal|medium|semibold)` (§4.1);
    - CSS named colours in string literals or JSX attributes in `.ts`/`.tsx`:
      `(['"])(white|black|red|green|blue|yellow|gray|grey|orange|purple|pink)\1` and
-     `\b(fill|stroke|color)=\{?["'](?!currentColor|none)[a-z]+["']`, apart from the allow-list below;
-   - any hex colour `#[0-9a-fA-F]{3,8}\b` or `rgb(`/`rgba(`/`hsl(` literal in `.ts`/`.tsx`, **except** as the fallback
-     argument of a `cssVar(…)` call, and in the allow-listed `host/src/lib/imageFile.ts`;
+     `\b(fill|stroke|color)=\{?["'](?!currentColor|none)[a-z]+["']`. There is **no** allow-list for named colours; none exist today;
+   - any hex colour `#[0-9a-fA-F]{3,8}\b` or `rgb(`/`rgba(`/`hsl(` literal in `.ts`/`.tsx`, **except** inside the
+     fallback of a `cssVar(…)` call, and in the allow-listed `host/src/lib/imageFile.ts`. **Exemption rule:** a match is exempt only if it
+     lies inside a single string literal (`'…'` or `"…"`, no nested quotes) that is the **third argument** of a call whose callee is
+     exactly `cssVar`, e.g. `cssVar(canvas, '--pin-full-fill', 'rgba(74, 222, 128, 0.3)')` (`PinBoard.tsx:111`). Implement it by
+     matching `cssVar\(\s*[^,]+,\s*(['"])--[\w-]+\1\s*,\s*(['"])([^'"]*)\2\s*\)` and blanking group 3 before running the colour regexes,
+     rather than stopping a regex at the first `)`;
    - any hex colour in `index.css` (they may only use `var(--…)`).
 2. *Contrast* (always on). Parse `frontend/theme/tokens.css` into the `light` and `dark` maps (RGB-channel tokens only; `--pin-*`
    are skipped) and assert, for each theme:
@@ -570,7 +593,7 @@ integration coverage to T4, T7 and T8. All existing integration tests must stay 
 | Test | Guards | Why it's needed |
 |---|---|---|
 | `test_no_raw_palette_or_forbidden_classes` (the §4.6 scan; `xfail` until the end of step 4) | R9 "hardcoded palette colours are gone"; focus never removed; no translucent text fills; no unloaded weights | ~860 manual edits. After the palette is replaced, a missed class renders as *nothing* rather than failing, so this test is the only thing that notices. |
-| `test_scan_patterns` (parametrized known-bad and known-good strings: `border-t-slate-700`, `focus:outline-none`, `bg-accent/40`, `'white'`, `cssVar(c,'--x','#fff')` → allowed, `bg-surface/80` → allowed, …) | The scan itself | The scan is the safety net, and a regex bug makes it pass silently. The second Goldfish pass already found regex gaps. Cheap. |
+| `test_scan_patterns` (parametrized known-bad and known-good strings: `border-t-slate-700`, `focus:outline-none`, `bg-accent/40`, `'white'`, `cn('nb-hero', big && 'tracking-tight')` → flagged, `cssVar(c,'--x','#fff')` → allowed, the real `cssVar(canvas, '--pin-full-fill', 'rgba(74, 222, 128, 0.3)')` → allowed, `bg-surface/80` → allowed, …) | The scan itself | The scan is the safety net, and a regex bug makes it pass silently. The second Goldfish pass already found regex gaps. Cheap. |
 | `test_token_contrast[light/dark]` | R9 "both themes meet the accessibility bar" (token pairs) | The values are hand-picked and will be tuned after screenshots (§8). Every tweak must re-prove AA. |
 | `test_token_parity` | Complete dark theme | A token missing from `[data-theme=dark]` silently inherits the light value from `:root`. That's plausible every time a token is added. It shares the parser with the contrast test, so it costs almost nothing. |
 
@@ -626,8 +649,9 @@ letter badge in front. So the new toggle and badges don't break them. They must 
 | Hover (pointer devices only: `@media (hover: hover)`) | `.nb-press:hover` → `translate(-1px, -1px)` and the shadow grows to `calc(var(--nb-offset) + 1px)`. Ghost and outline buttons also fill `surface-muted`. No colour change on filled buttons, so there are no hover colour tokens to contrast-test. |
 | Active | Press in: `translate(var(--nb-offset), var(--nb-offset))`, no shadow (§4.3.1). Replaces today's `active:scale-95` (13 uses). |
 | Disabled | `disabled:` variants only: `bg-surface-muted text-ink-muted shadow-none`, no hover lift or press (`.nb-press:disabled` resets transform), `cursor-not-allowed`. `disabled:opacity-60` is also allowed, since WCAG 1.4.3 exempts inactive components. Replaces today's `disabled:opacity-20/40/50`. |
-| Selected (answer tiles, put-in-order picks, admin list rows) | `.nb-selected` (a 3px **inset** ring inside the unchanged border, §4.3.1) plus a ✓ badge (`nb-chip bg-surface text-ink`) in the tile's top-right corner. The border width never changes, so tiles don't shift and grid rows stay put (the player's "nothing moves under a finger" rule). The fill doesn't change either, and colour is never the only cue. |
-| Locked or submitted (player) | The `disabled` state, plus the existing "locked" copy. |
+| Selected (answer tiles, put-in-order picks, admin list rows) | `.nb-selected` (a 3px `on-fill` **inset** ring inside the unchanged border, §4.3.1) plus a ✓ badge (`nb-chip bg-surface text-ink`) in the tile's top-right corner. Only on filled elements: selected list rows become `bg-accent text-on-fill`. The border width never changes, so tiles don't shift and grid rows stay put (the player's "nothing moves under a finger" rule). Colour is never the only cue. |
+| Selected + hover | Ring kept, lift applied (the plugin's `.nb-press.nb-selected:hover`). |
+| Locked or submitted (player) | **Unselected** tiles take the disabled state (grey `surface-muted`, `ink-muted`, no shadow). **Selected** tiles keep their fill, their `on-fill` ring and their ✓ badge, and lose only the offset shadow (`.nb-press.nb-selected:disabled`), so the player still sees what they chose after the host locks. Tiles therefore apply the disabled grey conditionally (`!selected && 'disabled:bg-surface-muted disabled:text-ink-muted'`). The existing "locked" copy stays. |
 
 Under `prefers-reduced-motion: reduce`, hover and press change only the shadow, with no translate and no transition.
 
@@ -674,13 +698,17 @@ today, and with a 56px header above them, every centred screen would scroll by 5
   scrolling `main`. Recheck them, and switch `22vh` to `22dvh` if needed.
 
 **Remaining unmapped elements, now mapped:**
-- **Spinners** (player `LobbyPage.tsx:19`, `FeedbackPage.tsx:7`): `border-4 border-line border-t-accent rounded-full
-  animate-spin`. The track is `line` (17.7:1 on light canvas, 4.6:1 on dark) and the arc is `accent` against that track (13.3:1 light),
-  so the graphic clears WCAG 1.4.11's 3:1. A `surface-muted` track would be about 1.1:1 on cream. They keep spinning under reduced
+- **Spinners** (player `LobbyPage.tsx:19`, `FeedbackPage.tsx:7`): `border-4 border-shadow border-t-accent rounded-full
+  animate-spin`. The information is the moving `accent` arc. It must clear 3:1 (WCAG 1.4.11) against both neighbours, the track and
+  the canvas:
+  - **light:** arc/track 13.3:1, arc/canvas 1.3:1. The arc is still bounded by the near-black track on its own ring, so it reads.
+  - **dark:** arc/track 10.1:1, arc/canvas 8.9:1.
+
+  A `line` track fails in dark mode (arc/track 1.9:1), and a `surface-muted` track fails in light mode (about 1.2:1). They keep spinning under reduced
   motion, because a spinner is an essential loading indicator.
 - **Tables:** the admin table rules (ruled `border-line` rows, a `surface-muted` header, zebra stripes, no per-row shadows) apply to
   **every** table, including host `RosterPage` (the only host `<table>`) and list-style rows in host `SessionsPage` and `GamesPage`.
-- **Native checkboxes and radios** (admin `SessionsPage`, `UserDetailPage`; host `RosterPage`): in each app's `@layer base`,
+- **Native checkboxes and radios** (admin `SessionsPage`, `UserDetailPage`; host `RosterPage`): in the preset plugin's `addBase`,
   `input[type=checkbox], input[type=radio] { accent-color: rgb(var(--ink)); width: 1.125rem; height: 1.125rem; }`. Yellow `accent`
   would fail 3:1 non-text contrast on cream; `ink` is about 17:1 in light and 13:1 in dark. They take the global focus outline.
 
@@ -694,7 +722,8 @@ Each step is one or more atomic commits on `feature/better-ui`. **This doc and `
   `vite.config.js` and `.d.ts` files next to the `.ts` configs, and **both Tailwind 3 and Vite load the `.js` before the `.ts`**.
   Edits to `tailwind.config.ts` or `vite.config.ts` are silently ignored under `npm run dev` until the next build. Adding
   `../theme/preset.ts` to the composite project would also emit `frontend/theme/preset.js` and `preset.d.ts`.
-  - Fix: in each `tsconfig.node.json`, add `"noEmit": true` (allowed with `composite` in TS ≥ 5.6; the repo has 5.9.3) and
+  - Fix: in each `tsconfig.node.json`, add `"noEmit": true` (allowed with `composite` in TS ≥ 5.6; every lockfile pins 5.9.3, while
+    `package.json` says `^5.5.3`; raise the range to `"typescript": "^5.6.0"` in all three apps so the floor is stated, not just locked) and
     `"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"`. Then delete the stale `tailwind.config.{js,d.ts}` and
     `vite.config.{js,d.ts}` in all three apps, once.
   - Belt and braces: `postcss.config.js` → `tailwindcss: { config: './tailwind.config.ts' }`; `package.json` scripts →
@@ -772,12 +801,12 @@ Mechanical mapping (applies to every file the scan lists):
 | player `min-h-screen` | `min-h-full` (§4.11 layout contract) |
 | spinners (`animate-spin` with palette borders) | §4.11 spinner classes |
 | `<img>` of an uploaded image | add `bg-image-bg` to it or its box (§4.9) |
-| Player `OPTION_COLORS` (`pages/game/QuestionPage.tsx:9`) | `bg-option-1 … bg-option-8` with `text-on-fill border-line`, plus a letter badge (A, B, C, …) |
+| Player `OPTION_COLORS` (`pages/game/QuestionPage.tsx:9`) | Keep a `const OPTION_FILLS = ['bg-option-1', …, 'bg-option-8']` array of **literal strings**, so Tailwind's content scan sees all eight; never build `bg-option-${n}`. Each tile uses `OPTION_FILLS[i % 8]` with `text-on-fill border-line`, and drops the per-option `hover:`/`border-` colours. Past 8 options the colours repeat, as they do today (the backend has no option limit); the letter badge (A, B, C, …, which keeps counting) tells repeated colours apart. |
 | Admin `STATUS_COLORS` (`pages/SessionsPage.tsx:34`) | `nb-chip` with `bg-success` (active) / `bg-warning` (lobby) / `bg-surface-muted` (completed) |
 
 Then the per-context passes:
 - **Player:** answer tiles at least 56px tall and full-width, a 3px outline, `brutal` shadow and press, `touch-action: manipulation`.
-  The selected state uses a thicker outline plus a ✓ badge (not colour alone). Put-in-order chips and the Pin the Spot "lock in"
+  The selected state is `.nb-selected` (a constant border, an inset `on-fill` ring and a ✓ badge, §4.11). Not a thicker outline, which would shift the layout. Put-in-order chips and the Pin the Spot "lock in"
   button follow the same rules. Bottom action areas pad by `env(safe-area-inset-bottom)`.
 - **Host projector** (`pages/game/*`, `data-density="projector"`): prompt `.nb-prompt` (Inter, not the display face, §4.1), room code
   `.nb-hero` (lobby) or `.nb-code` (corner panel), scores and counts `.nb-stat`, as in §4.11,
@@ -971,3 +1000,20 @@ during design with a Playwright Chromium probe, rather than deferred.
 | C4 | `getComputedStyle(el, '::placeholder')` support unknown | **Verified OK** in Chromium (returns the placeholder colour) | Stated in §4.10 |
 | C5 | Mixing rule only sees one string | Yes | The class string includes all args of one `cn(…)` call; cross-file `className` props are a documented limitation (§4.3.1, §4.6) |
 | C6 | Housekeeping | Yes | This row; §4.8 explains the fixed bar border widths |
+
+**Revision 8** was revised after a sixth Goldfish pass. Contrast values were recomputed with the WCAG formula.
+
+| # | Goldfish finding | Verified? | Change |
+|---|---|---|---|
+| 1 | The dark spinner fails 1.4.11 (arc/track 1.92:1); the doc quoted the light value | Yes (computed) | Track is `shadow`: arc/track 13.3 (light) / 10.1 (dark) (§4.11) |
+| 2 | Selected ring weak in dark (`line` on fills 1.26–2.13:1); hidden by hover (0,2,0 > 0,1,0); lost when disabled | Yes (computed) | `on-fill` ring (≥ 6.1:1), only on filled elements; `.nb-press.nb-selected:hover/:disabled` at 0,3,0; locked-and-selected tiles keep fill, ring and ✓ (§4.3.1, §4.11) |
+| 3 | §4.3 used block 2's selector for `color-scheme` | Yes | `html` / `html[data-theme=dark]` (§4.3) |
+| 4 | Step 4 still said "thicker outline" | Yes | Points to `.nb-selected` |
+| 5 | `cssVar` exemption had no parse rule (nested parens at `PinBoard.tsx:111`) | Yes | Exact third-argument rule and regex; the real string added to `test_scan_patterns` (§4.6, §4.10) |
+| 6 | Named-colour "allow-list below" didn't exist | Yes | No allow-list (§4.6) |
+| 7 | Mixing regex missed `nb-hero`/`nb-code`, `tracking-*`, `leading-*` | Yes | Added (§4.3.1, §4.6) |
+| 8 | ~80 lines of `@layer` CSS copied into three apps | Yes | **Decided:** a Tailwind plugin in the shared preset; `index.css` is four lines; copying recorded in §3 (§4.3) |
+| 9 | TS floor not pinned (`^5.5.3` vs `noEmit`+`composite` needing ≥ 5.6) | Yes (lockfiles pin 5.9.3) | Raise to `^5.6.0` (step 1) |
+| 10 | `.nb-caption` on a fill is ~1.1:1 | Yes | Never on a fill; `text-on-fill` override (§4.3.1) |
+| 11 | Options past 8; dynamic `bg-option-${n}` dropped by the content scan | Yes (backend has no limit; player cycles `i % 8`) | Literal-string array, cycling, letter badge disambiguates (step 4 mapping) |
+| 12 | HTML session summary scope unstated | n/a | Explicitly out of scope (§1) |
