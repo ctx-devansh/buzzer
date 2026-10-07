@@ -757,15 +757,17 @@ Each step is one or more atomic commits on `feature/better-ui`. **This doc and `
   `vite.config.js` and `.d.ts` files next to the `.ts` configs, and **both Tailwind 3 and Vite load the `.js` before the `.ts`**.
   Edits to `tailwind.config.ts` or `vite.config.ts` are silently ignored under `npm run dev` until the next build. Adding
   `../theme/preset.ts` to the composite project would also emit `frontend/theme/preset.js` and `preset.d.ts`.
-  - Fix: in each `tsconfig.node.json`, add `"noEmit": true` (allowed with `composite` in TS ≥ 5.6; every lockfile pins 5.9.3, while
-    `package.json` says `^5.5.3`; raise the range to `"typescript": "^5.6.0"` in all three apps so the floor is stated, not just locked) and
-    `"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"`. Then delete the stale `tailwind.config.{js,d.ts}` and
-    `vite.config.{js,d.ts}` in all three apps, once.
+  - Fix: in each `tsconfig.node.json`, add `"outDir": "./node_modules/.tmp/tsconfig.node"` and
+    `"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"`, so `tsc -b` still emits but never next to the configs. Raise
+    `"typescript"` to `"^5.6.0"` in all three apps (every lockfile pins 5.9.3) so the floor is stated, not just locked. Then delete the
+    stale `tailwind.config.{js,d.ts}` and `vite.config.{js,d.ts}` in all three apps, once.
+  - **Implementation finding (step 1):** the original plan, `"noEmit": true` on the composite project, is rejected by TS 5.9 with
+    `TS6310: Referenced project '…/tsconfig.node.json' may not disable emit`, because `tsconfig.json` references it. The `outDir`
+    fallback below was adopted as the fix.
   - Belt and braces: `postcss.config.js` → `tailwindcss: { config: './tailwind.config.ts' }`; `package.json` scripts →
     `"dev": "vite --config vite.config.ts"`, `"build": "tsc -b && vite build --config vite.config.ts"`.
   - Add `frontend/theme/*.js` and `frontend/theme/*.d.ts` to `.gitignore`, in case anything ever emits there.
-  - Fallback, if `noEmit` with `composite` is rejected: `"outDir": "./node_modules/.tmp/tsconfig.node"` instead. It's
-    equivalent for our purposes, because the explicit `--config` paths still guarantee the `.ts` is loaded.
+  - (`outDir` is equivalent to `noEmit` for our purposes, because the explicit `--config` paths still guarantee the `.ts` is loaded.)
 - **Shared folder.** Create `frontend/theme/{tokens.css,preset.ts,theme.ts}` with a token or two. In each app:
   - `tailwind.config.ts`: `presets: [preset]` from `'../theme/preset'`; keep `content`.
   - `tsconfig.node.json` `include`: add `"../theme/preset.ts"` (composite projects must list every file, or `tsc -b` fails with TS6307).
@@ -929,7 +931,7 @@ The authoritative list of files to migrate is whatever the scan test reports. Th
 - **Projector gamma.** Contrast ratios computed from hex values don't model a washed-out projector. If the step 4 projector check
   fails, add a `[data-surface=projector]` override of the fill tokens on `GameLayout`'s root. That's a new token dimension, so update
   this doc first.
-- **`noEmit` with `composite`** is believed supported on TS 5.9 but is unverified in this repo. Step 1 has a documented fallback.
+- **`noEmit` with `composite`** turned out to be rejected (TS6310) in step 1; `outDir` into `node_modules/.tmp` is used instead.
 - **Shared origin.** One `buzzer-theme` key means a host projecting from the same browser as an admin session shares the theme
   (accepted).
 - **Fonts.** `@fontsource` adds roughly 150–250 KB per app. Only the listed weights are imported.
