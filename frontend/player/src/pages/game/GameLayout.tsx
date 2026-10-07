@@ -190,12 +190,14 @@ export default function GameLayout() {
     );
   }
 
+  // No wrapper element here (docs/design-better-ui.md §4.11): the banner and the routed page are direct
+  // flex children of App's <main>. If a wrapper is ever added, it must be `flex-1 flex flex-col`.
   return (
     <GameContext.Provider
       value={{ phase, gameStatus, roomCode: code, playerCount, hostDisconnected, currentQuestion, questionLocked, lastAnswerData, answerResult, questionResults, gameOver, emitAnswer }}
     >
       {hostDisconnected && phase !== 'gameover' && (
-        <div className="fixed top-0 inset-x-0 bg-yellow-600/90 text-yellow-100 text-center py-2 text-sm z-50">
+        <div className="shrink-0 bg-yellow-600/90 text-yellow-100 text-center py-2 text-sm">
           Host disconnected — waiting for them to reconnect…
         </div>
       )}

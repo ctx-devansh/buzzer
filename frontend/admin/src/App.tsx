@@ -8,6 +8,7 @@ import GuestsPage from './pages/GuestsPage';
 import SessionsPage from './pages/SessionsPage';
 import { ExternalRedirect } from './components/ExternalRedirect';
 import { HOST_APP_URL, PLAYER_APP_URL } from './lib/links';
+import { ThemeToggle } from './components/ThemeToggle';
 
 // Builders for the routes that moved to the host app (module-level so their identity
 // is stable across renders). Param names match the host app's routes.
@@ -82,7 +83,8 @@ function AdminLayout() {
             <Smartphone size={16} /> Join as player <ExternalLink size={12} className="ml-auto" />
           </a>
         </nav>
-        <div className="p-3 border-t border-slate-700">
+        <div className="p-3 border-t border-slate-700 space-y-2">
+          <ThemeToggle className="w-full" />
           <button
             onClick={logout}
             className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-slate-100 w-full transition-colors"

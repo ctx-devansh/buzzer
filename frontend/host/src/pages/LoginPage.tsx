@@ -5,6 +5,7 @@ import { setToken } from '../lib/auth';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -72,6 +73,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
+      <ThemeToggle className="fixed top-4 right-4" />
       <Card className="w-full max-w-md">
         <CardHeader>
           <h1 className="text-2xl font-bold text-slate-100">Buzzer</h1>

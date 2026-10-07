@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api';
 import { clearToken, getRole } from '../lib/auth';
 import { ADMIN_APP_URL } from '../lib/links';
 import { Button } from './ui/button';
+import { ThemeToggle } from './ThemeToggle';
 
 export interface ShellCourse {
   id: number;
@@ -120,6 +121,7 @@ export default function HostShell() {
                 <Shield size={16} /> Admin console
               </a>
             )}
+            <ThemeToggle showLabel={false} />
             <button
               onClick={signOut}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-slate-100"

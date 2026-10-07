@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { getToken } from '../../lib/auth';
 import { QRCodeSVG } from 'qrcode.react';
+import { ThemeToggle } from '../../components/ThemeToggle';
 import { io, Socket } from 'socket.io-client';
 import type {
   AnswerPhaseEndedPayload,
@@ -236,6 +237,9 @@ export default function GameLayout() {
       value={{ phase, roomCode: code, gameTitle, sessionId, players, playerCount, currentQuestion, answeredCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, questionResults, gameOver, autoAdvance, setAutoAdvance, emitAdvance, emitLockQuestion }}
     >
       <Outlet />
+
+      {/* Bottom-left, clear of the join panel (bottom-right) and top-right projector content (§4.4). */}
+      <ThemeToggle showLabel={false} className="fixed bottom-4 left-4" />
 
       {/* Persistent join panel — always visible in the bottom-right corner */}
       <div className="fixed bottom-4 right-4 flex flex-col items-center gap-2 bg-slate-900/90 border border-slate-700 rounded-2xl p-3 shadow-xl backdrop-blur-sm">
