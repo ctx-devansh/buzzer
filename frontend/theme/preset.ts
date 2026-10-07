@@ -12,7 +12,7 @@
  * flips this to true, which *replaces* those scales: any leftover `bg-slate-800`, `rounded-xl` or
  * `shadow-xl` then produces no CSS, and tests/unit/test_theme_tokens.py fails on it.
  */
-const REPLACE_DEFAULT_SCALES = false;
+const REPLACE_DEFAULT_SCALES = true;
 
 const TOKENS = [
   'canvas', 'surface', 'surface-muted', 'ink', 'ink-muted', 'line', 'shadow', 'scrim', 'qr-bg', 'image-bg',

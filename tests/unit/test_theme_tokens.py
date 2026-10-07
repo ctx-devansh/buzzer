@@ -351,10 +351,6 @@ def scan_repo() -> list[Violation]:
     return found
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="pages are migrated in step 4; this flips with REPLACE_DEFAULT_SCALES",
-)
 def test_no_raw_palette_or_forbidden_classes():
     violations = scan_repo()
     assert not violations, f"{len(violations)} theme violations:\n" + "\n".join(
