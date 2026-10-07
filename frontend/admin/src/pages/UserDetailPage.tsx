@@ -219,7 +219,7 @@ export default function UserDetailPage() {
               <p className="text-ink-muted text-sm mt-0.5">
                 {user.username && <span className="mr-3">@{user.username}</span>}
                 {user.netid && <span className="mr-3">netid: {user.netid}</span>}
-                <span className="px-2 py-0.5 rounded-full text-xs bg-surface-muted text-ink-muted">{user.role}</span>
+                <span className={`nb-chip ${user.role === 'ADMIN' ? 'bg-accent text-on-fill' : 'bg-surface-muted text-ink'}`}>{user.role}</span>
               </p>
             </div>
             <div className="flex gap-2">

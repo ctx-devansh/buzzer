@@ -13,17 +13,17 @@ export default function CoursesPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold text-slate-100 mb-6">Courses</h2>
+    <div className="nb-page max-w-4xl mx-auto">
+      <h1 className="nb-h1 text-ink mb-6">Courses</h1>
       {courses.length === 0 ? (
-        <p className="text-slate-400">Loading…</p>
+        <p className="text-ink-muted">Loading…</p>
       ) : (
         <div className="space-y-3">
           {courses.map((c) => (
             <Card key={c.id} className="flex items-center justify-between px-6 py-4">
               <div>
-                <p className="font-semibold text-slate-100">{c.name}</p>
-                <p className="text-slate-400 text-sm">{c.semester}</p>
+                <p className="font-semibold text-ink">{c.name}</p>
+                <p className="text-ink-muted text-sm">{c.semester}</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => navigate(`/courses/${c.id}/roster`)}>
