@@ -25,10 +25,10 @@ const STATUS_OPTIONS = [
 ];
 
 const statusClass: Record<string, string> = {
-  COMPLETED: 'text-green-400',
-  ABANDONED: 'text-slate-500',
-  IN_PROGRESS: 'text-amber-400',
-  LOBBY: 'text-amber-400',
+  COMPLETED: 'text-success-text',
+  ABANDONED: 'text-ink-muted',
+  IN_PROGRESS: 'text-warning-text',
+  LOBBY: 'text-warning-text',
 };
 
 /** My sessions (all hosts' for ADMIN) with HTML summary and CSV score downloads. */
@@ -70,9 +70,9 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="nb-page max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-        <h2 className="text-2xl font-bold text-slate-100">Sessions</h2>
+        <h1 className="nb-h1 text-ink">Sessions</h1>
         <div className="flex gap-1">
           {STATUS_OPTIONS.map((o) => (
             <Button
@@ -87,12 +87,12 @@ export default function SessionsPage() {
         </div>
       </div>
 
-      {error && <p className="text-red-400 mb-4 text-sm">{error}</p>}
+      {error && <p className="text-danger-text mb-4 text-sm">{error}</p>}
 
       {loading ? (
-        <p className="text-slate-400">Loading…</p>
+        <p className="text-ink-muted">Loading…</p>
       ) : sessions.length === 0 ? (
-        <p className="text-slate-400">No sessions.</p>
+        <p className="text-ink-muted">No sessions.</p>
       ) : (
         <div className="space-y-3">
           {sessions.map((s) => {
@@ -101,13 +101,13 @@ export default function SessionsPage() {
               <Card key={s.session_id} className="px-6 py-4">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-100">{s.game_title}</p>
-                    <p className="text-slate-400 text-sm">{s.course_name} · {s.course_semester}</p>
-                    <p className="text-slate-500 text-xs mt-0.5">
-                      Room <span className="font-mono text-slate-300">{s.room_code}</span>
+                    <p className="font-semibold text-ink">{s.game_title}</p>
+                    <p className="text-ink-muted text-sm">{s.course_name} · {s.course_semester}</p>
+                    <p className="text-ink-muted text-xs mt-0.5">
+                      Room <span className="font-mono text-ink-muted">{s.room_code}</span>
                       {' · '}{new Date(s.created_at).toLocaleString()}
                       {' · '}{s.player_count} player{s.player_count !== 1 ? 's' : ''}
-                      {' · '}<span className={statusClass[s.status] ?? 'text-slate-400'}>{s.status}</span>
+                      {' · '}<span className={statusClass[s.status] ?? 'text-ink-muted'}>{s.status}</span>
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -131,7 +131,7 @@ export default function SessionsPage() {
                     </Button>
                   </div>
                 </div>
-                {rowErrors[s.session_id] && <p className="text-red-400 text-sm mt-2">{rowErrors[s.session_id]}</p>}
+                {rowErrors[s.session_id] && <p className="text-danger-text text-sm mt-2">{rowErrors[s.session_id]}</p>}
               </Card>
             );
           })}

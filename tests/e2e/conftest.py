@@ -66,10 +66,19 @@ def _built_apps_are_current(api: Api) -> None:
     if os.environ.get("E2E_SKIP_BUILD_CHECK"):
         return
     stale = []
-    for app in ("host", "admin"):
-        src = REPO_ROOT / "frontend" / app / "src"
-        index = REPO_ROOT / "frontend" / app / "dist" / "index.html"
-        newest_src = max(p.stat().st_mtime for p in src.rglob("*") if p.is_file())
+    # Every input of a build: the app's src/, its index.html (first-paint theme script) and
+    # Tailwind config, and the shared frontend/theme/ (tokens and preset) used by all three.
+    # Docs (the CLAUDE.md context files live inside src/) are not build inputs.
+    def sources(folder):
+        return [p for p in folder.rglob("*") if p.is_file() and p.suffix != ".md"]
+
+    shared = sources(REPO_ROOT / "frontend" / "theme")
+    for app in ("host", "player", "admin"):
+        root = REPO_ROOT / "frontend" / app
+        inputs = sources(root / "src")
+        inputs += [root / "index.html", root / "tailwind.config.ts", *shared]
+        index = root / "dist" / "index.html"
+        newest_src = max(p.stat().st_mtime for p in inputs if p.exists())
         if not index.exists() or index.stat().st_mtime < newest_src:
             stale.append(app)
     if stale:
@@ -95,15 +104,19 @@ def admin_token(api: Api) -> str:
 
 
 @pytest.fixture()
-def page_as(browser: Browser, base_url: str) -> Iterator[Callable[[str | None], Page]]:
+def page_as(browser: Browser, base_url: str) -> Iterator[Callable[..., Page]]:
     """
-    page_as(token) -> a Page in a fresh context whose localStorage.token is `token`
-    (None = signed out). Each call is isolated, like a separate private window.
+    page_as(token, *, color_scheme=None, **context_opts) -> a Page in a fresh context whose
+    localStorage.token is `token` (None = signed out). Each call is isolated, like a separate
+    private window. `color_scheme` emulates the OS light/dark preference; any other keyword
+    (viewport, device_scale_factor, ...) goes to browser.new_context.
     """
     contexts = []
 
-    def make(token: str | None) -> Page:
-        context = browser.new_context(base_url=base_url, accept_downloads=True)
+    def make(token: str | None, *, color_scheme: str | None = None, **context_opts) -> Page:
+        context = browser.new_context(
+            base_url=base_url, accept_downloads=True, color_scheme=color_scheme, **context_opts
+        )
         if token:
             context.add_init_script(f"window.localStorage.setItem('token', {token!r});")
         contexts.append(context)

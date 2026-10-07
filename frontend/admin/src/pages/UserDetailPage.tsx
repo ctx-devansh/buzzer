@@ -171,7 +171,7 @@ export default function UserDetailPage() {
     }
   }
 
-  if (!user) return <div className="p-8 text-slate-400">{error || 'Loading\u2026'}</div>;
+  if (!user) return <div className="p-8 text-ink-muted">{error || 'Loading\u2026'}</div>;
 
   const courseMap = Object.fromEntries(courses.map((c) => [c.id, c]));
   const gameMap = Object.fromEntries(games.map((g) => [g.id, g]));
@@ -201,25 +201,25 @@ export default function UserDetailPage() {
   const selectedGameCount = gameSelections.filter((s) => s.checked).length;
 
   return (
-    <div className="p-8 max-w-3xl space-y-6">
+    <div className="nb-page nb-stack max-w-3xl">
       <button
         onClick={() => navigate('/users')}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-100 text-sm"
+        className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm"
       >
         <ArrowLeft size={14} /> Back to Users
       </button>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-danger-text text-sm">{error}</p>}
 
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-bold text-slate-100">{user.display_name ?? user.username ?? user.netid}</h2>
-              <p className="text-slate-400 text-sm mt-0.5">
+              <h1 className="nb-h1 text-ink">{user.display_name ?? user.username ?? user.netid}</h1>
+              <p className="text-ink-muted text-sm mt-0.5">
                 {user.username && <span className="mr-3">@{user.username}</span>}
                 {user.netid && <span className="mr-3">netid: {user.netid}</span>}
-                <span className="px-2 py-0.5 rounded-full text-xs bg-slate-700 text-slate-300">{user.role}</span>
+                <span className={`nb-chip ${user.role === 'ADMIN' ? 'bg-accent text-on-fill' : 'bg-surface-muted text-ink'}`}>{user.role}</span>
               </p>
             </div>
             <div className="flex gap-2">
@@ -241,7 +241,7 @@ export default function UserDetailPage() {
             <div className="space-y-3 pt-1">
               {user.username !== null && (
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Username</label>
+                  <label className="block text-xs text-ink-muted mb-1">Username</label>
                   <Input
                     value={editUsername}
                     onChange={(e) => setEditUsername(e.target.value)}
@@ -251,7 +251,7 @@ export default function UserDetailPage() {
                 </div>
               )}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Display name</label>
+                <label className="block text-xs text-ink-muted mb-1">Display name</label>
                 <Input
                   value={editDisplayName}
                   onChange={(e) => setEditDisplayName(e.target.value)}
@@ -260,7 +260,7 @@ export default function UserDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Email</label>
+                <label className="block text-xs text-ink-muted mb-1">Email</label>
                 <Input
                   type="email"
                   value={editEmail}
@@ -271,7 +271,7 @@ export default function UserDetailPage() {
               </div>
               {user.username !== null && (
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">New password <span className="text-slate-500">(leave blank to keep current)</span></label>
+                  <label className="block text-xs text-ink-muted mb-1">New password <span className="text-ink-muted">(leave blank to keep current)</span></label>
                   <Input
                     type="password"
                     value={editPassword}
@@ -282,9 +282,9 @@ export default function UserDetailPage() {
                 </div>
               )}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Role</label>
+                <label className="block text-xs text-ink-muted mb-1">Role</label>
                 <select
-                  className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm"
+                  className="border-2 border-line bg-surface px-3 py-2 text-ink text-sm"
                   value={editRole}
                   onChange={(e) => setEditRole(e.target.value)}
                 >
@@ -301,9 +301,9 @@ export default function UserDetailPage() {
             </div>
           ) : (
             <div className="space-y-1">
-              {user.email && <p className="text-slate-400 text-xs">{user.email}</p>}
-              {user.netid && <p className="text-slate-500 text-xs">netid: {user.netid} (OAuth2 — not editable)</p>}
-              <p className="text-slate-500 text-xs">
+              {user.email && <p className="text-ink-muted text-xs">{user.email}</p>}
+              {user.netid && <p className="text-ink-muted text-xs">netid: {user.netid} (OAuth2 — not editable)</p>}
+              <p className="text-ink-muted text-xs">
                 Created {new Date(user.created_at).toLocaleDateString()}
                 {user.last_login && ` \u00b7 Last login ${new Date(user.last_login).toLocaleDateString()}`}
               </p>
@@ -316,7 +316,7 @@ export default function UserDetailPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-100">Course Access</h3>
+            <h2 className="nb-h3 text-ink">Course Access</h2>
             {availableCourses.length > 0 && !showCoursePanel && (
               <Button size="sm" variant="outline" onClick={() => openCoursePanel(availableCourses)}>
                 Add Courses
@@ -326,15 +326,15 @@ export default function UserDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {user.course_access.length === 0 && !showCoursePanel && (
-            <p className="text-slate-500 text-sm">No course access granted.</p>
+            <p className="text-ink-muted text-sm">No course access granted.</p>
           )}
           {user.course_access.map((ca) => {
             const course = courseMap[ca.course_id];
             return (
               <div key={ca.course_id} className="flex items-center justify-between">
-                <span className="text-slate-200 text-sm">
+                <span className="text-ink text-sm">
                   {course ? `${course.name} \u2014 ${course.semester}` : `Course ${ca.course_id}`}
-                  <span className="ml-2 text-xs text-slate-400">{ca.role}</span>
+                  <span className="ml-2 text-xs text-ink-muted">{ca.role}</span>
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => void revokeCourseAccess(ca.course_id)}>
                   <Trash2 size={12} />
@@ -344,8 +344,8 @@ export default function UserDetailPage() {
           })}
 
           {showCoursePanel && (
-            <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3 space-y-1">
-              <div className="flex items-center gap-2 pb-1 mb-1 border-b border-slate-700">
+            <div className="border-2 border-line bg-surface-muted p-3 space-y-1">
+              <div className="flex items-center gap-2 pb-1 mb-1 border-b-2 border-line">
                 <input
                   type="checkbox"
                   className="rounded"
@@ -354,8 +354,8 @@ export default function UserDetailPage() {
                     setCourseSelections((prev) => prev.map((s) => ({ ...s, checked: e.target.checked })))
                   }
                 />
-                <span className="text-xs text-slate-400 flex-1">Select all</span>
-                <span className="text-xs text-slate-500 w-20 text-center">Role</span>
+                <span className="text-xs text-ink-muted flex-1">Select all</span>
+                <span className="text-xs text-ink-muted w-20 text-center">Role</span>
               </div>
               {courseSelections.map((sel, i) => {
                 const course = courseMap[sel.id];
@@ -371,16 +371,16 @@ export default function UserDetailPage() {
                         )
                       }
                     />
-                    <span className="flex-1 text-sm text-slate-200">
+                    <span className="flex-1 text-sm text-ink">
                       {course ? `${course.name} \u2014 ${course.semester}` : `Course ${sel.id}`}
                     </span>
-                    <div className="flex rounded overflow-hidden border border-slate-600 text-xs">
+                    <div className="flex overflow-hidden border-2 border-line text-xs font-semibold">
                       <button
-                        className={`px-2 py-1 ${sel.role === 'HOST' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`px-2 py-1 ${sel.role === 'HOST' ? 'bg-accent text-on-fill' : 'bg-surface text-ink hover:bg-surface-muted'}`}
                         onClick={() => setCourseSelections((prev) => prev.map((s, j) => j === i ? { ...s, role: 'HOST' } : s))}
                       >HOST</button>
                       <button
-                        className={`px-2 py-1 ${sel.role === 'PLAYER' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`px-2 py-1 ${sel.role === 'PLAYER' ? 'bg-accent text-on-fill' : 'bg-surface text-ink hover:bg-surface-muted'}`}
                         onClick={() => setCourseSelections((prev) => prev.map((s, j) => j === i ? { ...s, role: 'PLAYER' } : s))}
                       >PLAYER</button>
                     </div>
@@ -406,7 +406,7 @@ export default function UserDetailPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-100">Game Access</h3>
+            <h2 className="nb-h3 text-ink">Game Access</h2>
             {availableGames.length > 0 && !showGamePanel && (
               <Button size="sm" variant="outline" onClick={() => openGamePanel(availableGames)}>
                 Add Games
@@ -416,7 +416,7 @@ export default function UserDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {user.game_access.length === 0 && !showGamePanel && (
-            <p className="text-slate-500 text-sm">No game access granted.</p>
+            <p className="text-ink-muted text-sm">No game access granted.</p>
           )}
           {user.game_access.map((gid) => {
             const game = gameMap[gid];
@@ -424,19 +424,19 @@ export default function UserDetailPage() {
             return (
               <div key={gid}>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-200 text-sm">{game ? gameLabel(game) : `Game ${gid}`}</span>
+                  <span className="text-ink text-sm">{game ? gameLabel(game) : `Game ${gid}`}</span>
                   <Button variant="ghost" size="sm" onClick={() => void revokeGameAccess(gid)}>
                     <Trash2 size={12} />
                   </Button>
                 </div>
-                {warning && <p className="text-yellow-400 text-xs mt-0.5">{warning}</p>}
+                {warning && <p className="text-warning-text text-xs mt-0.5">{warning}</p>}
               </div>
             );
           })}
 
           {showGamePanel && (
-            <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3 space-y-1">
-              <div className="flex items-center gap-2 pb-1 mb-1 border-b border-slate-700">
+            <div className="border-2 border-line bg-surface-muted p-3 space-y-1">
+              <div className="flex items-center gap-2 pb-1 mb-1 border-b-2 border-line">
                 <input
                   type="checkbox"
                   className="rounded"
@@ -445,7 +445,7 @@ export default function UserDetailPage() {
                     setGameSelections((prev) => prev.map((s) => ({ ...s, checked: e.target.checked })))
                   }
                 />
-                <span className="text-xs text-slate-400">Select all</span>
+                <span className="text-xs text-ink-muted">Select all</span>
               </div>
               {gameSelections.map((sel, i) => {
                 const game = gameMap[sel.id];
@@ -461,7 +461,7 @@ export default function UserDetailPage() {
                         )
                       }
                     />
-                    <span className="text-sm text-slate-200">{game ? gameLabel(game) : `Game ${sel.id}`}</span>
+                    <span className="text-sm text-ink">{game ? gameLabel(game) : `Game ${sel.id}`}</span>
                   </div>
                 );
               })}

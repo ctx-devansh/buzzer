@@ -8,6 +8,7 @@ import GuestsPage from './pages/GuestsPage';
 import SessionsPage from './pages/SessionsPage';
 import { ExternalRedirect } from './components/ExternalRedirect';
 import { HOST_APP_URL, PLAYER_APP_URL } from './lib/links';
+import { ThemeToggle } from './components/ThemeToggle';
 
 // Builders for the routes that moved to the host app (module-level so their identity
 // is stable across renders). Param names match the host app's routes.
@@ -29,27 +30,28 @@ function AdminLayout() {
     navigate('/login');
   }
 
+  // Same border width active or not, so items don't shift. The active item is an accent fill and
+  // sets text-on-fill explicitly (docs/design-better-ui.md §4.2).
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+    `flex items-center gap-3 px-4 py-2 text-sm font-semibold border-2 transition-colors ${
       isActive
-        ? 'bg-indigo-600 text-white'
-        : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+        ? 'border-line bg-accent text-on-fill'
+        : 'border-transparent text-ink hover:border-line hover:bg-surface-muted'
     }`;
 
   const externalClass =
-    'flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-700 hover:text-slate-100 transition-colors';
+    'flex items-center gap-3 px-4 py-2 text-sm text-ink-muted border-2 border-transparent hover:border-line hover:bg-surface-muted hover:text-ink transition-colors';
 
   return (
-    <div className="flex min-h-screen">
+    // Admin is the compact density: 2px outlines, 2px shadows (§4.3.1).
+    <div data-density="compact" className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 bg-slate-900 border-r border-slate-700 flex flex-col">
-        <div className="px-6 py-5 border-b border-slate-700">
-          <h1 className="text-lg font-bold text-white">Buzzer Admin</h1>
+      <aside className="w-56 shrink-0 bg-surface border-r-2 border-line flex flex-col">
+        <div className="px-6 py-5 border-b-2 border-line">
+          <p className="nb-h2 text-ink">Buzzer Admin</p>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          <p className="px-4 pt-1 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Administration
-          </p>
+          <p className="nb-caption px-4 pt-1 pb-2">Administration</p>
           <NavLink to="/users" className={linkClass}>
             <Users size={16} /> Users
           </NavLink>
@@ -60,12 +62,10 @@ function AdminLayout() {
             <UserX size={16} /> Guests
           </NavLink>
 
-          <div className="my-3 border-t border-slate-700" />
+          <div className="my-3 border-t-2 border-line" />
 
-          <p className="px-4 pt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Host tools
-          </p>
-          <p className="px-4 pb-2 text-xs text-slate-500">open the host app</p>
+          <p className="nb-caption px-4 pt-1">Host tools</p>
+          <p className="px-4 pb-2 text-xs text-ink-muted">open the host app</p>
           <NavLink to="/sessions" className={linkClass}>
             <History size={16} /> Sessions
           </NavLink>
@@ -82,10 +82,11 @@ function AdminLayout() {
             <Smartphone size={16} /> Join as player <ExternalLink size={12} className="ml-auto" />
           </a>
         </nav>
-        <div className="p-3 border-t border-slate-700">
+        <div className="p-3 border-t-2 border-line space-y-2">
+          <ThemeToggle className="w-full" />
           <button
             onClick={logout}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-slate-100 w-full transition-colors"
+            className="flex items-center gap-3 px-4 py-2 text-sm font-semibold text-ink border-2 border-transparent hover:border-line hover:bg-surface-muted w-full transition-colors"
           >
             <LogOut size={16} /> Logout
           </button>

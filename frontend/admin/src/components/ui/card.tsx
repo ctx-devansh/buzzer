@@ -1,8 +1,9 @@
 import { cn } from '../../lib/utils';
 
+// nb-box: surface fill, ink outline and hard shadow, sized by the page's density (§4.3.1).
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('rounded-xl border border-slate-700 bg-slate-800/60 shadow-xl', className)} {...props}>
+    <div className={cn('nb-box', className)} {...props}>
       {children}
     </div>
   );

@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api';
 import { clearToken, getRole } from '../lib/auth';
 import { ADMIN_APP_URL } from '../lib/links';
 import { Button } from './ui/button';
+import { ThemeToggle } from './ThemeToggle';
 
 export interface ShellCourse {
   id: number;
@@ -77,7 +78,7 @@ export default function HostShell() {
       case 'error':
         return (
           <Notice>
-            <p className="text-red-400">{state.message}</p>
+            <p className="text-danger-text">{state.message}</p>
             <Button variant="outline" size="sm" className="mt-4" onClick={() => void load()}>
               Retry
             </Button>
@@ -97,16 +98,18 @@ export default function HostShell() {
     }
   }
 
+  // Same border width active or not, so the nav never shifts; the active item is an accent fill
+  // with text-on-fill set explicitly (docs/design-better-ui.md §4.2).
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-      isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+    `flex items-center gap-2 px-3 py-2 text-sm font-semibold border-2 transition-colors ${
+      isActive ? 'border-line bg-accent text-on-fill' : 'border-transparent text-ink hover:border-line hover:bg-surface-muted'
     }`;
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-slate-700 bg-slate-900">
+      <header className="border-b-2 border-line bg-surface">
         <nav className="max-w-6xl mx-auto flex items-center gap-1 px-4 py-3 flex-wrap">
-          <span className="text-white font-bold mr-4">Buzzer Host</span>
+          <span className="nb-h2 text-ink mr-4">Buzzer Host</span>
           <NavLink to="/home" className={linkClass}><Play size={16} /> Play</NavLink>
           <NavLink to="/games" className={linkClass}><Gamepad2 size={16} /> Games</NavLink>
           <NavLink to="/courses" className={linkClass}><Users size={16} /> Courses</NavLink>
@@ -115,14 +118,15 @@ export default function HostShell() {
             {isAdmin && (
               <a
                 href={`${ADMIN_APP_URL}/`}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-slate-100"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold border-2 transition-colors border-transparent text-ink hover:border-line hover:bg-surface-muted"
               >
                 <Shield size={16} /> Admin console
               </a>
             )}
+            <ThemeToggle showLabel={false} />
             <button
               onClick={signOut}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-slate-100"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold border-2 transition-colors border-transparent text-ink hover:border-line hover:bg-surface-muted"
             >
               <LogOut size={16} /> Sign out
             </button>
@@ -136,7 +140,7 @@ export default function HostShell() {
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="max-w-xl mx-auto mt-16 px-4 text-center text-slate-300">
+    <div className="max-w-xl mx-auto mt-16 px-4 text-center text-ink-muted">
       {children}
     </div>
   );

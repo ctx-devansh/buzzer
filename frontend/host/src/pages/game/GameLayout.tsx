@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { getToken } from '../../lib/auth';
 import { QRCodeSVG } from 'qrcode.react';
+import { ThemeToggle } from '../../components/ThemeToggle';
 import { io, Socket } from 'socket.io-client';
 import type {
   AnswerPhaseEndedPayload,
@@ -218,10 +219,10 @@ export default function GameLayout() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div data-density="projector" className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center space-y-4">
-          <p className="text-red-400 text-lg">{error}</p>
-          <button className="text-indigo-400 underline" onClick={() => navigate('/home')}>
+          <p className="nb-body text-danger-text">{error}</p>
+          <button className={`nb-body text-ink underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent`} onClick={() => navigate('/home')}>
             Back to Home
           </button>
         </div>
@@ -235,16 +236,24 @@ export default function GameLayout() {
     <GameContext.Provider
       value={{ phase, roomCode: code, gameTitle, sessionId, players, playerCount, currentQuestion, answeredCount, allAnswered, answerPhaseEnded, questionLocked, lockedTimerSeconds, questionResults, gameOver, autoAdvance, setAutoAdvance, emitAdvance, emitLockQuestion }}
     >
-      <Outlet />
+      {/* The projector density (§4.3.1): 4px outlines, 6px shadows and the largest type, so the
+          screen reads from the back of a classroom. */}
+      <div data-density="projector" className="min-h-screen">
+        <Outlet />
 
-      {/* Persistent join panel — always visible in the bottom-right corner */}
-      <div className="fixed bottom-4 right-4 flex flex-col items-center gap-2 bg-slate-900/90 border border-slate-700 rounded-2xl p-3 shadow-xl backdrop-blur-sm">
-        <div className="bg-white rounded-lg p-1.5">
-          <QRCodeSVG value={playerJoinUrl} size={96} />
-        </div>
-        <div className="text-center">
-          <p className="text-slate-500 text-[10px] uppercase tracking-widest leading-none mb-0.5">Room Code</p>
-          <p className="text-white font-mono font-black tracking-widest text-lg leading-none">{code}</p>
+        {/* Bottom-left, clear of the join panel (bottom-right) and top-right projector content (§4.4). */}
+        <ThemeToggle showLabel={false} className="fixed bottom-4 left-4" />
+
+        {/* Persistent join panel — always visible in the bottom-right corner */}
+        <div className="nb-box fixed bottom-4 right-4 flex flex-col items-center gap-2 p-3">
+          {/* QR codes stay black on white in both themes, for scanning (§4.7). Only the QR is in the box. */}
+          <div className="border-2 border-line bg-qr-bg p-1.5">
+            <QRCodeSVG value={playerJoinUrl} size={96} />
+          </div>
+          <div className="text-center">
+            <p className="text-ink-muted text-xs font-semibold uppercase tracking-widest mb-1">Room Code</p>
+            <p className="nb-code text-ink">{code}</p>
+          </div>
         </div>
       </div>
     </GameContext.Provider>

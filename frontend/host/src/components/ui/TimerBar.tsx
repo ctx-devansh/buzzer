@@ -42,19 +42,21 @@ export function TimerBar({ totalSeconds, initialSeconds, paused = false }: Timer
   const displaySeconds = Math.ceil(timeLeft);
 
   const barColor =
-    fraction > 0.6 ? 'bg-green-500' :
-    fraction > 0.3 ? 'bg-yellow-400' :
-    'bg-red-500';
+    fraction > 0.6 ? 'bg-success' :
+    fraction > 0.3 ? 'bg-warning' :
+    'bg-danger';
 
+  // Square track with an ink outline; the fill carries its own edge so it is never an outline-less
+  // fill (docs/design-better-ui.md §4.2). The seconds sit beside the bar, so they use ink-muted.
   return (
     <div className="w-full flex items-center gap-4">
-      <div className="flex-1 h-6 bg-slate-700 rounded-full overflow-hidden">
+      <div className="flex-1 h-6 bg-surface-muted border-2 border-line overflow-hidden">
         <div
-          className={`h-full rounded-full transition-[width] duration-100 ease-linear ${barColor}`}
+          className={`h-full transition-[width] duration-100 ease-linear ${barColor} ${fraction > 0 ? 'border-r-2 border-line' : ''}`}
           style={{ width: `${fraction * 100}%` }}
         />
       </div>
-      <span className="text-slate-300 font-mono text-lg font-semibold w-12 text-right tabular-nums shrink-0">
+      <span className="text-ink-muted font-display font-bold text-lg w-12 text-right tabular-nums shrink-0">
         {displaySeconds}s
       </span>
     </div>

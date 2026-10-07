@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { dotRadius, fitRect, parseTapKey, toFraction } from '../lib/pinTheSpot';
 import type { PinKey, PinPoint, PinRect } from '../lib/pinTheSpot';
+import { useTheme } from '../lib/theme';
 
 interface PinBoardProps {
   imageUrl: string | undefined;
@@ -69,6 +70,9 @@ export function PinBoard({ imageUrl, aspect, taps, pinKey, onPick, maxHeight, ar
     };
   }, [aspect, maxHeight]);
 
+  // Colours are read from CSS variables while drawing, so a theme change must trigger a redraw.
+  const [theme] = useTheme();
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || box.w <= 0 || box.h <= 0) return;
@@ -86,6 +90,9 @@ export function PinBoard({ imageUrl, aspect, taps, pinKey, onPick, maxHeight, ar
     ctx.fillRect(0, 0, box.w, box.h);
     if (image) {
       // Stretched into the stored aspect on purpose (D6).
+      // A light backing first, so a transparent image stays visible in dark mode (§4.9).
+      ctx.fillStyle = cssVar(canvas, '--pin-image-bg', '#ffffff');
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
     } else {
       ctx.fillStyle = cssVar(canvas, '--pin-placeholder', '#1e293b');
@@ -140,11 +147,11 @@ export function PinBoard({ imageUrl, aspect, taps, pinKey, onPick, maxHeight, ar
       ctx.fillStyle = cssVar(canvas, '--pin-target', '#ef4444');
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = cssVar(canvas, '--pin-marker-stroke', '#ffffff');
       ctx.stroke();
       ctx.restore();
     }
-  }, [box, aspect, image, taps, pinKey]);
+  }, [box, aspect, image, taps, pinKey, theme]);
 
   function localPoint(e: PointerEvent<HTMLCanvasElement>) {
     const r = e.currentTarget.getBoundingClientRect();
@@ -175,7 +182,8 @@ export function PinBoard({ imageUrl, aspect, taps, pinKey, onPick, maxHeight, ar
   }
 
   return (
-    <div ref={boxRef} className="relative w-full" style={{ height: box.h || undefined }}>
+    // An outline, not a border: the box is measured to size the canvas, and outlines take no space.
+    <div ref={boxRef} className="relative w-full outline outline-4 outline-line" style={{ height: box.h || undefined }}>
       <canvas
         ref={canvasRef}
         data-testid={testId}
@@ -186,12 +194,12 @@ export function PinBoard({ imageUrl, aspect, taps, pinKey, onPick, maxHeight, ar
         onPointerMove={handlePointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        className={`block rounded-xl ${onPick && image ? 'cursor-crosshair' : ''}`}
+        className={`block ${onPick && image ? 'cursor-crosshair' : ''}`}
         style={{ width: box.w, height: box.h, touchAction: onPick ? 'none' : undefined }}
       />
       {failed && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-800/90">
-          <p className="text-slate-300 font-semibold">Image failed to load</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-surface">
+          <p className="text-ink-muted font-semibold">Image failed to load</p>
         </div>
       )}
     </div>

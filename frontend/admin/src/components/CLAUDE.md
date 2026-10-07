@@ -10,10 +10,12 @@ builds the URL and `window.location.replace`s to it in an effect, rendering `nul
 `/courses/:courseId/roster` bookmarks land on the same resource there.
 
 **Contents (`ui/`).**
-- `button.tsx` — `Button`: native `<button>` with `variant` (`default` indigo, `outline`,
-  `ghost`, `destructive`) and `size` (`sm`/`md`/`lg`); passes through all button props.
-- `card.tsx` — `Card`, `CardHeader`, `CardContent`: rounded bordered container plus padded
-  sections.
+- `button.tsx` — `Button`: native `<button>` with `variant` (`default` accent fill, `secondary`
+  pink fill, `outline` surface box, `ghost` no box until hover, `destructive` danger fill) and `size`
+  (`sm`/`md`/`lg`); passes through all button props. Boxed variants use `nb-box nb-press` (ink outline,
+  hard shadow, lift/press); text on fills is `text-on-fill`; focus is the global outline (T9).
+- `card.tsx` — `Card` (`nb-box`: surface, ink outline, hard shadow sized by the page's density),
+  `CardHeader`, `CardContent`.
 - `input.tsx` — `Input`: full-width styled `<input>`; passes through all props.
 
 **How it fits in.** Used by every page in `../pages/`. Pages layer their own Tailwind on top

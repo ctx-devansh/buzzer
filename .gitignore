@@ -26,3 +26,7 @@ data/
 *.swp
 *.swo
 .venv/
+
+# frontend/theme/ is source-only; tsc -b emits into each app's node_modules/.tmp
+frontend/theme/*.js
+frontend/theme/*.d.ts

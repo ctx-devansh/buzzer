@@ -5,13 +5,13 @@
 hand-written shadcn-style components (Tailwind + `cn`), and none of them holds game state.
 
 **Contents (`ui/`).**
-- `button.tsx` — `Button`: native `<button>` with `variant` (`default` indigo, `outline`,
-  `ghost`, `destructive`) and `size` (`sm`/`md`/`lg`). Adds `active:scale-95` for tap feedback.
-- `card.tsx` — `Card` (`rounded-2xl`, translucent slate), `CardHeader`, `CardContent`.
-- `input.tsx` — `Input`: full-width styled `<input>` (`rounded-xl`, `py-3`); passes through all
-  props.
+- `button.tsx` — `Button`: as host's (`default`/`secondary`/`outline`/`ghost`/`destructive`, T9
+  `nb-box nb-press` styling, press-in tap feedback) with touch sizes: min height 44/48/56 px.
+- `card.tsx` — `Card` (`nb-box`), `CardHeader`, `CardContent`.
+- `input.tsx` — `Input`: full-width `<input>`, ink outline, `py-3`, `text-base` (16 px, so iOS
+  doesn't zoom on focus); passes through all props.
 - `TimerBar.tsx` — `TimerBar({ totalSeconds, paused? })`: countdown bar ticking every 100 ms
-  against a wall-clock end time, green → yellow → red, freezing while `paused` and resuming from
+  against a wall-clock end time, success → warning → danger (seconds beside the bar), freezing while `paused` and resuming from
   the frozen value. Display only, because the server decides when answering ends.
 
 **`PinCanvas.tsx`** (outside `ui/`, it holds input state) — the Pin the Spot board: image
@@ -21,7 +21,7 @@ capture and `touch-action: none`: a tap that starts in the letterbox is ignored,
 image clamps to its edge, nothing before the image loads. Keyboard (`tabIndex=0`): the first
 arrow places the pin at the centre, arrows nudge 0.01 (Shift 0.05), Enter locks in. Read-only
 with `reveal` (target and circles) on the results screen. `role="application"` while it takes
-input, `role="img"` read-only. `--pin-*` colours; `data-loaded`. Callers pass
+input, `role="img"` read-only. `--pin-*` colours (redrawn on theme change); `data-loaded`. Callers pass
 `pinImageSrc(config)` (`../lib/pinTheSpot.ts`), so a library `image_id` canvas (T8) loads from
 `/api/images/{id}`.
 

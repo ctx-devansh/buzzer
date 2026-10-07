@@ -22,8 +22,13 @@ drive a live game that is projected for the class.
 - `App.tsx` — routes: `/login`; `RequireAuth` (token-presence only) → `HostShell` →
   `/home`, `/games`, `/games/:gameId/questions`, `/courses`, `/courses/:courseId/roster`,
   `/courses/:courseId/images`, `/sessions`; `/game/:code/{lobby,question,results,gameover}` outside the shell; `*` → `/login`.
-- `main.tsx`, `index.css` — React root and Tailwind entry; `index.css` also defines the
-  `--pin-*` colour hooks the Pin the Spot board reads (T9).
+- `main.tsx`, `index.css` — React root (also imports the self-hosted fonts) and Tailwind entry;
+  `index.css` only `@import`s `../../theme/tokens.css` (colours, density, `--pin-*`) and the
+  `@tailwind` directives (T9).
+- Theme (T9, `docs/design-better-ui.md`): `components/ThemeToggle.tsx` sits in the `HostShell`
+  nav, on the login page, and bottom-left on the projector screens; `lib/theme.ts` has
+  `useTheme()`. The `/game/:code/*` screens render inside `data-density="projector"` (biggest
+  outlines and type); management pages use the default density.
 
 **How it fits in.** One of three sibling Vite apps under `frontend/` (see `../../CLAUDE.md`).
 REST goes to `/api/game/*`, `/api/host/*` and `/api/auth/*` (plus `/api/admin/games/{id}` for
