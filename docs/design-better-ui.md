@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 4, revised after two Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **revision 5, revised after three Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -69,11 +69,12 @@ The chosen visual direction is **neo-brutalism**.
 | Density | One set of component classes, three densities set by CSS variables on a root element: **compact** (admin), **comfortable** (player, host manage; the default) and **projector** (host `/game/:code/*`). See §4.3.1. |
 | Radius | `rounded-none` by default. Up to 4px is allowed only on small chips and badges. |
 | Fills | Flat. No gradients. Coloured fills are for buttons, option tiles, badges and bars, never large page areas. |
-| Text on fills | Always `text-on-fill` (dark in **both** themes), never white. That keeps every fill at AA or better. Text that sits *beside* a fill (not on it) uses `ink`/`ink-muted`. |
-| Type | Display face **Space Grotesk 700** for headings, numbers, scores, room codes and button labels. **`font-display` always means weight 700.** The `fontFamily.display` entry can't carry a weight, so every `font-display` use pairs with `font-bold`, or comes through a class that sets it. The scan forbids `font-display` alongside `font-normal`, `font-medium` or `font-semibold`. Body face **Inter 400/500/600/700** (700 so `font-bold` is real bold, not faux-bold). Both come from `@fontsource`. Scores and timers use `tabular-nums`. |
+| Text on fills | Always `text-on-fill` (dark in **both** themes), never white. That keeps every fill at AA or better. The same applies to text inside an `image-bg` or `qr-bg` box (§4.9). Text that sits *beside* a fill (not on it) uses `ink`/`ink-muted`. |
+| Type | Display face **Space Grotesk 700** for page and section titles, numbers, scores, timers, room codes and button labels. It is **not** used for running text: question prompts and paragraphs use Inter, because a display face reads poorly over several lines. Sizes and spacing come from the scale in §4.11. **`font-display` always means weight 700.** The `fontFamily.display` entry can't carry a weight, so every `font-display` use pairs with `font-bold`, or comes through a class that sets it. The scan forbids `font-display` alongside `font-normal`, `font-medium` or `font-semibold`. Body face **Inter 400/500/600/700** (700 so `font-bold` is real bold, not faux-bold). Both come from `@fontsource`. Scores and timers use `tabular-nums`. |
 | Weight mapping | `font-black` (24 uses today) on headings, scores and room codes → `font-display` (Space Grotesk 700). Any other `font-black` → `font-bold`. After migration, `font-black` and `font-extrabold` appear nowhere (the scan test checks this, since those weights aren't loaded). `font-bold` on headings may become `font-display`; on body text it stays Inter 700. |
 | Focus | `:focus-visible` gives a 3px solid `focus` outline with a 2px offset, defined in each app's `@layer base` (§4.3). It is **enforced, not just stated**: all 15 `focus:outline-none` and all 40 `focus:ring*`/`ring-offset*` classes are deleted during migration, and the scan forbids `outline-none`, `focus:ring`, `focus-visible:ring` and `ring-offset` from then on. Why the deletion is required: a utility like `focus:outline-none` (specificity 0,1,1) beats a bare `:focus-visible` rule (0,1,0) no matter where that rule sits, so any surviving `outline-none` silently removes the focus state. |
-| Status meaning | Colour never carries meaning alone. Right/wrong pairs colour with an icon or word (✓/✗, "Correct"). Option tiles carry a letter (A, B, …) as well as their colour. |
+| Status meaning | Colour never carries meaning alone. Right/wrong pairs colour with an icon or word (✓/✗, "Correct"). Option tiles carry a letter (A, B, …) as well as their colour. This includes the fill-in-the-blank word cloud (§4.8). |
+| States | Hover, active, disabled and selected are defined once, in §4.11. Pages don't invent their own. |
 
 ### 4.2 Tokens
 
@@ -114,13 +115,33 @@ Rules for using tokens:
 - **Never use `ink` as a backdrop or overlay.** It's off-white in dark mode. Scrims use `bg-scrim/60`.
 - **No opacity modifiers on fill tokens** (`accent`, `accent-2`, `info`, `success`, `danger`, `warning`, `option-1…8`). For
   example, `bg-accent/40` is not allowed. A translucent fill blends with whatever sits underneath it, so the contrast test can't
-  vouch for text on it. The scan enforces this. Opacity is allowed only on `scrim`, `surface*`, `ink*` and `shadow`.
+  vouch for text on it. The scan enforces this.
+- **Opacity is allowed only as `bg-scrim/…`, `bg-surface*/…` and in `shadow`.** That means no opacity modifier on any `text-*`
+  class (`text-ink/50` would fail AA, and no test could see it). Element-level `opacity-*` is allowed **only through the `disabled:`
+  variant**: WCAG 1.4.3 exempts inactive UI components, and that's the only case where dimming is acceptable (§4.11). The scan
+  enforces both rules. Today there are no `text-*/NN` uses, but element `opacity-*` dims **content** in two places, and those
+  get migrated:
+  - the player's option fallback letter (`QuestionPage.tsx:39`, `opacity-60`) → `text-on-fill` (it sits in an `image-bg` box);
+  - inactive and skipped roster rows (`RosterPage.tsx:370` `opacity-30 line-through`, `:573` `opacity-50`) → `text-ink-muted`,
+    plus `line-through` for skipped rows and an "Inactive" `nb-chip` for inactive entries.
+  Conditional `opacity-50` on the player's answer tiles and submit buttons (`QuestionPage.tsx` :131, :161, :183, :191, :269, :288,
+  :362) becomes `disabled:` styling on the same buttons. Each must carry the `disabled` attribute when submitted or locked; add it
+  where it's missing.
 - **Any element with a fill-token background sets `text-on-fill` explicitly.** That includes the admin sidebar's active item,
   chips, badges, tiles and buttons. Inheriting `ink` would give about 1.7:1 on dark `accent`.
 - In light mode the fills are pale against the cream canvas (yellow vs cream is 1.3:1). That's fine because every filled
   element carries a `line` outline, and the outline carries the WCAG 1.4.11 non-text contrast. **A fill without an outline is
   not allowed.**
 - `line` in dark mode must stay at **3:1 or better against `canvas`, `surface` and `surface-muted`**.
+- **Text inside an `image-bg` or `qr-bg` box uses `text-on-fill`.** Both stay light in dark mode, so inherited `ink` (off-white)
+  would be about 1.1:1. Known sites:
+  - the player option fallback letter (`QuestionPage.tsx:39`);
+  - "Image failed to load" (host `QuestionPage.tsx:116`, `ResultsPage.tsx:317`, player `QuestionPage.tsx:407`), where those
+    messages render inside the image box;
+  - the editor's "Missing image" (`QuestionEditorPage.tsx:242`).
+
+  "Image failed to load" in `PinBoard.tsx:194` and `PinCanvas.tsx:242` sits on the themed canvas letterbox, not on `image-bg`, so it
+  uses `ink-muted`.
 
 Contrast at the starting values (computed with the WCAG 2.1 formula):
 
@@ -157,7 +178,7 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
     `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`, which covers
     every raw page `<input>`/`<textarea>` (11 raw `<textarea>`/`<select>` exist outside the primitives).
   - `extend.boxShadow`: `brutal-sm`, `brutal`, `brutal-lg` (hard offsets in `rgb(var(--shadow))`).
-  - `extend.borderWidth`: `3`.
+  - `extend.borderWidth`: `3` and `5` (`5` is the selected-tile outline, §4.11).
   - `extend.fontFamily`: `display: ['"Space Grotesk"', 'system-ui', 'sans-serif']`, `sans: ['Inter', 'system-ui', 'sans-serif']`.
 
 **Staging (the apps stay usable during migration):**
@@ -171,10 +192,11 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
 - `body { background: rgb(var(--canvas)); color: rgb(var(--ink)); }`. This replaces the hardcoded body colours in each `index.css`.
 - **Not** the placeholder rule. A bare `::placeholder` (specificity 0,0,1) in `tokens.css` loses to preflight's
   `input::placeholder` (0,0,2), which also comes later. The rule goes in `@layer base` (below).
-- `<meta name="theme-color">` is not set in CSS. Each `index.html` carries two of them,
-  `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFF8E7">` and the dark one with `#1B1C20`, and
-  `theme.ts` updates a single un-media'd `theme-color` meta on every `setTheme` and attribute change, so mobile browser chrome
-  matches the chosen theme rather than only the OS setting.
+- `theme-color` (mobile browser chrome) is not set in CSS. Each `index.html` has **exactly one**
+  `<meta name="theme-color" content="#FFF8E7">`, with no `media` attribute. Browsers use the first matching meta, so two
+  media-scoped metas would always follow the OS and ignore the toggle. The no-flash script sets its `content` from the resolved theme
+  (`#FFF8E7` light, `#1B1C20` dark). `theme.ts` updates it every time it sets the attribute (`setTheme`, OS change, storage event),
+  through one internal `applyTheme(t)` that does both.
 
 Each app's `src/index.css` (same block in all three, under 40 lines, every value a token or density variable):
 - **`@layer base`** (after `@tailwind base`): `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }` and
@@ -205,6 +227,24 @@ Each app's `src/index.css` (same block in all three, under 40 lines, every value
   - **player and host manage:** nothing (comfortable).
 - The `shadow-brutal-sm/-/lg` utilities stay available for one-off elements that sit outside `.nb-box`, but primitives use
   `.nb-box`/`.nb-press` so density follows automatically.
+
+#### 4.3.3 `tokens.css` structure (the tests parse this)
+
+`tokens.css` has exactly these blocks, in this order, with these **exact selector strings**. The unit tests (§4.10) locate blocks by
+selector text, so don't merge or rename them.
+
+| # | Selector | Holds | Parity test | Contrast test |
+|---|---|---|---|---|
+| 1 | `:root` | **Theme-invariant** variables: `--nb-border`, `--nb-offset` (comfortable defaults), `--qr-bg` (`255 255 255`), and the saturated canvas marker colours `--pin-full`, `--pin-full-fill`, `--pin-zero`, `--pin-target`, `--pin-tap`, `--pin-tap-stroke`, `--pin-head`, `--pin-stem`, and `--pin-marker-stroke` (`#ffffff`, the contrasting ring around markers on photos) | exempt; must **not** be redefined in blocks 2–3 | merged into both themes (supplies `qr-bg`) |
+| 2 | `:root, [data-theme=light]` | Every **themed** variable at its light value: all RGB-channel colour tokens in §4.2 except `qr-bg`, plus `--image-bg`, `--pin-letterbox`, `--pin-placeholder`, `--pin-image-bg` | must define exactly the same names as block 3 | light theme = block 1 + block 2 |
+| 3 | `[data-theme=dark]` | The same names as block 2, at dark values | see block 2 | dark theme = block 1 + block 3 |
+| 4 | `[data-density=compact]`, `[data-density=projector]` | Only `--nb-border` and `--nb-offset` | ignored | ignored |
+| 5 | `:root, [data-theme=light]` and `[data-theme=dark]` (a second, property-only pair) plus `body` | `color-scheme` and the body background and colour. **No custom properties** in these blocks | ignored | ignored |
+
+- The parser reads only `--name: value;` declarations inside blocks 1–4. A variable defined in more than one of blocks 1–3 fails the
+  parity test, which prevents an "invariant" value being silently overridden by one theme only.
+- `--pin-*` values are full colour strings (canvas `fillStyle` needs them). The contrast test skips anything that isn't three
+  space-separated integers.
 
 #### 4.3.2 `cn()` / tailwind-merge
 
@@ -249,9 +289,10 @@ resolve as expected: `cn('shadow-brutal','shadow-none') === 'shadow-none'`, `cn(
   pattern: the name doesn't change and the state is carried by `aria-pressed`. It has a sun/moon glyph (`aria-hidden`) and
   `nb-box nb-press` styling. The visible text label "Dark theme", where width allows, matches the accessible name. Placement:
   - **Host:** right side of the `HostShell` top nav, before Sign out. On `LoginPage`, top-right of the page. On the `/game/:code/*`
-    projector screens (outside the shell), a small fixed top-right button rendered once in `pages/game/GameLayout.tsx`. It must not
-    overlap the corner QR code that `GameLayout` renders (§4.7); place it on the opposite side from the QR code, or stack them.
-  - **Player:** a **normal in-flow header row** rendered once in `App.tsx` above `<Routes>`. It's a 56px-tall bar holding only the
+    projector screens (outside the shell), a small **fixed bottom-left** button rendered once in `pages/game/GameLayout.tsx`. That
+    keeps it clear of the fixed bottom-right QR/room-code panel (`GameLayout.tsx:241`) and of top-right projector content (timer,
+    counts).
+  - **Player:** (layout contract in §4.11) a **normal in-flow header row** rendered once in `App.tsx` above `<Routes>`. It's a 56px-tall bar holding only the
     toggle (44×44 or larger, right-aligned). It isn't a fixed overlay, so no page needs to reserve padding. The
     "Host disconnected" banner in `pages/game/GameLayout.tsx` (currently `fixed top-0 … z-50`) becomes an **in-flow** block, so it
     appears directly below the header without covering the toggle.
@@ -287,7 +328,9 @@ resolve as expected: `cn('shadow-brutal','shadow-none') === 'shadow-none'`, `cn(
      `\b(bg|text|border(-[trblxyse])?|ring|ring-offset|outline|from|via|to|fill|stroke|divide|placeholder|accent|caret|decoration|shadow)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black)\b`
      (this catches `bg-white`, `text-black` and `border-t-slate-700`);
    - focus removal and rings: `\boutline-none\b`, `\b(focus|focus-visible|focus-within):ring\b`, `\bring-offset\b` (§4.1);
-   - opacity on fill tokens: `\b(bg|border|text)-(accent|accent-2|info|success|danger|warning|option-\d)/\d+` (§4.2);
+   - opacity on fill tokens: `\b(bg|border|text)-(accent|accent-2|info|success|danger|warning|option-\d)/\d+`; opacity on any
+     text colour: `\btext-[a-z-]+/\d+`; element opacity without `disabled:`: `(?<!disabled:)\bopacity-\d+` (§4.2);
+   - `\bmin-h-screen\b` in `frontend/player/src/pages/**` (§4.11 layout contract);
    - `font-black` or `font-extrabold` (weights that aren't loaded), and `font-display` on the same line as
      `font-(normal|medium|semibold)` (§4.1);
    - CSS named colours in string literals or JSX attributes in `.ts`/`.tsx`:
@@ -299,8 +342,8 @@ resolve as expected: `cn('shadow-brutal','shadow-none') === 'shadow-none'`, `cn(
 2. *Contrast* (always on). Parse `frontend/theme/tokens.css` into the `light` and `dark` maps (RGB-channel tokens only; `--pin-*`
    are skipped) and assert, for each theme:
    - `ink` and `ink-muted` on `canvas`/`surface`/`surface-muted` ≥ 4.5;
-   - `on-fill` on `accent`, `accent-2`, `info`, `success`, `danger`, `warning` and `option-1…8` ≥ 4.5 (only opaque fills are
-     tested, which is why opacity on fills is banned);
+   - `on-fill` on `accent`, `accent-2`, `info`, `success`, `danger`, `warning`, `option-1…8`, `image-bg` and `qr-bg` ≥ 4.5 (only
+     opaque fills are tested, which is why opacity on fills is banned);
    - `*-text` on `canvas`/`surface`/`surface-muted` ≥ 4.5;
    - `line` on `canvas`/`surface`/`surface-muted` ≥ 3.0;
    - `focus` on `canvas`/`surface` ≥ 3.0.
@@ -333,7 +376,7 @@ doesn't collect it. Run it explicitly: `npm run build && pytest tests/e2e/captur
 
 | App | Screens |
 |---|---|
-| Player (390×844) | 01 join, 02 name (guest), 03 lobby, 04 question MC with images, 05 true/false, 06 fill in the blank, 07 multi-select, 08 put in order, 09 Pin the Spot with pin placed, 10 feedback (answer locked in), 11 results correct, 12 results incorrect, 13 game over |
+| Player (390×844) | 01 join, 02 name (guest; `page_as(None)`, so there's no token and the guest form shows), 03 lobby, 04 question MC with images, 05 true/false, 06 fill in the blank, 07 multi-select, 08 put in order, 09 Pin the Spot with pin placed, 10 feedback (answer locked in), 11 results correct, 12 results incorrect, 13 game over |
 | Host projector (1920×1080) | 14 lobby with QR code, 15 question MC with prompt image, 16 question Pin the Spot, 17 results MC bars, 18 results Pin the Spot taps, 19 game over |
 | Host manage (1440×900) | 20 login, 21 home (play), 22 games, 23 question editor (Pin the Spot target picker), 24 image library, 25 image picker modal, 26 roster, 27 sessions |
 | Admin (1440×900) | 28 users, 29 user detail, 30 sessions |
@@ -349,7 +392,9 @@ The T10 document links it.
 - **QR codes** (`QRCodeSVG` in `host/src/pages/game/LobbyPage.tsx:26`, 200px, and `GameLayout.tsx:243`, 96px) stay
   **dark-on-light in both themes**, for scanning reliability. Keep the library defaults (black modules on white), and wrap each SVG
   in a `bg-qr-bg p-3 border-4 border-line shadow-brutal` box. The `qr-bg` token is `#FFFFFF` in both themes, so the box stays white in
-  dark mode. The QR codes are never inverted. The contrast test skips `qr-bg`, since no text sits on it.
+  dark mode. The QR codes are never inverted. **Only the QR SVG sits inside the `qr-bg` box.** The "Room Code" label and the code
+  itself (`GameLayout.tsx:246–247`, and the lobby's code) sit outside it, on the panel's `surface`, in `ink-muted` / `ink`. The contrast
+  test checks `on-fill` on `qr-bg` anyway, in case text is ever put inside the box.
 - **Player viewport** (`frontend/player/index.html:5`), currently
   `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no`, changes to
   `width=device-width, initial-scale=1.0, viewport-fit=cover`:
@@ -376,10 +421,18 @@ The themed version uses **one encoding on both pages** (decided: wrong is muted,
 | GameOver score histogram (:337) | `bg-accent` | `border-2 border-line`, no rounding | none |
 
 - To keep both pages in step, factor the class choice into one helper, `barClasses(correct: boolean | null)`, in
-  `host/src/lib/answerBars.ts`. Both pages call it instead of choosing colours inline (`colorClass={…}` at GameOver :180/:210/:226
+  `host/src/lib/answerBars.ts`. It returns `{ bar, label }`: `bar` holds the fill and border classes from the table, and `label`
+  holds the text class for anything drawn **on** the bar (`text-on-fill` for correct/no-key, `text-ink` for wrong). Labels and counts
+  that sit *beside* the bar use `text-ink`/`text-ink-muted` and don't need `label`. Put-in-order bars need nothing extra:
+  `lib/putInOrder.ts::buildPioBars` already returns only `correct: true | null` (no colours), so they go through the same renderer and
+  `barClasses()`. Both pages call it instead of choosing colours inline (`colorClass={…}` at GameOver :180/:210/:226
   and `barColor` in ResultsPage). GameOverPage gets the same ✓ chip as ResultsPage.
-- Inline "correct" text (`text-green-400` at ResultsPage :81, :96, :350, and the equivalents in GameOverPage) becomes
+- Inline "correct" text (`text-green-400` at ResultsPage :81, :350, and the equivalents in GameOverPage) becomes
   `text-success-text font-semibold`.
+- **Fill-in-the-blank word cloud** (`ResultsPage.tsx:96`, `isCorrectWord(word) ? 'text-green-400' : 'text-slate-300'`): today
+  colour alone marks correct words (WCAG 1.4.1). Correct words become `text-success-text font-bold underline decoration-2` with a
+  leading "✓ " (`aria-hidden`, plus an `sr-only` "correct"). Other words are `text-ink-muted`. The ✓ and underline carry the meaning
+  without colour.
 - Option colours are **not** used on host bars.
 
 ### 4.9 Uploaded images (T8) on dark surfaces
@@ -392,7 +445,8 @@ background vanishes on the charcoal surface. **Decision: every image well has a 
   `object-contain` letterboxing then shows `image-bg`, not the page surface.
 - The well keeps its `border-line` outline, so the light box reads as a deliberate frame in dark mode.
 - Pin the Spot canvases fill the image rectangle with `--pin-image-bg` before drawing (§4.5).
-- `image-bg` is softened in dark mode (`#EDE9E0`) to limit glare. It's skipped by the contrast test, since no text sits on it.
+- `image-bg` is softened in dark mode (`#EDE9E0`) to limit glare. Fallback and error text can sit inside these boxes (§4.2), so the
+  contrast test checks `on-fill` on `image-bg` in both themes.
 
 ### 4.10 Test plan: what's needed, and what was deliberately left out
 
@@ -415,13 +469,15 @@ integration coverage to T4, T7 and T8. All existing integration tests must stay 
 | `test_token_contrast[light/dark]` | R9 "both themes meet the accessibility bar" (token pairs) | The values are hand-picked and will be tuned after screenshots (§8). Every tweak must re-prove AA. |
 | `test_token_parity` | Complete dark theme | A token missing from `[data-theme=dark]` silently inherits the light value from `:root`. That's plausible every time a token is added. It shares the parser with the contrast test, so it costs almost nothing. |
 
-**E2E tests: one new file, `tests/e2e/test_theme_ui.py`** (Playwright against nginx :8080, built `dist/`). Each test opens only a
-login or join page and needs no game, so they're fast.
+**E2E tests: one new file, `tests/e2e/test_theme_ui.py`** (Playwright against nginx :8080, built `dist/`). The first test and the
+login and join part of the second open only a login or join page and need no game. The editor case of the second creates one game
+through the API, via the `env`/`cleanup` fixtures, and signs in as `env`'s host.
 
 | Test | Guards | Why it's needed |
 |---|---|---|
-| `test_theme_defaults_to_os_and_persists[app × scheme]` (apps: host `/host/login`, player `/player/join`, admin `/admin/login`; schemes: light, dark) | R9 "toggle that defaults to the OS preference and persists" (graded explicitly) | The defaulting logic is an inline script copied into three `index.html` files, and `tokens.css` reaches each app through a relative `@import`, so each app can break on its own. Steps: (1) new context with `color_scheme=<scheme>` → `html[data-theme=<scheme>]`, and `body` computed background equals that theme's `canvas`, which proves the tokens actually load; (2) click the toggle → attribute flips, `aria-pressed` flips, the accessible name stays "Dark theme"; (3) reload → still flipped; (4) `page.emulate_media(color_scheme=<scheme>)` again → still flipped (stored beats OS). |
-| `test_focus_outline_and_placeholder[app]` (each app's login/join page, plus host `QuestionEditorPage` for the raw `<textarea>`/`<select>`) | R9 "visible focus states"; placeholder contrast | Both depend on cascade order (§4.3), which is exactly what went wrong twice in review, and the static scan can't see cascade order. Steps: Tab through every focusable element and assert the computed `outline-style` isn't `none` and `outline-width` is ≥ 2px; read `getComputedStyle(input, '::placeholder').color` and assert it equals `ink-muted`. One theme is enough, since the colours are already proven by the contrast unit test. |
+| `test_theme_defaults_to_os_and_persists[app × scheme]` (apps: host `/host/login`, player `/player/join`, admin `/admin/login`; schemes: light, dark) | R9 "toggle that defaults to the OS preference and persists" (graded explicitly) | The defaulting logic is an inline script copied into three `index.html` files, and `tokens.css` reaches each app through a relative `@import`, so each app can break on its own. Steps: (1) new context with `color_scheme=<scheme>` → `html[data-theme=<scheme>]`, and `body` computed background equals that theme's `canvas`, which proves the tokens actually load; (2) click the toggle → attribute flips, `aria-pressed` flips, the accessible name stays "Dark theme"; (3) reload → still flipped; (4) `page.emulate_media(color_scheme=<opposite of scheme>)` and then back to `<scheme>`, which fires real
+`change` events → still flipped (stored beats OS). Emulating the same scheme again would fire no event and prove nothing. |
+| `test_focus_outline_and_placeholder[case]` (cases: host `/host/login`, player `/player/join`, admin `/admin/login`, and host `QuestionEditorPage` for a game created through the API, which holds the raw `<textarea>`/`<select>`) | R9 "visible focus states"; placeholder contrast | Both depend on cascade order (§4.3), which is exactly what went wrong twice in review, and the static scan can't see cascade order. Steps: Tab through every focusable element and assert the computed `outline-style` isn't `none` and `outline-width` is ≥ 2px; read `getComputedStyle(input, '::placeholder').color` and assert it equals `ink-muted`. One theme is enough, since the colours are already proven by the contrast unit test. |
 
 **Rendered-contrast check: an axe-core assertion inside the capture module, not a separate test.** Token contrast doesn't
 prove that pages *use* the right pairs. For example, `bg-accent` with inherited `ink` text is 1.7:1 in dark mode, and neither the
@@ -448,6 +504,56 @@ letter badge in front. So the new toggle and badges don't break them. They must 
 - QR and image-well backings, tap-target sizes, `theme-color` (visible in the screenshots, and set once with little room to regress);
 - answer-bar encoding (one shared helper, `barClasses()`, makes the two pages unable to diverge);
 - a JS unit-test runner for `theme.ts` (the repo has none, and the e2e test exercises the real logic in a real browser).
+
+### 4.11 States, type scale, spacing and layout contract
+
+**Interactive states** (decided: lift and press). Defined once in `.nb-press` and the primitives:
+
+| State | Rule |
+|---|---|
+| Hover (pointer devices only: `@media (hover: hover)`) | `.nb-press:hover` → `translate(-1px, -1px)` and the shadow grows to `calc(var(--nb-offset) + 1px)`. Ghost and outline buttons also fill `surface-muted`. No colour change on filled buttons, so there are no hover colour tokens to contrast-test. |
+| Active | Press in: `translate(var(--nb-offset), var(--nb-offset))`, no shadow (§4.3.1). Replaces today's `active:scale-95` (13 uses). |
+| Disabled | `disabled:` variants only: `bg-surface-muted text-ink-muted shadow-none`, no hover lift or press (`.nb-press:disabled` resets transform), `cursor-not-allowed`. `disabled:opacity-60` is also allowed, since WCAG 1.4.3 exempts inactive components. Replaces today's `disabled:opacity-20/40/50`. |
+| Selected (answer tiles, put-in-order picks, admin list rows) | `border-5 border-line` plus a ✓ badge (`nb-chip bg-surface text-ink`) in the tile's top-right corner. The fill doesn't change, and colour is never the only cue. |
+| Locked or submitted (player) | The `disabled` state, plus the existing "locked" copy. |
+
+Under `prefers-reduced-motion: reduce`, hover and press change only the shadow, with no translate and no transition.
+
+**Type and spacing scale** (decided: bold contrast). Each density is selected by the `data-density` root (§4.3.1). Pages use these
+classes; they don't pick their own sizes.
+
+| Role | compact (admin) | comfortable (player, host manage) | projector (host `/game/*`) | Face |
+|---|---|---|---|---|
+| Page title (`h1`) | `text-2xl` | `text-3xl` | `text-6xl` | `font-display font-bold` |
+| Section title (`h2`) | `text-lg` | `text-xl` | `text-4xl` | `font-display font-bold` |
+| Card title (`h3`) | `text-base` | `text-lg` | `text-2xl` | Inter `font-semibold` |
+| Body, prompts | `text-sm` | `text-base` | `text-2xl` (question prompt: `text-4xl`, Inter `font-semibold`) | Inter `font-normal` |
+| Caption, labels | `text-xs` | `text-sm` | `text-lg` | Inter `font-medium`, `text-ink-muted`, `uppercase tracking-wide` |
+| Page padding | `p-4` | `p-5` | `p-10` | |
+| Card padding | `p-3` | `p-5` | `p-8` | |
+| Stack gap | `gap-3` / `space-y-3` | `gap-4` / `space-y-4` | `gap-8` / `space-y-8` | |
+
+- Each page has exactly one `h1`. Section and card titles use the real heading elements (`h2`, `h3`), so the hierarchy is visible to
+  assistive tech too.
+- Scores, timers and room codes are numbers, not headings: `font-display font-bold tabular-nums`, sized one step above the body
+  size of their density.
+
+**Player layout contract** (needed because of the in-flow header row, §4.4). There are 11 `min-h-screen` uses in the player app
+today, and with a 56px header above them, every centred screen would scroll by 56px.
+- `App.tsx`: the root is `flex flex-col h-[100dvh]`. The header is `shrink-0` and padded by `env(safe-area-inset-top)`. The routes
+  wrapper is `<main class="flex-1 min-h-0 overflow-y-auto">`.
+- Pages replace `min-h-screen` with `min-h-full`, which centres within `main`, not the viewport.
+- The `22vh` option-image sizing (`QuestionPage.tsx:21`, `:29`) and the Pin the Spot canvas must still fit at 390×844 without
+  scrolling `main`. Recheck them, and switch `22vh` to `22dvh` if needed.
+
+**Remaining unmapped elements, now mapped:**
+- **Spinners** (player `LobbyPage.tsx:19`, `FeedbackPage.tsx:7`): `border-4 border-surface-muted border-t-accent rounded-full
+  animate-spin`. They keep spinning under reduced motion, because a spinner is an essential loading indicator.
+- **Tables:** the admin table rules (ruled `border-line` rows, a `surface-muted` header, zebra stripes, no per-row shadows) apply to
+  **every** table, including host `RosterPage` (the only host `<table>`) and list-style rows in host `SessionsPage` and `GamesPage`.
+- **Native checkboxes and radios** (admin `SessionsPage`, `UserDetailPage`; host `RosterPage`): in each app's `@layer base`,
+  `input[type=checkbox], input[type=radio] { accent-color: rgb(var(--ink)); width: 1.125rem; height: 1.125rem; }`. Yellow `accent`
+  would fail 3:1 non-text contrast on cream; `ink` is about 17:1 in light and 13:1 in dark. They take the global focus outline.
 
 ## 5. Implementation steps (in order)
 
@@ -524,6 +630,13 @@ Mechanical mapping (applies to every file the scan lists):
 | `font-black` | `font-display font-bold` (headings, scores, codes) or `font-bold` (§4.1) |
 | `focus:outline-none`, `focus:ring-*`, `focus:ring-offset-*`, `ring-offset-*` (on raw `<textarea>`/`<select>`/`<input>` in pages too) | delete (§4.1) |
 | bar colours on ResultsPage / GameOverPage | `barClasses()` (§4.8) |
+| headings and ad-hoc `text-xl`/`text-3xl`/`p-4`/`gap-*` on titles, cards and page wrappers | the §4.11 scale for that app's density |
+| `hover:bg-*`, `hover:text-*`, `hover:border-*` | `.nb-press` lift (filled buttons) or `hover:bg-surface-muted` (ghost/outline), per §4.11 |
+| `active:scale-95` | `.nb-press` |
+| `disabled:opacity-*`, conditional `opacity-50 cursor-not-allowed` | `disabled:` state per §4.11, plus the `disabled` attribute |
+| `opacity-*` on content (fallback letter, roster rows) | `text-on-fill` / `text-ink-muted` + `line-through` / "Inactive" chip (§4.2) |
+| player `min-h-screen` | `min-h-full` (§4.11 layout contract) |
+| spinners (`animate-spin` with palette borders) | §4.11 spinner classes |
 | `<img>` of an uploaded image | add `bg-image-bg` to it or its box (§4.9) |
 | Player `OPTION_COLORS` (`pages/game/QuestionPage.tsx:9`) | `bg-option-1 … bg-option-8` with `text-on-fill border-line`, plus a letter badge (A, B, C, …) |
 | Admin `STATUS_COLORS` (`pages/SessionsPage.tsx:34`) | `nb-chip` with `bg-success` (active) / `bg-warning` (lobby) / `bg-surface-muted` (completed) |
@@ -532,7 +645,8 @@ Then the per-context passes:
 - **Player:** answer tiles at least 56px tall and full-width, a 3px outline, `brutal` shadow and press, `touch-action: manipulation`.
   The selected state uses a thicker outline plus a ✓ badge (not colour alone). Put-in-order chips and the Pin the Spot "lock in"
   button follow the same rules. Bottom action areas pad by `env(safe-area-inset-bottom)`.
-- **Host projector** (`pages/game/*`): prompt `text-4xl` or larger in `font-display`, room code and scores in `font-display tabular-nums`,
+- **Host projector** (`pages/game/*`, `data-density="projector"`): prompt `text-4xl` Inter `font-semibold` (not the display face, §4.1),
+  room code and scores in `font-display font-bold tabular-nums`,
   4px outlines and `brutal-lg`. Results bars as in §4.8. QR codes as in §4.7. Check readability at 1920×1080 viewed at 25% zoom, as a
   back-of-room proxy, in both themes.
 - **Host manage** (`pages/manage/*`, `HostShell`, `ImagePicker`): 3px outlines. The question editor groups fields in `nb-box` sections.
@@ -596,7 +710,7 @@ The authoritative list of files to migrate is whatever the scan test reports. Th
    - Play a full game covering every question type (the fixture from §4.6, or `scripts/seed_demo.py` plus the T6 games with
      `scripts/simulate_players.py`). Every screen looks intentional in both themes, Pin the Spot repaints on toggle, and QR codes
      scan from a phone in both themes.
-   - Player at 390×844: no horizontal scroll, tap targets ≥ 44px, the toggle never covers an input, pinch-zoom works, and focusing an
+   - Player at 390×844: no horizontal scroll, **no vertical scroll on join, name, lobby, feedback and results**, tap targets ≥ 44px, the toggle never covers an input, pinch-zoom works, and focusing an
      input doesn't auto-zoom on iOS Safari.
 5. `docs/ui/after/{light,dark}` holds all 30 key screens, and `docs/ui/README.md` shows before/after side by side.
 
@@ -676,3 +790,22 @@ real defect in revision 3:
 |---|---|---|---|
 | 1 | Revision 3's `::placeholder` rule in `tokens.css` can never win. Preflight's `input::placeholder, textarea::placeholder` has higher specificity (0,0,2 vs 0,0,1) and comes later. | Yes (`preflight.css` ~333) | Rule moved to each app's `@layer base` with preflight's exact selector (§4.3) |
 | 2 | No test plan. The e2e build guard ignores the player app and would ignore `frontend/theme/` | Yes (`conftest.py::_built_apps_are_current` checks host and admin only) | §4.10: four unit tests, two e2e tests, an axe contrast check in the capture module, fixture fixes, and an explicit list of what is *not* tested and why |
+
+**Revision 5** was revised after a third Goldfish pass. Every finding was verified against the code. Three claims turned out wrong,
+and the log records them, rather than dropping them, so the reasoning is visible.
+
+| # | Goldfish finding | Verified? | Change |
+|---|---|---|---|
+| C1 | Text inside `image-bg`/`qr-bg` inherits off-white `ink` (~1.1:1) | Yes: fallback letter (`player QuestionPage:39`), "Image failed to load" ×3, "Missing image". The room code is **outside** the QR box (`GameLayout:242–247`). | `text-on-fill` inside those boxes; `on-fill` on `image-bg`/`qr-bg` added to the contrast test; room-code placement stated (§4.2, §4.7, §4.9) |
+| C2 | No spacing, type scale or hierarchy, which R9 grades | Yes | Bold-contrast scale per density (decided), heading elements, mapping row (§4.11) |
+| C3.1 | Word cloud marks correct words by colour only | Yes (`ResultsPage:96`) | ✓, bold and underline, plus `sr-only` text (§4.8) |
+| C3.2 | `buildPioBars` is a third bar-colour site | **No**: it returns `correct: true\|null`, and colours are picked by the shared renderer | Stated in §4.8. No new site. |
+| C4 | Media-scoped `theme-color` metas ignore the toggle | Yes (first matching meta wins) | A single meta, set by the no-flash script and `applyTheme()` (§4.3) |
+| C5 | Opacity on `ink*` unchecked; translucent text unmapped | Partly: no `text-*/NN` today, but `opacity-*` dims content (fallback letter, roster rows) | Text opacity banned; element opacity only via `disabled:`; content sites mapped; scan rules (§4.2, §4.6) |
+| C6 | Hover, active, disabled and selected unmapped | Yes (e.g. 13 `active:scale-95`, 10 `hover:bg-indigo-500`, `disabled:opacity-20/40/50`) | Lift-and-press states (decided), `border-5` selected, mapping rows (§4.11) |
+| C7 | The header row causes vertical scroll | Yes: 11 `min-h-screen` in the player app | Flex-column layout contract, `min-h-full`, a scan rule and a §7 check (§4.11) |
+| C8 | `tokens.css` structure unpinned, but the tests depend on it | Yes | Exact blocks, selectors, invariant set, `--pin-marker-stroke` value, test exemptions (§4.3.3) |
+| C9 | Test-plan inconsistencies | Two of three. "Needs no game" was wrong for the editor case, and "emulate the same scheme" fired no event. Screen 02 **was** reachable (`page_as(None)` shows the guest form). | Editor case uses API fixtures; step 4 emulates the opposite scheme, then back; screen 02 note (§4.10, §4.6) |
+| C10 | `barClasses()` doesn't give label text a colour | Yes | Returns `{ bar, label }` (§4.8) |
+| C11 | Spinners, host tables, checkboxes, projector toggle position | Yes: 2 spinners, checkboxes in 3 files, `RosterPage` table, QR panel bottom-right | Mapped in §4.11; projector toggle fixed bottom-left (§4.4) |
+| C12 | Sanitised prompt HTML may need themed rules | **No**: no `dangerouslySetInnerHTML`/`innerHTML` in any frontend, so prompts are plain text. The display-face point was valid. | Prompts use Inter, not the display face (§4.1, §4.11) |
