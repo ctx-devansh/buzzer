@@ -484,7 +484,7 @@ doesn't collect it. Run it explicitly: `npm run build && pytest tests/e2e/captur
 - **User detail** (screen 29) is the `env` host user's page, which shows course and game grants.
 - **Driving the game.** One host page (1920×1080) and three guest player pages (390×844, device scale 2) through `page_as`.
   One player answers correctly and one incorrectly, so both results states exist.
-- **Keeping timers from expiring between shots.** The fixture game's questions use `time_limit_seconds = 600`, so nothing expires
+- **Keeping timers from expiring between shots.** The fixture game's questions use `time_limit_seconds = 300` (the backend's maximum; 600 is rejected with a 422, an implementation finding), so nothing expires
   while screenshots are taken. Screens that need the "locked" state are reached through the host's existing lock control, not by
   waiting for the timer. The shots are taken, then the host advances.
 - **Theme.** Each context gets `color_scheme=<theme>` **and** `localStorage['buzzer-theme']=<theme>` through `context.add_init_script`
@@ -988,7 +988,7 @@ the code first.
 | 9a | `font-display font-semibold` would be faux-bold | Yes (only Space Grotesk 700 loaded) | `font-display` ⇒ 700, enforced by the scan (§4.1) |
 | 9b | `borderColor.DEFAULT` darkens unmigrated pages mid-migration | Yes | Stated as an expected artefact (§8) |
 | 9c | Toggle `aria-label` changes with state | Yes | Fixed name plus `aria-pressed` (§4.4) |
-| 9d | Capture module needs a `test_*` function; two games; timers | Yes | Parametrized `test_capture_ui_screens`, one room per theme, `time_limit_seconds = 600`, host lock control (§4.6) |
+| 9d | Capture module needs a `test_*` function; two games; timers | Yes | Parametrized `test_capture_ui_screens`, one room per theme, `time_limit_seconds = 300` (backend max), host lock control (§4.6) |
 | 9e | No `theme-color` meta | Yes (none in any `index.html`) | Two media-scoped metas plus a runtime update in `theme.ts` (§4.3) |
 
 **Revision 4** came from planning which tests T9 actually needs (§4.10). Applying the "is this test needed?" filter exposed one
