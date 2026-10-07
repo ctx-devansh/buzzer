@@ -492,7 +492,7 @@ doesn't collect it. Run it explicitly: `npm run build && pytest tests/e2e/captur
   Before each shot, wait for `[data-loaded=true]` on canvases and for fonts (`document.fonts.ready`).
 - **Output:** `docs/ui/after/<theme>/<after file>` from the key-screen table below.
 
-**Key-screen set** (30 screens × 2 themes = 60 images). The after path is `docs/ui/after/<theme>/<after file>`. The before path is
+**Key-screen set** (41 screens × 2 themes = 82 images; 31–41 were added after a coverage check against the before set: the rest of the admin pages, host courses, the put-in-order and Pin the Spot results, the word cloud, and the locked state). The after path is `docs/ui/after/<theme>/<after file>`. The before path is
 relative to `docs/ui/before/`. Every key screen has a before shot, all dark, since that was the only theme.
 
 | # | Screen | After file | Before file |
@@ -527,6 +527,17 @@ relative to `docs/ui/before/`. Every key screen has a before shot, all dark, sin
 | 28 | Admin: users | `admin/28-users.png` | `admin/02-users/01-users--desktop.png` |
 | 29 | Admin: user detail | `admin/29-user-detail.png` | `admin/02-users/02-user-detail--desktop.png` |
 | 30 | Admin: sessions | `admin/30-sessions.png` | `admin/05-sessions/01-sessions--desktop.png` |
+| 31 | Player: put-in-order results | `player/31-results-put-in-order.png` | `player/05-results/05-put-in-order.png` |
+| 32 | Player: Pin the Spot results | `player/32-results-pin.png` | `player/05-results/06-pin-the-spot.png` |
+| 33 | Player: question locked by the host | `player/33-question-locked.png` | `player/03-question/90-question-locked.png` |
+| 34 | Host projector: put-in-order question | `host/34-question-put-in-order.png` | `host/03-live-game/02-question/05-put-in-order.png` |
+| 35 | Host projector: put-in-order results | `host/35-results-put-in-order.png` | `host/03-live-game/03-results/05-put-in-order.png` |
+| 36 | Host projector: fill-in-the-blank word cloud | `host/36-results-fill-blank.png` | `host/03-live-game/03-results/03-fill-in-the-blank.png` |
+| 37 | Host projector: question locked | `host/37-question-locked.png` | `host/03-live-game/02-question/90-question-locked.png` |
+| 38 | Host: courses | `host/38-courses.png` | `host/02-manage/04-courses--desktop.png` |
+| 39 | Admin: login | `admin/39-login.png` | `admin/01-sign-in/01-login--desktop.png` |
+| 40 | Admin: courses | `admin/40-courses.png` | `admin/03-courses/01-courses--desktop.png` |
+| 41 | Admin: guests | `admin/41-guests.png` | `admin/04-guests/01-guests--desktop.png` |
 
 Viewports: player 390×844 at device scale 2; host projector 1920×1080; host manage and admin 1440×900.
 
@@ -920,7 +931,7 @@ The authoritative list of files to migrate is whatever the scan test reports. Th
      scan from a phone in both themes.
    - Player at 390×844: no horizontal scroll, **no vertical scroll on join, name, lobby, feedback and results**, tap targets ≥ 44px, the toggle never covers an input, pinch-zoom works, and focusing an
      input doesn't auto-zoom on iOS Safari.
-5. `docs/ui/after/{light,dark}` holds all 30 key screens, and `docs/ui/README.md` shows before/after side by side.
+5. `docs/ui/after/{light,dark}` holds all 41 key screens, and `docs/ui/README.md` shows before/after side by side.
 
 ## 8. Risks and open questions
 

@@ -6,7 +6,7 @@ Neo-brutalist light and dark themes for all three apps. Design and rationale: [`
 
 **How these were made.** `npm run build && pytest tests/e2e/capture_ui_screens.py` plays a seeded game covering every question type in each theme and captures every screen below. It also runs axe-core's colour-contrast and link-in-text-block rules on each one; the latest run's report is [`after/axe-report.txt`](after/axe-report.txt) (no violations). The *before* shots were captured from the original single dark theme, so there is one before column.
 
-Before shots live in [`before/`](before/) (95 screens, described in [`before/README.md`](before/README.md)); after shots in [`after/light/`](after/light/) and [`after/dark/`](after/dark/).
+Before shots live in [`before/`](before/) (94 screens, described in [`before/README.md`](before/README.md)); after shots in [`after/light/`](after/light/) and [`after/dark/`](after/dark/).
 
 ## Player (phone, 390×844)
 
@@ -25,6 +25,9 @@ Before shots live in [`before/`](before/) (95 screens, described in [`before/REA
 | 11 | Player: results, correct | <img src="before/player/05-results/01-multiple-choice-with-images.png" width="220"> | <img src="after/light/player/11-results-correct.png" width="220"> | <img src="after/dark/player/11-results-correct.png" width="220"> |
 | 12 | Player: results, incorrect | <img src="before/player/05-results/01b-multiple-choice-with-images-incorrect.png" width="220"> | <img src="after/light/player/12-results-incorrect.png" width="220"> | <img src="after/dark/player/12-results-incorrect.png" width="220"> |
 | 13 | Player: game over | <img src="before/player/06-game-over/01-final-rank-and-recap.png" width="220"> | <img src="after/light/player/13-game-over.png" width="220"> | <img src="after/dark/player/13-game-over.png" width="220"> |
+| 31 | Player: put-in-order results | <img src="before/player/05-results/05-put-in-order.png" width="220"> | <img src="after/light/player/31-results-put-in-order.png" width="220"> | <img src="after/dark/player/31-results-put-in-order.png" width="220"> |
+| 32 | Player: Pin the Spot results | <img src="before/player/05-results/06-pin-the-spot.png" width="220"> | <img src="after/light/player/32-results-pin.png" width="220"> | <img src="after/dark/player/32-results-pin.png" width="220"> |
+| 33 | Player: question locked by the host | <img src="before/player/03-question/90-question-locked.png" width="220"> | <img src="after/light/player/33-question-locked.png" width="220"> | <img src="after/dark/player/33-question-locked.png" width="220"> |
 
 ## Host projector (1920×1080)
 
@@ -36,6 +39,10 @@ Before shots live in [`before/`](before/) (95 screens, described in [`before/REA
 | 17 | Host projector: MC results bars | <img src="before/host/03-live-game/03-results/01-multiple-choice-with-images.png" width="320"> | <img src="after/light/host/17-results-mc.png" width="320"> | <img src="after/dark/host/17-results-mc.png" width="320"> |
 | 18 | Host projector: Pin the Spot results (taps) | <img src="before/host/03-live-game/03-results/06-pin-the-spot.png" width="320"> | <img src="after/light/host/18-results-pin.png" width="320"> | <img src="after/dark/host/18-results-pin.png" width="320"> |
 | 19 | Host projector: game over | <img src="before/host/03-live-game/04-game-over/01-game-over.png" width="320"> | <img src="after/light/host/19-game-over.png" width="320"> | <img src="after/dark/host/19-game-over.png" width="320"> |
+| 34 | Host projector: put-in-order question | <img src="before/host/03-live-game/02-question/05-put-in-order.png" width="320"> | <img src="after/light/host/34-question-put-in-order.png" width="320"> | <img src="after/dark/host/34-question-put-in-order.png" width="320"> |
+| 35 | Host projector: put-in-order results | <img src="before/host/03-live-game/03-results/05-put-in-order.png" width="320"> | <img src="after/light/host/35-results-put-in-order.png" width="320"> | <img src="after/dark/host/35-results-put-in-order.png" width="320"> |
+| 36 | Host projector: fill-in-the-blank word cloud | <img src="before/host/03-live-game/03-results/03-fill-in-the-blank.png" width="320"> | <img src="after/light/host/36-results-fill-blank.png" width="320"> | <img src="after/dark/host/36-results-fill-blank.png" width="320"> |
+| 37 | Host projector: question locked | <img src="before/host/03-live-game/02-question/90-question-locked.png" width="320"> | <img src="after/light/host/37-question-locked.png" width="320"> | <img src="after/dark/host/37-question-locked.png" width="320"> |
 
 ## Host management (1440×900)
 
@@ -49,6 +56,7 @@ Before shots live in [`before/`](before/) (95 screens, described in [`before/REA
 | 25 | Host: image picker modal | <img src="before/host/02-manage/03d-image-picker-modal--desktop.png" width="320"> | <img src="after/light/host/25-image-picker.png" width="320"> | <img src="after/dark/host/25-image-picker.png" width="320"> |
 | 26 | Host: roster (after import) | <img src="before/host/02-manage/05c-roster-after-import--desktop.png" width="320"> | <img src="after/light/host/26-roster.png" width="320"> | <img src="after/dark/host/26-roster.png" width="320"> |
 | 27 | Host: sessions | <img src="before/host/02-manage/07-sessions--desktop.png" width="320"> | <img src="after/light/host/27-sessions.png" width="320"> | <img src="after/dark/host/27-sessions.png" width="320"> |
+| 38 | Host: courses | <img src="before/host/02-manage/04-courses--desktop.png" width="320"> | <img src="after/light/host/38-courses.png" width="320"> | <img src="after/dark/host/38-courses.png" width="320"> |
 
 ## Admin (1440×900)
 
@@ -57,3 +65,6 @@ Before shots live in [`before/`](before/) (95 screens, described in [`before/REA
 | 28 | Admin: users | <img src="before/admin/02-users/01-users--desktop.png" width="320"> | <img src="after/light/admin/28-users.png" width="320"> | <img src="after/dark/admin/28-users.png" width="320"> |
 | 29 | Admin: user detail | <img src="before/admin/02-users/02-user-detail--desktop.png" width="320"> | <img src="after/light/admin/29-user-detail.png" width="320"> | <img src="after/dark/admin/29-user-detail.png" width="320"> |
 | 30 | Admin: sessions | <img src="before/admin/05-sessions/01-sessions--desktop.png" width="320"> | <img src="after/light/admin/30-sessions.png" width="320"> | <img src="after/dark/admin/30-sessions.png" width="320"> |
+| 39 | Admin: login | <img src="before/admin/01-sign-in/01-login--desktop.png" width="320"> | <img src="after/light/admin/39-login.png" width="320"> | <img src="after/dark/admin/39-login.png" width="320"> |
+| 40 | Admin: courses | <img src="before/admin/03-courses/01-courses--desktop.png" width="320"> | <img src="after/light/admin/40-courses.png" width="320"> | <img src="after/dark/admin/40-courses.png" width="320"> |
+| 41 | Admin: guests | <img src="before/admin/04-guests/01-guests--desktop.png" width="320"> | <img src="after/light/admin/41-guests.png" width="320"> | <img src="after/dark/admin/41-guests.png" width="320"> |

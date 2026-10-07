@@ -7,13 +7,13 @@ against the Docker stack, after a build:
 
     npm run build && pytest tests/e2e/capture_ui_screens.py
 
-It writes docs/ui/after/<theme>/<app>/<NN-name>.png (the screen table in the design doc) and
+It writes docs/ui/after/<theme>/<app>/<NN-name>.png (the 41-screen table in the design doc) and
 docs/ui/after/axe-report.txt. At every shot it runs axe-core's color-contrast and
 link-in-text-block rules; violations are collected and the test fails once, at the end, with one
 report, so a violation never leaves a half-played game behind.
 
-Order: a full game in light, a full game in dark (screens 01-19), then the management and admin
-screens 20-30 in both themes, so both themes show identical data (two completed sessions).
+Order: a full game in light, a full game in dark (the in-game screens), then the management and
+admin screens in both themes, so both themes show identical data (two completed sessions).
 """
 
 from __future__ import annotations
@@ -204,6 +204,7 @@ def _play(env: Env, cleanup: Cleanup, page_as, host_token: str, theme: str, bund
         p.get_by_role("button", name="Submit").click()
         _wait_locked_in(p)
     reveal()
+    _shot(host, theme, "host/36-results-fill-blank")
     advance()
 
     # Q4 multi-select: the shot shows one selected row
@@ -223,11 +224,15 @@ def _play(env: Env, cleanup: Cleanup, page_as, host_token: str, theme: str, bund
     # Q5 put in order
     expect(alex.get_by_test_id("pio-row-0")).to_be_visible()
     _shot(alex, theme, "player/08-question-put-in-order")
+    _shot(host, theme, "host/34-question-put-in-order")
     _order(alex, q[4]["config"]["items"], q[4]["answer_data"]["correct_order"])
     for p in (alex, sam, jordan):
         p.get_by_test_id("pio-lock-in").click()
         _wait_locked_in(p)
     reveal()
+    expect(alex.locator("p").filter(has_text="Correct order:")).to_be_visible()
+    _shot(host, theme, "host/35-results-put-in-order")
+    _shot(alex, theme, "player/31-results-put-in-order")
     advance()
 
     # Q6 Pin the Spot
@@ -244,9 +249,21 @@ def _play(env: Env, cleanup: Cleanup, page_as, host_token: str, theme: str, bund
         _wait_locked_in(p)
     reveal()
     _shot(host, theme, "host/18-results-pin")
+    expect(alex.get_by_text("Correct!", exact=True)).to_be_visible()
+    _shot(alex, theme, "player/32-results-pin")
     advance()
 
-    # Q7 multiple choice, completeness grading
+    # Q7 multiple choice, completeness grading. First the locked state, on both screens.
+    host.get_by_role("button", name="Lock Question").click()
+    expect(host.get_by_role("button", name="Unlock Question")).to_be_visible()
+    expect(sam.get_by_text("Answers locked — waiting for results…")).to_be_visible()
+    host.wait_for_timeout(SERVER_SETTLE_MS)
+    _shot(host, theme, "host/37-question-locked")
+    _shot(sam, theme, "player/33-question-locked")
+    host.get_by_role("button", name="Unlock Question").click()
+    expect(host.get_by_role("button", name="Lock Question")).to_be_visible()
+    expect(sam.get_by_text("Answers locked — waiting for results…")).to_have_count(0)
+    host.wait_for_timeout(SERVER_SETTLE_MS)
     for p, i in ((alex, 1), (sam, 2), (jordan, 1)):
         _tap(p, q[6]["config"]["options"][i])
         _wait_locked_in(p)
@@ -277,6 +294,7 @@ def _manage(env: Env, page_as, host_token: str, host_id: str, course_id: int, ga
         ("host/22-games", "/host/games", "Games"),
         ("host/24-image-library", f"/host/courses/{course_id}/images", "Images"),
         ("host/26-roster", f"/host/courses/{course_id}/roster", "Course Roster"),
+        ("host/38-courses", "/host/courses", "Courses"),
         ("host/27-sessions", "/host/sessions", "Sessions"),
     ):
         page.goto(path)
@@ -293,11 +311,19 @@ def _manage(env: Env, page_as, host_token: str, host_id: str, course_id: int, ga
     _shot(page, theme, "host/25-image-picker")
     page.context.close()
 
+    admin_login = _open(page_as, None, theme, DESKTOP)
+    admin_login.goto("/admin/login")
+    expect(admin_login.get_by_role("heading", name="Admin Login")).to_be_visible()
+    _shot(admin_login, theme, "admin/39-login")
+    admin_login.context.close()
+
     admin = _open(page_as, env.admin, theme, DESKTOP)
     for name, path, ready in (
         ("admin/28-users", "/admin/users", "Users"),
         ("admin/29-user-detail", f"/admin/users/{host_id}", "Course Access"),
         ("admin/30-sessions", "/admin/sessions", "Sessions"),
+        ("admin/40-courses", "/admin/courses", "Courses"),
+        ("admin/41-guests", "/admin/guests", "Guest Users"),
     ):
         admin.goto(path)
         expect(admin.get_by_role("heading", name=ready, exact=True)).to_be_visible()
