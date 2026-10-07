@@ -1,0 +1,160 @@
+/*
+ * Buzzer design tokens (T9). Shared by host, player and admin; each app's src/index.css
+ * @imports this file first. Spec: docs/design-better-ui.md §4.2 and §4.3.3.
+ *
+ * The block order and the exact selectors below are parsed by tests/unit/test_theme_tokens.py:
+ *   1  :root                          theme-invariant and derived variables
+ *   2  :root, [data-theme=light]      themed colour tokens, light values
+ *   3  [data-theme=dark]              the same names, dark values
+ *   4  [data-density=...]             density overrides (non-colour)
+ *   5  html / html[data-theme=dark] / body   properties only, no custom properties
+ * Colour tokens are space-separated RGB channels so Tailwind can add <alpha-value>.
+ * Adding a colour: define it in blocks 2 and 3, map it in preset.ts, run pytest tests/unit.
+ */
+
+/* 1. Theme-invariant and derived */
+:root {
+  --nb-border: 3px;
+  --nb-offset: 4px;
+  --nb-h1: 1.875rem;
+  --nb-h2: 1.25rem;
+  --nb-stat: 1.5rem;
+  --nb-hero: 3rem;
+  --nb-h3: 1.125rem;
+  --nb-body: 1rem;
+  --nb-prompt: 1.125rem;
+  --nb-caption: 0.875rem;
+  --nb-page-pad: 1.25rem;
+  --nb-card-pad: 1.25rem;
+  --nb-gap: 1rem;
+
+  /* QR codes stay black on white in both themes, for reliable scanning (spec 4.7). */
+  --qr-bg: 255 255 255;
+
+  /* Pin the Spot canvas colours. Full colour strings, not channels: canvas fillStyle needs a
+     complete colour, and markers sit on photos, so they don't follow the page theme (spec 4.5). */
+  --pin-full: #4ade80;
+  --pin-full-fill: rgba(74, 222, 128, 0.3);
+  --pin-zero: #fbbf24;
+  --pin-target: #ef4444;
+  --pin-tap: rgba(129, 140, 248, 0.85);
+  --pin-tap-stroke: #ffffff;
+  --pin-head: #6366f1;
+  --pin-stem: #f8fafc;
+  --pin-marker-stroke: #ffffff;
+  /* Derived from the theme: computed values have var() substituted, so canvases read a resolved colour. */
+  --pin-letterbox: rgb(var(--canvas));
+  --pin-placeholder: rgb(var(--surface-muted));
+  --pin-image-bg: rgb(var(--image-bg));
+}
+
+/* 2. Light theme */
+:root, [data-theme=light] {
+  --canvas: 255 248 231; /* #FFF8E7 */
+  --surface: 255 255 255; /* #FFFFFF */
+  --surface-muted: 243 235 214; /* #F3EBD6 */
+  --ink: 18 18 18; /* #121212 */
+  --ink-muted: 74 70 64; /* #4A4640 */
+  --line: 18 18 18; /* #121212 */
+  --shadow: 18 18 18; /* #121212 */
+  --scrim: 18 18 18; /* #121212 */
+  --image-bg: 255 255 255; /* #FFFFFF */
+  --on-fill: 18 18 18; /* #121212 */
+  --accent: 255 214 10; /* #FFD60A */
+  --accent-2: 255 111 181; /* #FF6FB5 */
+  --info: 61 214 245; /* #3DD6F5 */
+  --success: 123 224 123; /* #7BE07B */
+  --danger: 255 90 95; /* #FF5A5F */
+  --warning: 255 169 77; /* #FFA94D */
+  --success-text: 30 107 42; /* #1E6B2A */
+  --danger-text: 179 38 30; /* #B3261E */
+  --warning-text: 138 75 0; /* #8A4B00 */
+  --focus: 43 89 255; /* #2B59FF */
+  --option-1: 255 214 10; /* #FFD60A */
+  --option-2: 255 111 181; /* #FF6FB5 */
+  --option-3: 61 214 245; /* #3DD6F5 */
+  --option-4: 123 224 123; /* #7BE07B */
+  --option-5: 255 169 77; /* #FFA94D */
+  --option-6: 183 156 255; /* #B79CFF */
+  --option-7: 200 241 105; /* #C8F169 */
+  --option-8: 255 138 101; /* #FF8A65 */
+}
+
+/* 3. Dark theme */
+[data-theme=dark] {
+  --canvas: 27 28 32; /* #1B1C20 */
+  --surface: 36 38 43; /* #24262B */
+  --surface-muted: 46 48 54; /* #2E3036 */
+  --ink: 232 228 218; /* #E8E4DA */
+  --ink-muted: 181 176 165; /* #B5B0A5 */
+  --line: 138 133 123; /* #8A857B */
+  --shadow: 13 13 15; /* #0D0D0F */
+  --scrim: 13 13 15; /* #0D0D0F */
+  --image-bg: 237 233 224; /* #EDE9E0 */
+  --on-fill: 22 23 26; /* #16171A */
+  --accent: 217 185 63; /* #D9B93F */
+  --accent-2: 217 138 174; /* #D98AAE */
+  --info: 110 193 209; /* #6EC1D1 */
+  --success: 134 196 138; /* #86C48A */
+  --danger: 224 122 122; /* #E07A7A */
+  --warning: 217 160 102; /* #D9A066 */
+  --success-text: 168 221 171; /* #A8DDAB */
+  --danger-text: 242 167 167; /* #F2A7A7 */
+  --warning-text: 240 196 143; /* #F0C48F */
+  --focus: 143 176 255; /* #8FB0FF */
+  --option-1: 217 185 63; /* #D9B93F */
+  --option-2: 217 138 174; /* #D98AAE */
+  --option-3: 110 193 209; /* #6EC1D1 */
+  --option-4: 134 196 138; /* #86C48A */
+  --option-5: 217 160 102; /* #D9A066 */
+  --option-6: 169 155 217; /* #A99BD9 */
+  --option-7: 181 207 122; /* #B5CF7A */
+  --option-8: 217 140 115; /* #D98C73 */
+}
+
+/* 4. Density (set with data-density on a layout root; comfortable is the :root default) */
+[data-density=compact] {
+  --nb-border: 2px;
+  --nb-offset: 2px;
+  --nb-h1: 1.5rem;
+  --nb-h2: 1.125rem;
+  --nb-stat: 1.25rem;
+  --nb-hero: 2.5rem;
+  --nb-h3: 1rem;
+  --nb-body: 0.875rem;
+  --nb-prompt: 1rem;
+  --nb-caption: 0.75rem;
+  --nb-page-pad: 1rem;
+  --nb-card-pad: 0.75rem;
+  --nb-gap: 0.75rem;
+}
+
+[data-density=projector] {
+  --nb-border: 4px;
+  --nb-offset: 6px;
+  --nb-h1: 3.75rem;
+  --nb-h2: 2.25rem;
+  --nb-stat: 3rem;
+  --nb-hero: 6rem;
+  --nb-h3: 1.5rem;
+  --nb-body: 1.5rem;
+  --nb-prompt: 2.25rem;
+  --nb-caption: 1.125rem;
+  --nb-page-pad: 2.5rem;
+  --nb-card-pad: 2rem;
+  --nb-gap: 2rem;
+}
+
+/* 5. Properties only */
+html {
+  color-scheme: light;
+}
+
+html[data-theme=dark] {
+  color-scheme: dark;
+}
+
+body {
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
+}

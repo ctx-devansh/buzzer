@@ -9,7 +9,8 @@
     "strict": true,
     "composite": true,
     "outDir": "./node_modules/.tmp/tsconfig.node",
+    "rootDir": "..",
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
   },
-  "include": ["vite.config.ts", "tailwind.config.ts"]
+  "include": ["vite.config.ts", "tailwind.config.ts", "../theme/preset.ts"]
 }
