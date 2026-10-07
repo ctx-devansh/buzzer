@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 2, revised after the Goldfish test** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **revision 3, revised after two Goldfish passes** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -65,13 +65,14 @@ The chosen visual direction is **neo-brutalism**.
 |---|---|
 | Outline | Solid `border-line` on every card, input, button, table and tile. Width by density: **admin 2px, player and host-manage 3px, host projector 4px**. |
 | Shadow | Hard offset, no blur, colour `shadow` token: `brutal-sm` 2px 2px, `brutal` 4px 4px, `brutal-lg` 6px 6px. Admin uses shadows only on interactive elements and cards, **not** table rows. |
-| Press | Interactive elements with a shadow translate by the shadow offset and drop the shadow on `:active`, so they feel "pushed in". Under `prefers-reduced-motion: reduce`, nothing transitions; the shadow simply disappears. |
+| Press | Interactive elements with a shadow translate by the shadow offset and drop the shadow on `:active`, so they feel "pushed in". Under `prefers-reduced-motion: reduce`, nothing transitions; the shadow simply disappears. Offsets come from density variables (§4.3.1), so one `.nb-press` class works at every size. |
+| Density | One set of component classes, three densities set by CSS variables on a root element: **compact** (admin), **comfortable** (player, host manage; the default) and **projector** (host `/game/:code/*`). See §4.3.1. |
 | Radius | `rounded-none` by default. Up to 4px is allowed only on small chips and badges. |
 | Fills | Flat. No gradients. Coloured fills are for buttons, option tiles, badges and bars, never large page areas. |
 | Text on fills | Always `text-on-fill` (dark in **both** themes), never white. That keeps every fill at AA or better. Text that sits *beside* a fill (not on it) uses `ink`/`ink-muted`. |
-| Type | Display face **Space Grotesk 700** for headings, numbers, scores, room codes and button labels. Body face **Inter 400/500/600/700** (700 so `font-bold` is real bold, not faux-bold). Both come from `@fontsource`. Scores and timers use `tabular-nums`. |
+| Type | Display face **Space Grotesk 700** for headings, numbers, scores, room codes and button labels. **`font-display` always means weight 700.** The `fontFamily.display` entry can't carry a weight, so every `font-display` use pairs with `font-bold`, or comes through a class that sets it. The scan forbids `font-display` alongside `font-normal`, `font-medium` or `font-semibold`. Body face **Inter 400/500/600/700** (700 so `font-bold` is real bold, not faux-bold). Both come from `@fontsource`. Scores and timers use `tabular-nums`. |
 | Weight mapping | `font-black` (24 uses today) on headings, scores and room codes → `font-display` (Space Grotesk 700). Any other `font-black` → `font-bold`. After migration, `font-black` and `font-extrabold` appear nowhere (the scan test checks this, since those weights aren't loaded). `font-bold` on headings may become `font-display`; on body text it stays Inter 700. |
-| Focus | `:focus-visible` gives a 3px solid `focus` outline with a 2px offset. It is never removed. The existing `focus:ring-offset-slate-900` classes go away. |
+| Focus | `:focus-visible` gives a 3px solid `focus` outline with a 2px offset, defined in each app's `@layer base` (§4.3). It is **enforced, not just stated**: all 15 `focus:outline-none` and all 40 `focus:ring*`/`ring-offset*` classes are deleted during migration, and the scan forbids `outline-none`, `focus:ring`, `focus-visible:ring` and `ring-offset` from then on. Why the deletion is required: a utility like `focus:outline-none` (specificity 0,1,1) beats a bare `:focus-visible` rule (0,1,0) no matter where that rule sits, so any surviving `outline-none` silently removes the focus state. |
 | Status meaning | Colour never carries meaning alone. Right/wrong pairs colour with an icon or word (✓/✗, "Correct"). Option tiles carry a letter (A, B, …) as well as their colour. |
 
 ### 4.2 Tokens
@@ -104,12 +105,18 @@ recorded in this doc.
 | `focus` | focus outline | `#2B59FF` | `#8FB0FF` |
 | `option-1…8` | answer-tile fills (with `on-fill` text) | `#FFD60A #FF6FB5 #3DD6F5 #7BE07B #FFA94D #B79CFF #C8F169 #FF8A65` | `#D9B93F #D98AAE #6EC1D1 #86C48A #D9A066 #A99BD9 #B5CF7A #D98C73` |
 | `qr-bg` | QR code backing box (§4.7) | `#FFFFFF` | `#FFFFFF` (intentionally not themed) |
+| `image-bg` | backing behind every uploaded image (§4.9) | `#FFFFFF` | `#EDE9E0` (light on purpose, slightly softened) |
 | `pin-*` | canvas colours (§4.5) | in `tokens.css` | in `tokens.css` |
 
 Rules for using tokens:
 - **Fill tokens (`accent`, `success`, `danger`, …) are never used as text colours.** Status text uses `*-text` tokens.
   Example: `text-red-400` error messages become `text-danger-text`.
 - **Never use `ink` as a backdrop or overlay.** It's off-white in dark mode. Scrims use `bg-scrim/60`.
+- **No opacity modifiers on fill tokens** (`accent`, `accent-2`, `info`, `success`, `danger`, `warning`, `option-1…8`). For
+  example, `bg-accent/40` is not allowed. A translucent fill blends with whatever sits underneath it, so the contrast test can't
+  vouch for text on it. The scan enforces this. Opacity is allowed only on `scrim`, `surface*`, `ink*` and `shadow`.
+- **Any element with a fill-token background sets `text-on-fill` explicitly.** That includes the admin sidebar's active item,
+  chips, badges, tiles and buttons. Inheriting `ink` would give about 1.7:1 on dark `accent`.
 - In light mode the fills are pale against the cream canvas (yellow vs cream is 1.3:1). That's fine because every filled
   element carries a `line` outline, and the outline carries the WCAG 1.4.11 non-text contrast. **A fill without an outline is
   not allowed.**
@@ -134,14 +141,20 @@ Every pair clears AA. The lowest text pair is dark `ink-muted` on `surface-muted
 because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts` applies `satisfies Config`.
 
 - `tokenColors`: every token above under its kebab-case name (`canvas`, `surface`, `surface-muted`, `ink`, `ink-muted`,
-  `line`, `shadow`, `scrim`, `qr-bg`, `on-fill`, `accent`, `accent-2`, `info`, `success`, `danger`, `warning`, `success-text`,
+  `line`, `shadow`, `scrim`, `qr-bg`, `image-bg`, `on-fill`, `accent`, `accent-2`, `info`, `success`, `danger`, `warning`, `success-text`,
   `danger-text`, `warning-text`, `focus`, `option-1`…`option-8`), each as `rgb(var(--<name>) / <alpha-value>)`.
 - `preset`: the Tailwind preset:
   - `theme.colors` / `theme.extend.colors`: see "staging" below.
   - **Defaults that Tailwind derives from the palette, set explicitly** (otherwise replacing the palette makes a bare
     `border` fall back to `currentColor`, which is off-white in dark mode and causes the halation this design rejects):
     `borderColor.DEFAULT = line`, `divideColor.DEFAULT = line`, `ringColor.DEFAULT = focus`,
-    `outlineColor.DEFAULT = focus`, `placeholderColor.DEFAULT = ink-muted`. (51 bare `border`/`border-x` uses exist today.)
+    `outlineColor.DEFAULT = focus`, `ringOffsetColor.DEFAULT = canvas`. (51 bare `border`/`border-x` uses exist today.)
+    `ringOffsetColor` matters because Tailwind's own default is `#fff`, which would show as a white halo in dark mode.
+  - **Placeholders are not covered by the preset.** Tailwind 3's preflight hardcodes
+    `input::placeholder, textarea::placeholder { color: theme('colors.gray.400', #9ca3af) }` (`tailwindcss/src/css/preflight.css`
+    around line 333), and `placeholderColor.DEFAULT` doesn't feed it. Once the palette is replaced, that becomes `#9ca3af`, about
+    2.5:1 on white, which fails AA. So `tokens.css` sets `::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`, which covers
+    every raw page `<input>`/`<textarea>` (11 raw `<textarea>`/`<select>` exist outside the primitives).
   - `extend.boxShadow`: `brutal-sm`, `brutal`, `brutal-lg` (hard offsets in `rgb(var(--shadow))`).
   - `extend.borderWidth`: `3`.
   - `extend.fontFamily`: `display: ['"Space Grotesk"', 'system-ui', 'sans-serif']`, `sans: ['Inter', 'system-ui', 'sans-serif']`.
@@ -155,11 +168,48 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
 `frontend/theme/tokens.css` also defines, outside Tailwind:
 - `:root, [data-theme=light] { color-scheme: light }` / `[data-theme=dark] { color-scheme: dark }`, so native scrollbars and form controls follow.
 - `body { background: rgb(var(--canvas)); color: rgb(var(--ink)); }`. This replaces the hardcoded body colours in each `index.css`.
-- `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }`.
+- `::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`. See above.
+- `<meta name="theme-color">` is not set in CSS. Each `index.html` carries two of them,
+  `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFF8E7">` and the dark one with `#1B1C20`, and
+  `theme.ts` updates a single un-media'd `theme-color` meta on every `setTheme` and attribute change, so mobile browser chrome
+  matches the chosen theme rather than only the OS setting.
 
-Each app's `src/index.css`, after `@tailwind components`, holds the same small `@layer components` block (under 20 lines, every
-value a token): `.nb-box` (surface, line border, shadow), `.nb-press` (the active-state translate, reduced-motion aware) and
-`.nb-chip`. They live here, not in `tokens.css`, because `@layer` needs the Tailwind directives in the same file.
+Each app's `src/index.css` (same block in all three, under 40 lines, every value a token or density variable):
+- **`@layer base`** (after `@tailwind base`): `:focus-visible { outline: 3px solid rgb(var(--focus)); outline-offset: 2px; }`.
+  It lives here, not in `tokens.css`. `tokens.css` is `@import`ed before `@tailwind base`, so preflight would follow it. Putting it
+  in `@layer base` places it after preflight and before every utility. Utilities still beat it, which is why the deletions and the
+  scan rule in §4.1 are what really guarantee focus visibility.
+- **`@layer components`** (after `@tailwind components`): `.nb-box`, `.nb-press` and `.nb-chip`, all reading the density variables
+  below. `@layer` needs the Tailwind directives in the same file, which is why these aren't in `tokens.css`.
+
+#### 4.3.1 Density variables
+
+`tokens.css` defines three non-colour variables on `:root` (the comfortable defaults) and overrides them under `[data-density]`:
+
+| Variable | compact (`[data-density=compact]`) | comfortable (default) | projector (`[data-density=projector]`) |
+|---|---|---|---|
+| `--nb-border` | 2px | 3px | 4px |
+| `--nb-offset` | 2px | 4px | 6px |
+
+- `.nb-box`: `background: rgb(var(--surface)); border: var(--nb-border) solid rgb(var(--line)); box-shadow: var(--nb-offset) var(--nb-offset) 0 0 rgb(var(--shadow));`
+- `.nb-press`: `transition: transform 80ms, box-shadow 80ms;` and on `:active`, `transform: translate(var(--nb-offset), var(--nb-offset)); box-shadow: none;`.
+  Under `prefers-reduced-motion: reduce`, `transition: none`.
+- `.nb-chip`: `border: 2px solid rgb(var(--line))`, small padding, `rounded` (4px), and `font-semibold text-sm`. It has no shadow, at any density.
+- Where `data-density` is set:
+  - **admin:** `<div data-density="compact">` at the root of `AdminLayout` and `LoginPage`;
+  - **host projector:** the root element of `pages/game/GameLayout.tsx`;
+  - **player and host manage:** nothing (comfortable).
+- The `shadow-brutal-sm/-/lg` utilities stay available for one-off elements that sit outside `.nb-box`, but primitives use
+  `.nb-box`/`.nb-press` so density follows automatically.
+
+#### 4.3.2 `cn()` / tailwind-merge
+
+Each app's `lib/utils.ts` `cn()` uses `twMerge` (tailwind-merge ^2.5). It doesn't know the custom shadow keys. It classifies
+`shadow-brutal*` as a shadow-**colour** class, so `cn('shadow-brutal', 'shadow-none')` keeps both, and a colour-like class would
+knock out `shadow-brutal`. Replace `twMerge` with `extendTailwindMerge({ extend: { classGroups: { shadow: [{ shadow: ['brutal-sm', 'brutal', 'brutal-lg'] }] } } })`
+in all three `lib/utils.ts`. Check during step 3, with a quick assertion in the browser console or a scratch call, that these
+resolve as expected: `cn('shadow-brutal','shadow-none') === 'shadow-none'`, `cn('border-2','border-3') === 'border-3'`, and
+`cn('font-sans','font-display') === 'font-display'`. If `border-3` or `font-display` misbehave, register them the same way.
 
 ### 4.4 Theme mechanics
 
@@ -190,9 +240,10 @@ value a token): `.nb-box` (surface, line border, shadow), `.nb-press` (the activ
   browser (live, through the storage listener). Under `npm run dev` each port has its own storage.
 - **Host's localStorage rule:** `frontend/host/src/lib/CLAUDE.md` says to keep `localStorage` hits only in `auth.ts`. Update the rule
   to name `buzzer-theme` in `frontend/theme/theme.ts` as the single exception.
-- **Toggle component:** each app gets `src/components/ThemeToggle.tsx`. It's a `<button type="button">` with
-  `aria-label="Switch to dark theme"` or `"Switch to light theme"`, a sun/moon glyph, a visible text label ("Dark"/"Light") where
-  width allows, and `nb-box nb-press` styling. Placement:
+- **Toggle component:** each app gets `src/components/ThemeToggle.tsx`. It's a `<button type="button">` with a **fixed**
+  accessible name, `aria-label="Dark theme"`, and `aria-pressed={theme === 'dark'}`. This is the conventional toggle-button
+  pattern: the name doesn't change and the state is carried by `aria-pressed`. It has a sun/moon glyph (`aria-hidden`) and
+  `nb-box nb-press` styling. The visible text label "Dark theme", where width allows, matches the accessible name. Placement:
   - **Host:** right side of the `HostShell` top nav, before Sign out. On `LoginPage`, top-right of the page. On the `/game/:code/*`
     projector screens (outside the shell), a small fixed top-right button rendered once in `pages/game/GameLayout.tsx`. It must not
     overlap the corner QR code that `GameLayout` renders (§4.7); place it on the opposite side from the QR code, or stack them.
@@ -210,6 +261,8 @@ value a token): `.nb-box` (surface, line border, shadow), `.nb-press` (the activ
   `--pin-letterbox`, `--pin-placeholder`, `--pin-full`, `--pin-full-fill`, `--pin-zero`, `--pin-target`, `--pin-tap`, and
   `--pin-tap-stroke` (host), plus `--pin-head` and `--pin-stem` (player). Add a new `--pin-marker-stroke`.
   - `--pin-letterbox` and `--pin-placeholder` follow the theme (canvas and surface-muted values).
+  - New **`--pin-image-bg`** (equal to `image-bg`, §4.9): fill the image's destination rectangle with it *before* `drawImage`, so a
+    transparent Pin the Spot image sits on a light backing inside the themed letterbox.
   - The marker colours must stay visible on arbitrary *photos*, so they stay saturated in both themes and rely on a contrasting
     stroke, not on the page theme.
 - These stay as **full colour strings** (`#4ade80`, `rgba(…)`), not RGB channels, because canvas `fillStyle` needs a
@@ -224,19 +277,26 @@ value a token): `.nb-box` (surface, line border, shadow), `.nb-press` (the activ
 ### 4.6 Tests and evidence
 
 **`tests/unit/test_theme_tokens.py`** (pure Python, no Docker, runs in the existing `tests/unit` collection):
-1. *Raw-palette scan* (`xfail(strict=True)` until the final step-4 commit). Walk `frontend/{host,player,admin}/src/**/*.{ts,tsx,css}`
-   and fail with file:line for:
-   - any Tailwind utility with a default palette name:
-     `\b(bg|text|border|ring|ring-offset|outline|from|via|to|fill|stroke|divide|placeholder|accent|caret|decoration|shadow)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black)\b`
-     (this catches `bg-white` and `text-black` too);
-   - `font-black` or `font-extrabold` (weights that aren't loaded);
+1. *Raw-palette and class-rule scan* (`xfail(strict=True)` until the final step-4 commit). Walk
+   `frontend/{host,player,admin}/src/**/*.{ts,tsx,css}` and fail with file:line for:
+   - any Tailwind utility with a default palette name, including side-specific borders and any variant prefix:
+     `\b(bg|text|border(-[trblxyse])?|ring|ring-offset|outline|from|via|to|fill|stroke|divide|placeholder|accent|caret|decoration|shadow)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black)\b`
+     (this catches `bg-white`, `text-black` and `border-t-slate-700`);
+   - focus removal and rings: `\boutline-none\b`, `\b(focus|focus-visible|focus-within):ring\b`, `\bring-offset\b` (§4.1);
+   - opacity on fill tokens: `\b(bg|border|text)-(accent|accent-2|info|success|danger|warning|option-\d)/\d+` (§4.2);
+   - `font-black` or `font-extrabold` (weights that aren't loaded), and `font-display` on the same line as
+     `font-(normal|medium|semibold)` (§4.1);
+   - CSS named colours in string literals or JSX attributes in `.ts`/`.tsx`:
+     `(['"])(white|black|red|green|blue|yellow|gray|grey|orange|purple|pink)\1` and
+     `\b(fill|stroke|color)=\{?["'](?!currentColor|none)[a-z]+["']`, apart from the allow-list below;
    - any hex colour `#[0-9a-fA-F]{3,8}\b` or `rgb(`/`rgba(`/`hsl(` literal in `.ts`/`.tsx`, **except** as the fallback
      argument of a `cssVar(…)` call, and in the allow-listed `host/src/lib/imageFile.ts`;
    - any hex colour in `index.css` (they may only use `var(--…)`).
 2. *Contrast* (always on). Parse `frontend/theme/tokens.css` into the `light` and `dark` maps (RGB-channel tokens only; `--pin-*`
    are skipped) and assert, for each theme:
    - `ink` and `ink-muted` on `canvas`/`surface`/`surface-muted` ≥ 4.5;
-   - `on-fill` on `accent`, `accent-2`, `info`, `success`, `danger`, `warning` and `option-1…8` ≥ 4.5;
+   - `on-fill` on `accent`, `accent-2`, `info`, `success`, `danger`, `warning` and `option-1…8` ≥ 4.5 (only opaque fills are
+     tested, which is why opacity on fills is banned);
    - `*-text` on `canvas`/`surface`/`surface-muted` ≥ 4.5;
    - `line` on `canvas`/`surface`/`surface-muted` ≥ 3.0;
    - `focus` on `canvas`/`surface` ≥ 3.0.
@@ -253,10 +313,16 @@ doesn't collect it. Run it explicitly: `npm run build && pytest tests/e2e/captur
   multiple choice with option images, true/false with a prompt image, fill in the blank, multi-select, put in order, Pin the
   Spot (library image), and a COMPLETENESS multiple choice. Images are uploaded to the course library from
   `sample_games/` assets or generated in memory with Pillow (already used by `scripts/make_pin_images.py`).
+- **Entry point.** The module defines one function, `test_capture_ui_screens(theme, …fixtures)`, parametrized over
+  `theme in ('light', 'dark')`, so pytest collects it when the file is passed explicitly. It holds no assertions beyond "the page
+  reached the expected state". Each parametrized run is a **full, separate game in its own room**: two rooms in total.
 - **Driving the game.** One host page (1920×1080) and three guest player pages (390×844, device scale 2) through `page_as`.
   One player answers correctly and one incorrectly, so both results states exist.
-- **Theme.** For each theme in `('light', 'dark')`, set `localStorage['buzzer-theme']` with `page.add_init_script` before the first
-  navigation, then replay the screen list. Wait for `[data-loaded=true]` on canvases and for fonts (`document.fonts.ready`) before each shot.
+- **Keeping timers from expiring between shots.** The fixture game's questions use `time_limit_seconds = 600`, so nothing expires
+  while screenshots are taken. Screens that need the "locked" state are reached through the host's existing lock control, not by
+  waiting for the timer. The shots are taken, then the host advances.
+- **Theme.** Set `localStorage['buzzer-theme']` with `context.add_init_script` before the first navigation, in every page of that run.
+  Before each shot, wait for `[data-loaded=true]` on canvases and for fonts (`document.fonts.ready`).
 - **Output:** `docs/ui/after/<theme>/<app>/<NN-screen>.png`.
 
 **Key-screen set** (30 screens × 2 themes = 60 images):
@@ -289,17 +355,40 @@ The T10 document links it.
     Double-tap zoom on answer tiles and the Pin the Spot canvas is prevented with `touch-action: manipulation`, which doesn't
     disable pinch-zoom.
 
-### 4.8 Host results bars (`host/src/pages/game/ResultsPage.tsx`)
+### 4.8 Host answer bars: one encoding on ResultsPage *and* GameOverPage
 
-Today, `barColor` (around line 131) is `bg-green-500` for correct, `bg-slate-600` for wrong, and `bg-indigo-500` for no-key questions
-(poll / put-in-order distribution). The themed version **keeps this correctness encoding**:
-- correct → `bg-success`, 4px `border-line`, and a "✓ Correct" badge (`nb-chip bg-success text-on-fill`, replacing
-  `text-green-400`);
-- wrong → `bg-surface-muted` with a 2px `border-line`;
-- no-key (`correct === null`) → `bg-accent`.
+Today the two pages disagree:
+- `ResultsPage.tsx` around line 131 uses green (correct), slate (wrong) and indigo (no key).
+- `GameOverPage.tsx` uses green/indigo at :180, green/slate at :210, green/**red-700** at :226 (so wrong is red here), plus an
+  indigo score histogram at :337.
 
-Colour is never the only cue: correct also gets the ✓ badge and the thicker outline. Inline correct text
-(`text-green-400` at lines 81, 96, 350) becomes `text-success-text font-semibold`. Option colours are **not** used on host bars.
+The themed version uses **one encoding on both pages** (decided: wrong is muted, not red):
+
+| Bar state | Fill | Outline | Extra cue |
+|---|---|---|---|
+| correct | `bg-success` | `border-4 border-line` (projector density) | "✓ Correct" chip: `nb-chip bg-success text-on-fill` |
+| wrong | `bg-surface-muted` | `border-2 border-line` | none (the absence of ✓ is the cue) |
+| no key (`correct === null`, polls / put-in-order distribution) | `bg-accent` | `border-2 border-line` | none |
+| GameOver score histogram (:337) | `bg-accent` | `border-2 border-line`, no rounding | none |
+
+- To keep both pages in step, factor the class choice into one helper, `barClasses(correct: boolean | null)`, in
+  `host/src/lib/answerBars.ts`. Both pages call it instead of choosing colours inline (`colorClass={…}` at GameOver :180/:210/:226
+  and `barColor` in ResultsPage). GameOverPage gets the same ✓ chip as ResultsPage.
+- Inline "correct" text (`text-green-400` at ResultsPage :81, :96, :350, and the equivalents in GameOverPage) becomes
+  `text-success-text font-semibold`.
+- Option colours are **not** used on host bars.
+
+### 4.9 Uploaded images (T8) on dark surfaces
+
+`prepareUpload` (`host/src/lib/imageFile.ts`) keeps PNG, GIF and WebP alpha channels. So a black line drawing on a transparent
+background vanishes on the charcoal surface. **Decision: every image well has a fixed light backing in both themes.**
+- Every `<img>` that shows an uploaded or library image sits on `bg-image-bg`, set either on the `<img>` itself or on its fixed-size box. That
+  covers option tiles (host and player `QuestionPage`), the prompt image (host `QuestionPage`, `ResultsPage`, `GameOverPage`), the library
+  grid (`ImagesPage`), `ImagePicker` thumbnails, and the editor previews in `QuestionEditorPage`. That's the 13 `<img>` sites today.
+  `object-contain` letterboxing then shows `image-bg`, not the page surface.
+- The well keeps its `border-line` outline, so the light box reads as a deliberate frame in dark mode.
+- Pin the Spot canvases fill the image rectangle with `--pin-image-bg` before drawing (§4.5).
+- `image-bg` is softened in dark mode (`#EDE9E0`) to limit glare. It's skipped by the contrast test, since no text sits on it.
 
 ## 5. Implementation steps (in order)
 
@@ -347,7 +436,10 @@ Each step is one or more atomic commits on `feature/better-ui`. **This doc and `
   (surface + line), `ghost` (no box until hover, then `surface-muted`), and `destructive` (danger fill, on-fill text). All get
   `border-line`, the shadow and press, and `focus-visible`. Keep the existing variant and size **names** so call sites don't break.
   Player sizes stay larger (min height 48px for `md`, 56px for `lg`).
-- `card.tsx`: `nb-box`. `input.tsx`: surface, line border, `placeholder:text-ink-muted`, and a focus outline. The player input is `text-base` or larger.
+- In every primitive, **delete** `focus:outline-none`, `focus:ring-*` and `focus:ring-offset-*`. The base-layer `:focus-visible`
+  outline (§4.3) is the only focus style.
+- `card.tsx`: `nb-box`. `input.tsx`: surface, line border, and the global placeholder colour (§4.3). The player input is `text-base` or larger.
+- `lib/utils.ts`: `extendTailwindMerge` with the shadow keys, plus the three `cn()` checks (§4.3.2).
 - `TimerBar.tsx` (host and player): the track becomes `bg-surface-muted border-2 border-line` (square, no `rounded-full`). The fill goes
   `success` → `warning` → `danger` as time runs out. **The seconds text is the existing separate `<span>` beside the bar, not on the
   fill.** It becomes `text-ink-muted font-display tabular-nums`, replacing `text-slate-300` and `font-mono`. On-fill text is
@@ -370,7 +462,10 @@ Mechanical mapping (applies to every file the scan lists):
 | `bg-red-*` / `text-red-*` | `bg-danger text-on-fill` / `text-danger-text` |
 | `bg-yellow|amber-*` / `text-…` | `bg-warning text-on-fill` / `text-warning-text` |
 | `bg-black/50` etc. (modal scrims) | `bg-scrim/60` |
-| `font-black` | `font-display` (headings, scores, codes) or `font-bold` (§4.1) |
+| `font-black` | `font-display font-bold` (headings, scores, codes) or `font-bold` (§4.1) |
+| `focus:outline-none`, `focus:ring-*`, `focus:ring-offset-*`, `ring-offset-*` (on raw `<textarea>`/`<select>`/`<input>` in pages too) | delete (§4.1) |
+| bar colours on ResultsPage / GameOverPage | `barClasses()` (§4.8) |
+| `<img>` of an uploaded image | add `bg-image-bg` to it or its box (§4.9) |
 | Player `OPTION_COLORS` (`pages/game/QuestionPage.tsx:9`) | `bg-option-1 … bg-option-8` with `text-on-fill border-line`, plus a letter badge (A, B, C, …) |
 | Admin `STATUS_COLORS` (`pages/SessionsPage.tsx:34`) | `nb-chip` with `bg-success` (active) / `bg-warning` (lobby) / `bg-surface-muted` (completed) |
 
@@ -384,9 +479,10 @@ Then the per-context passes:
 - **Host manage** (`pages/manage/*`, `HostShell`, `ImagePicker`): 3px outlines. The question editor groups fields in `nb-box` sections.
   Image library tiles are outlined thumbnails with a visible focus. The `ImagePicker` modal is `nb-box` + `brutal-lg` over a
   `bg-scrim/60` backdrop.
-- **Admin:** compact density, with 2px outlines and `brutal-sm` on cards and buttons only. Tables use `border-line` ruled rows, a
-  `surface-muted` header row and zebra stripes, with no per-row shadows. The sidebar is a `surface` column with a line border. The
-  active item is an accent fill, and the "Host tools" group uses `ink-muted` labels.
+- **Admin:** compact density (`data-density="compact"`), with 2px outlines and 2px shadows on cards and buttons only. Tables use
+  `border-line` ruled rows, a `surface-muted` header row and zebra stripes, with no per-row shadows. The sidebar is a `surface` column
+  with a line border. The active item is `bg-accent text-on-fill` (text set explicitly, §4.2), and the "Host tools" group uses
+  `ink-muted` labels.
 - Delete each app's hardcoded `body { background; color }` and `--pin-*` block from `index.css`.
 - **Final commit of step 4:** switch the preset from `extend.colors` to replacing `colors` (§4.3) and remove the scan's `xfail`,
   in the same commit. The scan must pass.
@@ -409,9 +505,10 @@ mid-question repaints the canvas without a reload.
 
 - **New:** `frontend/theme/tokens.css`, `frontend/theme/preset.ts`, `frontend/theme/theme.ts`,
   `frontend/{host,player,admin}/src/lib/theme.ts`, `frontend/{host,player,admin}/src/components/ThemeToggle.tsx`,
+  `frontend/host/src/lib/answerBars.ts`,
   `tests/unit/test_theme_tokens.py`, `tests/e2e/capture_ui_screens.py`, `docs/ui/README.md`, `docs/ui/after/**`.
 - **Config per app:** `index.html`, `tailwind.config.ts`, `postcss.config.js`, `vite.config.ts`, `tsconfig.json`,
-  `tsconfig.node.json`, `package.json` (+ lockfile), `src/index.css`, `src/main.tsx`. **Root:** `.gitignore`.
+  `tsconfig.node.json`, `package.json` (+ lockfile), `src/index.css`, `src/main.tsx`, `src/lib/utils.ts` (tailwind-merge). **Root:** `.gitignore`.
 - **Host (20):** `components/{HostShell,PinBoard,ImagePicker}.tsx`, `components/ui/{button,card,input,TimerBar}.tsx`,
   `pages/{HomePage,LoginPage}.tsx`, `pages/game/{GameLayout,LobbyPage,QuestionPage,ResultsPage,GameOverPage}.tsx`,
   `pages/manage/{GamesPage,QuestionEditorPage,CoursesPage,RosterPage,ImagesPage,SessionsPage}.tsx`.
@@ -443,6 +540,10 @@ The authoritative list of files to migrate is whatever the scan test reports. Th
 
 ## 8. Risks and open questions
 
+- **Expected staging artefact (don't "fix" it mid-migration).** From step 2, `borderColor.DEFAULT` is `line`. On pages not yet
+  migrated, a bare `border` therefore draws near-black (`#121212`) outlines on the old slate surfaces whenever the theme is light, and
+  some unmigrated pages look odd in light mode until step 4 reaches them. That's harmless on the feature branch and resolves itself
+  as each page is migrated.
 - **Scale.** About 860 class edits is where regressions hide. Staging (extend, then replace) keeps the apps usable, but the
   final replace commit will expose any missed class as *no CSS* (for example, a transparent button). The scan test runs in that
   same commit, which is the safety net.
@@ -486,3 +587,22 @@ code before changing this doc.
 | 14 | Replacing the palette in step 2 breaks apps until step 4 ends | Yes | Extend during migration, replace in the final step-4 commit together with removing the `xfail` (§4.3, step 4) |
 | 15 | No work split for R11 | n/a | Decision: one member owns all of T9 (header) |
 | 16 | Design doc not committed | Yes (untracked) | Committed before step 1, with `docs/ui/before/` |
+
+**Revision 3** was revised after a second Goldfish pass (a fresh session reading only revision 2). Every finding was verified against
+the code first.
+
+| # | Goldfish finding | Verified? | Change |
+|---|---|---|---|
+| 1 | `focus:outline-none` utilities beat the global `:focus-visible` rule, so "never removed" was unenforced | Yes: 15 `focus:outline-none`, 40 `focus:ring*` (the Goldfish said 26), 11 raw `<textarea>`/`<select>` | Focus rule moved to `@layer base`; every `outline-none` and `focus:ring*` deleted; scan forbids them (§4.1, §4.3, step 3, step 4) |
+| 2 | Preflight hardcodes `::placeholder` as gray-400 (`#9ca3af`, ~2.5:1) | Yes (`preflight.css` ~333) | Global `::placeholder` rule in `tokens.css` (§4.3) |
+| 3 | GameOverPage bars use a different encoding (wrong = red at :226) | Yes (:180, :210, :226, :337) | One encoding for both pages (wrong = muted, decided), shared `barClasses()` helper, ✓ chip on both (§4.8) |
+| 4 | Transparent PNG/GIF/WebP images vanish on dark surfaces | Yes (`prepareUpload` keeps alpha) | `image-bg` light backing in every image well, plus `--pin-image-bg` (§4.9, §4.5) |
+| 5 | `.nb-press`/`.nb-box` can't serve three shadow sizes | Yes | Density variables `--nb-border`/`--nb-offset` with `data-density` roots (§4.3.1) |
+| 6 | tailwind-merge treats `shadow-brutal*` as a shadow colour | Yes (twMerge ^2.5, `lib/utils.ts`) | `extendTailwindMerge` plus three `cn()` checks (§4.3.2) |
+| 7 | Scan misses side borders, named colours, `ring-offset` (default `#fff` halo) | Yes: none exist today | Regex widened; `ringOffsetColor.DEFAULT = canvas` (§4.6, §4.3) |
+| 8 | Contrast test misses opacity fills; sidebar active item text unspecified | Yes | Opacity banned on fill tokens; `text-on-fill` required on every fill (§4.2) |
+| 9a | `font-display font-semibold` would be faux-bold | Yes (only Space Grotesk 700 loaded) | `font-display` ⇒ 700, enforced by the scan (§4.1) |
+| 9b | `borderColor.DEFAULT` darkens unmigrated pages mid-migration | Yes | Stated as an expected artefact (§8) |
+| 9c | Toggle `aria-label` changes with state | Yes | Fixed name plus `aria-pressed` (§4.4) |
+| 9d | Capture module needs a `test_*` function; two games; timers | Yes | Parametrized `test_capture_ui_screens`, one room per theme, `time_limit_seconds = 600`, host lock control (§4.6) |
+| 9e | No `theme-color` meta | Yes (none in any `index.html`) | Two media-scoped metas plus a runtime update in `theme.ts` (§4.3) |
