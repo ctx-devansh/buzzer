@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 6, revised after four Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **revision 7, revised after five Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -67,7 +67,8 @@ The chosen visual direction is **neo-brutalism**.
 | Shadow | Hard offset, no blur, colour `shadow` token: `brutal-sm` 2px 2px, `brutal` 4px 4px, `brutal-lg` 6px 6px. Admin uses shadows only on interactive elements and cards, **not** table rows. |
 | Press | Interactive elements with a shadow translate by the shadow offset and drop the shadow on `:active`, so they feel "pushed in". Under `prefers-reduced-motion: reduce`, nothing transitions; the shadow simply disappears. Offsets come from density variables (§4.3.1), so one `.nb-press` class works at every size. |
 | Density | One set of component classes, three densities set by CSS variables on a root element: **compact** (admin), **comfortable** (player, host manage; the default) and **projector** (host `/game/:code/*`). See §4.3.1. |
-| Radius | `rounded-none` by default. Up to 4px is allowed only on small chips and badges. |
+| Radius | Square by default. The preset **replaces** Tailwind's radius scale with `none`, `DEFAULT` (4px, for chips, badges and inputs only) and `full` (spinners, pills, round avatars). Every other `rounded-*` stops emitting CSS once replaced, and the scan forbids it (§4.3, §4.6). |
+| Shadow scale | The preset **replaces** Tailwind's shadow scale with `none`, `brutal-sm`, `brutal` and `brutal-lg`. Soft shadows (`shadow`, `shadow-md`…`shadow-2xl`) use a literal `rgb(0 0 0 / …)` that would survive the palette swap, so they must go. No `backdrop-blur`, `blur` or `drop-shadow`. |
 | Fills | Flat. No gradients. Coloured fills are for buttons, option tiles, badges and bars, never large page areas. |
 | Text on fills | Always `text-on-fill` (dark in **both** themes), never white. That keeps every fill at AA or better. The same applies to text inside an `image-bg` or `qr-bg` box (§4.9). Text that sits *beside* a fill (not on it) uses `ink`/`ink-muted`. |
 | Type | Display face **Space Grotesk 700** for page and section titles, numbers, scores, timers, room codes and button labels. It is **not** used for running text: question prompts and paragraphs use Inter, because a display face reads poorly over several lines. Sizes and spacing come from the scale in §4.11. **`font-display` always means weight 700.** The `fontFamily.display` entry can't carry a weight, so every `font-display` use pairs with `font-bold`, or comes through a class that sets it. The scan forbids `font-display` alongside `font-normal`, `font-medium` or `font-semibold`. Body face **Inter 400/500/600/700** (700 so `font-bold` is real bold, not faux-bold). Both come from `@fontsource`. Scores and timers use `tabular-nums`. |
@@ -177,15 +178,19 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
     2.5:1 on white, which fails AA. So each app's `@layer base` (below) sets
     `input::placeholder, textarea::placeholder { color: rgb(var(--ink-muted)); opacity: 1; }`, which covers
     every raw page `<input>`/`<textarea>` (11 raw `<textarea>`/`<select>` exist outside the primitives).
-  - `extend.boxShadow`: `brutal-sm`, `brutal`, `brutal-lg` (hard offsets in `rgb(var(--shadow))`).
+  - `boxShadow` and `borderRadius`: see "staging". The tokens are
+    `boxShadow = { none: 'none', 'brutal-sm', brutal, 'brutal-lg' }` (hard offsets in `rgb(var(--shadow))`) and
+    `borderRadius = { none: '0', DEFAULT: '4px', full: '9999px' }`.
   - `extend.borderWidth`: `3`.
   - `extend.fontFamily`: `display: ['"Space Grotesk"', 'system-ui', 'sans-serif']`, `sans: ['Inter', 'system-ui', 'sans-serif']`.
 
 **Staging (the apps stay usable during migration):**
-- **Steps 2–4:** the preset uses `theme.extend.colors = tokenColors`. Tailwind's palette still exists, so unmigrated pages render as
-  they do today, and migrated pages use tokens. The scan test is `xfail(strict=True)`.
-- **Final commit of step 4:** switch to `theme.colors = { transparent, current, inherit, ...tokenColors }` (replace), and remove
-  the `xfail` in the **same commit**. From then on, a leftover palette class produces no CSS and fails the scan.
+- **Steps 2–4:** the preset uses `theme.extend` for colours, the brutal shadows and the radius tokens. Tailwind's own palette,
+  radii and soft shadows still exist, so unmigrated pages render as they do today, and migrated pages use tokens. The scan test is
+  `xfail(strict=True)`.
+- **Final commit of step 4:** switch all three to replacement, `theme.colors = { transparent, current, inherit, ...tokenColors }`,
+  `theme.boxShadow = {…}` and `theme.borderRadius = {…}`, and remove the `xfail` in the **same commit**. From then on, a leftover
+  palette, radius or soft-shadow class produces no CSS and fails the scan.
 
 `frontend/theme/tokens.css` also defines, outside Tailwind:
 - `:root, [data-theme=light] { color-scheme: light }` / `[data-theme=dark] { color-scheme: dark }`, so native scrollbars and form controls follow.
@@ -221,7 +226,9 @@ Each app's `src/index.css` (same block in all three, about 80 lines, every value
 | `--nb-border` | 2px | 3px | 4px |
 | `--nb-offset` | 2px | 4px | 6px |
 | `--nb-h1` (page title) | 1.5rem | 1.875rem | 3.75rem |
-| `--nb-h2` (section title, scores and stats) | 1.125rem | 1.25rem | 2.25rem |
+| `--nb-h2` (section title) | 1.125rem | 1.25rem | 2.25rem |
+| `--nb-stat` (scores, timers, counts) | 1.25rem | 1.5rem | 3rem |
+| `--nb-hero` (hero numbers and glyphs) | 2.5rem | 3rem | 6rem |
 | `--nb-h3` (card title) | 1rem | 1.125rem | 1.5rem |
 | `--nb-body` | 0.875rem | 1rem | 1.5rem |
 | `--nb-prompt` (question prompt) | 1rem | 1.125rem | 2.25rem |
@@ -246,15 +253,19 @@ Classes in each app's `@layer components` (same block in all three apps):
   - `.nb-body`: Inter 400, `var(--nb-body)`, `line-height: 1.5`.
   - `.nb-prompt`: Inter 600, `var(--nb-prompt)`, `line-height: 1.3`.
   - `.nb-caption`: Inter 500, `var(--nb-caption)`, `color: rgb(var(--ink-muted))`, `text-transform: uppercase; letter-spacing: 0.05em`.
-  - `.nb-stat` (scores, timers, room codes): display 700, `var(--nb-h2)`, `font-variant-numeric: tabular-nums`.
+  - `.nb-stat` (scores, timers, counts): display 700, `var(--nb-stat)`, `font-variant-numeric: tabular-nums`, `line-height: 1.1`.
+  - `.nb-hero` (the one big thing on a screen): display 700, `var(--nb-hero)`, tabular-nums, `line-height: 1`, `letter-spacing: 0.08em`.
+  - `.nb-code` (small room code in the projector's corner QR panel): display 700, `var(--nb-h3)`, tabular-nums, `letter-spacing: 0.15em`.
 - **Spacing:**
   - `.nb-page`: `padding: var(--nb-page-pad)`.
   - `.nb-card`: `.nb-box` plus `padding: var(--nb-card-pad)`.
   - `.nb-stack`: `display: flex; flex-direction: column; gap: var(--nb-gap)`.
-- **Rule:** an element using an `.nb-h*`/`.nb-body`/`.nb-prompt`/`.nb-caption`/`.nb-stat` class adds no `text-{size}`/`font-{weight}`
+- **Rule:** an element using an `.nb-h*`/`.nb-body`/`.nb-prompt`/`.nb-caption`/`.nb-stat`/`.nb-hero`/`.nb-code` class adds no `text-{size}`/`font-{weight}`
   utility, and `.nb-page`/`.nb-card`/`.nb-stack` add no `p-*`/`gap-*`/`space-y-*`. tailwind-merge doesn't know these classes, so
   `cn('nb-h1', 'text-xl')` would keep both and the utility would silently win. The scan enforces the rule per class string (§4.6).
-  Colour, margin, alignment and width utilities may still be combined with them.
+  Colour, margin, alignment and width utilities may still be combined with them. **Known limitation:** a `className` *prop* passed
+  from another component, e.g. `<CardHeader className="text-xl">` where `CardHeader` applies `.nb-h3`, crosses files and isn't caught.
+  Primitives that apply an `.nb-*` type class therefore document "don't pass size or weight classes" in a one-line comment.
 - Where `data-density` is set:
   - **admin:** `<div data-density="compact">` at the root of `AdminLayout` and `LoginPage`;
   - **host projector:** the root element of `pages/game/GameLayout.tsx`;
@@ -289,7 +300,8 @@ exact selector text.
   blocks 1–4. Any custom property found in block 5, or in a rule whose selector isn't listed, fails the test. A variable defined in more
   than one of blocks 1–3 fails the parity test, which stops an "invariant" value being silently overridden by one theme.
 - The contrast test skips any value that isn't three space-separated integers (the `--pin-*` and density variables).
-- **The derived `--pin-*` colours need a browser check in step 5:**
+- **The derived `--pin-*` colours** were checked during design in Playwright's Chromium: `rgb(var(--canvas))` reads back as
+  `rgb(27 28 32)`, and a canvas filled with it gives pixel `[27, 28, 32]`. **Safari still needs a check in step 5:**
   - Custom properties' computed values have `var()` substituted, so `getComputedStyle(el).getPropertyValue('--pin-letterbox')`
     should return a resolved `rgb(27 28 32)`-style string, which canvas `fillStyle` accepts.
   - Confirm both in Chromium and Safari.
@@ -372,7 +384,11 @@ exact selector text.
    - opacity on fill tokens: `\b(bg|border|text)-(accent|accent-2|info|success|danger|warning|option-\d)/\d+`; opacity on any
      text colour: `\btext-[a-z-]+/\d+`; element opacity without `disabled:`: `(?<!disabled:)\bopacity-\d+` (§4.2);
    - `\bmin-h-screen\b` in `frontend/player/src/pages/**` (§4.11 layout contract);
-   - within one class string (a `className="…"` value or one template literal): `nb-(h1|h2|h3|body|prompt|caption|stat)` together
+   - radius and soft shadows: `\brounded-(?:[trblse]{1,2}-)?(sm|md|lg|xl|2xl|3xl)\b`,
+     `\bshadow(?:-(sm|md|lg|xl|2xl|inner))?(?![-\w])` (bare `shadow` or a soft size; `shadow-brutal*`/`shadow-none` pass), and
+     `\b(backdrop-blur|blur|drop-shadow)(-[a-z0-9]+)?\b`;
+   - within one class string: a `className="…"` value, one template literal, or **all the arguments of one `cn(…)` call taken
+     together** (so `cn('nb-h1', cond && 'text-xl')` is caught): `nb-(h1|h2|h3|body|prompt|caption|stat)` together
      with `\btext-(xs|sm|base|lg|[2-9]?xl)\b` or `\bfont-(normal|medium|semibold|bold)\b`, and `nb-(page|card|stack)` together with
      `\b(p|px|py|pt|pb|pl|pr)-\d` or `\b(gap|space-y|space-x)-\d` (§4.3.1);
    - `font-black` or `font-extrabold` (weights that aren't loaded), and `font-display` on the same line as
@@ -404,15 +420,29 @@ doesn't collect it. Run it explicitly: `npm run build && pytest tests/e2e/captur
   multiple choice with option images, true/false with a prompt image, fill in the blank, multi-select, put in order, Pin the
   Spot (library image), and a COMPLETENESS multiple choice. Images are uploaded to the course library from
   `sample_games/` assets or generated in memory with Pillow (already used by `scripts/make_pin_images.py`).
-- **Entry point.** The module defines one function, `test_capture_ui_screens(theme, …fixtures)`, parametrized over
-  `theme in ('light', 'dark')`, so pytest collects it when the file is passed explicitly. It holds no assertions beyond "the page
-  reached the expected state". Each parametrized run is a **full, separate game in its own room**: two rooms in total.
+- **Entry point.** The module defines **one** non-parametrized function, `test_capture_ui_screens(…fixtures)`, so pytest collects
+  it when the file is passed explicitly. Its only assertion is the axe report at the end (§4.10), plus waits for "the page reached the
+  expected state". **Shot order:**
+  1. game A in **light** (screens 01–19 light);
+  2. game B in **dark** (screens 01–19 dark), each in its own room;
+  3. only after both games: screens 20–30 in light, then in dark.
+
+  Because both themes' management and admin shots come after both games, they show **identical data** (two completed sessions).
+  Screens 27 and 30 need a completed session, and this ordering guarantees one.
+- **Context options.** `page_as` gains a pass-through: `page_as(token, *, color_scheme=None, **context_opts)` forwards
+  `viewport` and `device_scale_factor` (and anything else) to `browser.new_context`. The device scale can't change after the context
+  exists. Existing call sites are unchanged.
+- **Roster data** (screen 26). Before the shots, import a small CSV of 6 students for the `env` course through
+  `POST /api/host/courses/{course_id}/roster/import` (`routers/host.py:256`) as the `env` host, with one row deactivated so the
+  "Inactive" chip shows. `cleanup` must remove the entries.
+- **User detail** (screen 29) is the `env` host user's page, which shows course and game grants.
 - **Driving the game.** One host page (1920×1080) and three guest player pages (390×844, device scale 2) through `page_as`.
   One player answers correctly and one incorrectly, so both results states exist.
 - **Keeping timers from expiring between shots.** The fixture game's questions use `time_limit_seconds = 600`, so nothing expires
   while screenshots are taken. Screens that need the "locked" state are reached through the host's existing lock control, not by
   waiting for the timer. The shots are taken, then the host advances.
-- **Theme.** Set `localStorage['buzzer-theme']` with `context.add_init_script` before the first navigation, in every page of that run.
+- **Theme.** Each context gets `color_scheme=<theme>` **and** `localStorage['buzzer-theme']=<theme>` through `context.add_init_script`
+  before the first navigation.
   Before each shot, wait for `[data-loaded=true]` on canvases and for fonts (`document.fonts.ready`).
 - **Output:** `docs/ui/after/<theme>/<after file>` from the key-screen table below.
 
@@ -484,7 +514,9 @@ Today the two pages disagree:
 - `GameOverPage.tsx` uses green/indigo at :180, green/slate at :210, green/**red-700** at :226 (so wrong is red here), plus an
   indigo score histogram at :337.
 
-The themed version uses **one encoding on both pages** (decided: wrong is muted, not red):
+The themed version uses **one encoding on both pages** (decided: wrong is muted, not red). The fixed `border-4`/`border-2` widths below
+are deliberate rather than `--nb-border`: these bars only ever render at projector density, and the correct bar must stay thicker than
+the others to work as a non-colour cue.
 
 | Bar state | Fill | Outline | Extra cue |
 |---|---|---|---|
@@ -550,7 +582,8 @@ through the API, via the `env`/`cleanup` fixtures, and signs in as `env`'s host.
 |---|---|---|
 | `test_theme_defaults_to_os_and_persists[app × scheme]` (apps: host `/host/login`, player `/player/join`, admin `/admin/login`; schemes: light, dark) | R9 "toggle that defaults to the OS preference and persists" (graded explicitly) | The defaulting logic is an inline script copied into three `index.html` files, and `tokens.css` reaches each app through a relative `@import`, so each app can break on its own. Steps: (1) new context with `color_scheme=<scheme>` → `html[data-theme=<scheme>]`, and `body` computed background equals that theme's `canvas`, which proves the tokens actually load; (2) click the toggle → attribute flips, `aria-pressed` flips, the accessible name stays "Dark theme"; (3) reload → still flipped; (4) `page.emulate_media(color_scheme=<opposite of scheme>)` and then back to `<scheme>`, which fires real
 `change` events → still flipped (stored beats OS). Emulating the same scheme again would fire no event and prove nothing. |
-| `test_focus_outline_and_placeholder[case]` (cases: host `/host/login`, player `/player/join`, admin `/admin/login`, and host `QuestionEditorPage` for a game created through the API, which holds the raw `<textarea>`/`<select>`) | R9 "visible focus states"; placeholder contrast | Both depend on cascade order (§4.3), which is exactly what went wrong twice in review, and the static scan can't see cascade order. Steps: Tab through every focusable element and assert the computed `outline-style` isn't `none` and `outline-width` is ≥ 2px; read `getComputedStyle(input, '::placeholder').color` and assert it equals `ink-muted`. One theme is enough, since the colours are already proven by the contrast unit test. |
+| `test_focus_outline_and_placeholder[case]` (cases: host `/host/login`, player `/player/join`, admin `/admin/login`, and host `QuestionEditorPage` for a game created through the API, which holds the raw `<textarea>`/`<select>`) | R9 "visible focus states"; placeholder contrast | Both depend on cascade order (§4.3), which is exactly what went wrong twice in review, and the static scan can't see cascade order. Steps: Tab through every focusable element and assert the computed `outline-style` isn't `none` and `outline-width` is ≥ 2px; read `getComputedStyle(input, '::placeholder').color` and assert it equals `ink-muted`. That API was **verified during design** in
+Playwright's Chromium: it returns the placeholder colour, not the input's own. The e2e suite runs only Chromium. One theme is enough, since the colours are already proven by the contrast unit test. |
 
 **Rendered-contrast check: an axe-core assertion inside the capture module, not a separate test.** Token contrast doesn't
 prove that pages *use* the right pairs. For example, `bg-accent` with inherited `ink` text is 1.7:1 in dark mode, and neither the
@@ -564,7 +597,8 @@ screen in both themes, so this adds no game setup. It adds one dependency, `axe-
 are produced, which is the moment the evidence for R9 gets created.
 
 **Fixture changes, `tests/e2e/conftest.py`** (needed for the above, and they fix an existing gap):
-- `page_as(token, *, color_scheme=None)`: pass `color_scheme` to `browser.new_context`. Existing call sites are unchanged.
+- `page_as(token, *, color_scheme=None, **context_opts)`: pass `color_scheme` and any other context options (`viewport`,
+  `device_scale_factor`) to `browser.new_context`. Existing call sites are unchanged.
 - `_built_apps_are_current` today checks only `host` and `admin` `src/`. Extend it to `player`, and for every app, include
   `index.html`, `tailwind.config.ts`, and the shared `frontend/theme/` folder in the "newest source" time. Otherwise, editing a token
   leaves a stale `dist/` that the e2e tests silently run against.
@@ -614,7 +648,22 @@ never pick their own sizes. The table shows the equivalent Tailwind sizes, for r
 
 - Each page has exactly one `h1`. Section and card titles use the real heading elements (`h2`, `h3`), so the hierarchy is visible to
   assistive tech too.
-- Scores, timers and room codes are numbers, not headings: `.nb-stat`.
+- **Numbers and glyphs use exactly one mechanism each.** Every site that's `text-5xl` or larger today is listed here:
+
+  | Element | Class | Projector / comfortable size (today) |
+  |---|---|---|
+  | Lobby room code (host `LobbyPage.tsx:32`, `text-8xl`) | `.nb-hero` | 6rem (6rem) |
+  | Player final rank (`player GameOverPage.tsx:171`, `text-5xl`) | `.nb-hero` | 3rem (3rem) |
+  | Player option fallback letter (`QuestionPage.tsx:39`) | `.nb-hero` + `text-on-fill` | 3rem (3rem) |
+  | Player lock glyphs 🔒 (`QuestionPage.tsx:210`, `FeedbackPage.tsx:4`) | `.nb-hero` | 3rem (3rem / 3.75rem) |
+  | "Game Over!" (host `GameOverPage.tsx:320`) | `.nb-h1` (it's the page title) | 3.75rem (3rem) |
+  | Scores, timers, answer counts, leaderboard points | `.nb-stat` | 3rem / 1.5rem |
+  | Room code in the projector's corner QR panel (`GameLayout.tsx:247`, `text-lg`) | `.nb-code` | 1.5rem (1.125rem) |
+
+  Nothing shrinks on the projector.
+- **The one exception to "no size utilities":** the fill-in-the-blank word cloud (`ResultsPage.tsx` `sizeClass`, `text-base`…`text-5xl`)
+  keeps its size ramp, because there size *encodes frequency*. Its `font-black` becomes `font-bold` (Inter). The word cloud never
+  carries an `.nb-*` type class, so the scan rule doesn't conflict.
 
 **Player layout contract** (needed because of the in-flow header row, §4.4). There are 11 `min-h-screen` uses in the player app
 today, and with a 56px header above them, every centred screen would scroll by 56px.
@@ -681,6 +730,8 @@ Each step is one or more atomic commits on `feature/better-ui`. **This doc and `
   (surface + line), `ghost` (no box until hover, then `surface-muted`), and `destructive` (danger fill, on-fill text). All get
   `border-line`, the shadow and press, and `focus-visible`. Keep the existing variant and size **names** so call sites don't break.
   Player sizes stay larger (min height 48px for `md`, 56px for `lg`).
+- In every primitive, **delete** `rounded-lg`/`rounded-xl` (host and admin `button`/`card`/`input` are `rounded-lg`; player's are
+  `rounded-xl`, and its card is `rounded-2xl`), any `shadow-*`, and `active:scale-95`. They're replaced by `.nb-box`/`.nb-press`.
 - In every primitive, **delete** `focus:outline-none`, `focus:ring-*` and `focus:ring-offset-*`. The base-layer `:focus-visible`
   outline (§4.3) is the only focus style.
 - `card.tsx`: `nb-box`. `input.tsx`: surface, line border, and the global placeholder colour (§4.3). The player input is `text-base` or larger.
@@ -714,6 +765,8 @@ Mechanical mapping (applies to every file the scan lists):
 | headings and ad-hoc `text-xl`/`text-3xl`/`p-4`/`gap-*` on titles, cards and page wrappers | `.nb-h1`/`.nb-h2`/`.nb-h3`/`.nb-caption`/`.nb-stat` and `.nb-page`/`.nb-card`/`.nb-stack` (§4.3.1); drop the size and padding utilities |
 | `hover:bg-*`, `hover:text-*`, `hover:border-*` | `.nb-press` lift (filled buttons) or `hover:bg-surface-muted` (ghost/outline), per §4.11 |
 | `active:scale-95` | `.nb-press` |
+| `rounded-sm/md/lg/xl/2xl/3xl`, `rounded-t-lg` (117 `rounded*` uses today) | remove (square); bare `rounded` only on chips, badges and inputs; `rounded-full` only on spinners, pills and avatars |
+| `shadow`, `shadow-xl` (5), `backdrop-blur-sm` (1, the corner QR panel) | `.nb-box` / `shadow-brutal*`; drop the blur (the panel is an opaque `surface`) |
 | `disabled:opacity-*`, conditional `opacity-50 cursor-not-allowed` | `disabled:` state per §4.11, plus the `disabled` attribute |
 | `opacity-*` on content (fallback letter, roster rows) | `text-on-fill` / `text-ink-muted` + `line-through` / "Inactive" chip (§4.2) |
 | player `min-h-screen` | `min-h-full` (§4.11 layout contract) |
@@ -726,8 +779,8 @@ Then the per-context passes:
 - **Player:** answer tiles at least 56px tall and full-width, a 3px outline, `brutal` shadow and press, `touch-action: manipulation`.
   The selected state uses a thicker outline plus a ✓ badge (not colour alone). Put-in-order chips and the Pin the Spot "lock in"
   button follow the same rules. Bottom action areas pad by `env(safe-area-inset-bottom)`.
-- **Host projector** (`pages/game/*`, `data-density="projector"`): prompt `text-4xl` Inter `font-semibold` (not the display face, §4.1),
-  room code and scores in `font-display font-bold tabular-nums`,
+- **Host projector** (`pages/game/*`, `data-density="projector"`): prompt `.nb-prompt` (Inter, not the display face, §4.1), room code
+  `.nb-hero` (lobby) or `.nb-code` (corner panel), scores and counts `.nb-stat`, as in §4.11,
   4px outlines and `brutal-lg`. Results bars as in §4.8. QR codes as in §4.7. Check readability at 1920×1080 viewed at 25% zoom, as a
   back-of-room proxy, in both themes.
 - **Host manage** (`pages/manage/*`, `HostShell`, `ImagePicker`): 3px outlines. The question editor groups fields in `nb-box` sections.
@@ -906,3 +959,15 @@ and the log records them, rather than dropping them, so the reasoning is visible
 | C7 | Before/after pairing undefined | Yes: the before set uses a different naming scheme | A 30-row table with exact after and before paths; all 30 have a before shot (§4.6) |
 | C8 | axe aborting mid-run; focus test misses clipped outlines | Yes: 8 `overflow-hidden` | Collect-then-fail with a written report; manual clipping check (§4.10, §7) |
 | C9 | `--pin-*` theme colours and `applyTheme` duplicate hex values | Yes | `--pin-*` derive from tokens via `rgb(var(--…))` (browser check in step 5, with a hex fallback); `applyTheme` reads computed `--canvas` (§4.3.3, §4.3) |
+
+**Revision 7** was revised after a fifth Goldfish pass. Two items (C4, and the step-5 `--pin-*` check) were **verified empirically**
+during design with a Playwright Chromium probe, rather than deferred.
+
+| # | Goldfish finding | Verified? | Change |
+|---|---|---|---|
+| C1 | `.nb-stat` (2.25rem) would shrink the 6rem lobby room code; two mechanisms for the same element | Yes (`LobbyPage:32` `text-8xl`). **Corrections:** `ResultsPage:64` is the word-cloud frequency ramp, and `GameOverPage:320` is the page title. Neither is a stat. | `--nb-stat` and `--nb-hero` variables, `.nb-hero`/`.nb-code` classes, a site-by-site table (nothing shrinks), and a word-cloud exception (§4.3.1, §4.11) |
+| C2 | Radius and soft shadows unmapped and unscanned | Yes: 117 `rounded*`, 5 soft `shadow`, 1 `backdrop-blur` | The preset replaces the radius and shadow scales (staged with colours), plus scan rules, a mapping row and step-3 primitive stripping (§4.1, §4.3, §4.6) |
+| C3 | Capture module unbuildable: viewport/DPR, roster data, shot order, differing data between themes | Yes (`page_as` builds the context at `conftest.py:105`) | `**context_opts` pass-through; roster import via `routers/host.py:256`; one test with a fixed order (two games, then all manage/admin shots); screen 29 defined (§4.6, §4.10) |
+| C4 | `getComputedStyle(el, '::placeholder')` support unknown | **Verified OK** in Chromium (returns the placeholder colour) | Stated in §4.10 |
+| C5 | Mixing rule only sees one string | Yes | The class string includes all args of one `cn(…)` call; cross-file `className` props are a documented limitation (§4.3.1, §4.6) |
+| C6 | Housekeeping | Yes | This row; §4.8 explains the fixed bar border widths |
