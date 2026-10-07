@@ -1,7 +1,7 @@
 # frontend/host/src/components/
 
 **Purpose.** The Host app's management shell plus presentational UI primitives, styled for its
-dark slate theme. Primitives live in `ui/`. These are hand-written components in the shadcn style (Tailwind +
+T9 token theme (light/dark, `frontend/theme/`). Primitives live in `ui/`. These are hand-written components in the shadcn style (Tailwind +
 `cn`), not a generated shadcn install, and none of them holds game state.
 
 **`HostShell.tsx`.** Layout route for the management pages (`/home`, `/games…`, `/courses…`,
@@ -23,7 +23,8 @@ Sessions, an **Admin console** link (only when `getRole() === 'ADMIN'`), Sign ou
 zero-credit circle, filled full-credit circle, target), and `onPick` (the editor's target
 picker: click places, drag moves, a click in the letterbox is ignored, nothing before the image
 loads). Shows "Image failed to load" in its box on error. Colours come from `--pin-*` custom
-properties with fallbacks. `data-loaded` is `'true'` once the image has decoded (e2e waits on it).
+properties (defined in `frontend/theme/tokens.css`; it redraws on theme change via `useTheme`, fills the
+image rect with `--pin-image-bg` first so transparent images stay visible, and has an ink `outline`) with fallbacks. `data-loaded` is `'true'` once the image has decoded (e2e waits on it).
 Used by `game/QuestionPage` (no taps), `game/ResultsPage`, `game/GameOverPage` and the editor.
 
 **`ImagePicker.tsx`** (T8). A modal over a course's image library (`GET /host/courses/{id}/images`)
@@ -33,14 +34,16 @@ Thumbnails are lazy, in fixed boxes. Also exports `uploadToLibrary(courseId, fil
 `pages/manage/QuestionEditorPage.tsx` only when the game has a course.
 
 **Contents (`ui/`).**
-- `button.tsx` — `Button`: native `<button>` with `variant` (`default` indigo, `outline`,
-  `ghost`, `destructive`) and `size` (`sm`/`md`/`lg`); passes through all button props.
-- `card.tsx` — `Card`, `CardHeader`, `CardContent`: rounded bordered container plus padded
-  sections.
+- `button.tsx` — `Button`: native `<button>` with `variant` (`default` accent fill, `secondary`
+  pink fill, `outline` surface box, `ghost` no box until hover, `destructive` danger fill) and `size`
+  (`sm`/`md`/`lg`); passes through all button props. Boxed variants use `nb-box nb-press` (ink outline,
+  hard shadow, lift/press); text on fills is `text-on-fill`; focus is the global outline (T9).
+- `card.tsx` — `Card` (`nb-box`: surface, ink outline, hard shadow sized by the page's density),
+  `CardHeader`, `CardContent`.
 - `input.tsx` — `Input`: full-width styled `<input>`; passes through all input props.
 - `TimerBar.tsx` — `TimerBar({ totalSeconds, initialSeconds?, paused? })`: countdown bar that
-  ticks every 100 ms against a wall-clock end time, changes colour green → yellow → red as time
-  runs out, and freezes while `paused` (resuming continues from the frozen value). Display only:
+  ticks every 100 ms against a wall-clock end time, changes colour success → warning → danger as time runs out (the fill has its own ink edge; the
+  seconds sit beside the bar in `ink-muted`), and freezes while `paused` (resuming continues from the frozen value). Display only:
   the server, not this bar, decides when the answer phase ends.
 
 **How it fits in.** `HostShell` wraps the management routes in `../App.tsx`. `ui/` is imported by `../pages/` (Login and Home use Button/Card/Input; the in-game

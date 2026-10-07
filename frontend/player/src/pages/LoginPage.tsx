@@ -59,12 +59,12 @@ export default function LoginPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="flex flex-1 flex-col items-center justify-center p-4">
         <div className="text-center space-y-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-danger-text">{error}</p>
           <button
             onClick={() => navigate('/join')}
-            className="text-indigo-400 hover:underline text-sm"
+            className="text-ink text-sm underline decoration-line decoration-2 underline-offset-2 hover:decoration-accent"
           >
             ← Back to join
           </button>
@@ -74,8 +74,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <p className="text-slate-400">Signing in…</p>
+    <div className="flex flex-1 flex-col items-center justify-center p-4">
+      <p className="text-ink-muted">Signing in…</p>
     </div>
   );
 }

@@ -93,24 +93,24 @@ export default function HomePage() {
   return (
     <div className="flex flex-col items-center px-4 py-8 gap-4">
       {activeSessions.length > 0 && (
-        <Card className="w-full max-w-lg border-amber-500/40">
+        <Card className="w-full max-w-lg">
           <CardHeader>
-            <h2 className="text-lg font-semibold text-amber-400">Active Sessions</h2>
-            <p className="text-slate-400 text-sm">You have running games — rejoin one or create a new room below.</p>
+            <h2 className="nb-h2 text-ink">Active Sessions</h2>
+            <p className="text-ink-muted text-sm">You have running games — rejoin one or create a new room below.</p>
           </CardHeader>
           <CardContent className="space-y-2">
             {activeSessions.map(s => (
               <div
                 key={s.session_id}
-                className="flex items-center justify-between rounded-lg bg-slate-800 border border-slate-700 px-4 py-3"
+                className="flex items-center justify-between bg-surface-muted border-2 border-line px-4 py-3"
               >
                 <div>
-                  <p className="text-slate-100 font-medium">{s.game_title}</p>
-                  <p className="text-slate-400 text-sm">{s.course_name} · {s.course_semester}</p>
-                  <p className="text-slate-500 text-xs mt-0.5">
-                    Room <span className="font-mono text-slate-300">{s.room_code}</span>
+                  <p className="text-ink font-medium">{s.game_title}</p>
+                  <p className="text-ink-muted text-sm">{s.course_name} · {s.course_semester}</p>
+                  <p className="text-ink-muted text-xs mt-0.5">
+                    Room <span className="font-mono text-ink-muted">{s.room_code}</span>
                     {' · '}
-                    <span className={s.status === 'IN_PROGRESS' ? 'text-green-400' : 'text-amber-400'}>
+                    <span className={s.status === 'IN_PROGRESS' ? 'text-success-text' : 'text-warning-text'}>
                       {s.status === 'IN_PROGRESS' ? 'In Progress' : 'Lobby'}
                     </span>
                   </p>
@@ -118,7 +118,7 @@ export default function HomePage() {
                 <div className="flex items-center gap-2 shrink-0">
                   {confirmDelete === s.session_id ? (
                     <>
-                      <span className="text-red-400 text-xs">Delete all data?</span>
+                      <span className="text-danger-text text-xs">Delete all data?</span>
                       <Button size="sm" variant="destructive" onClick={() => deleteSession(s.session_id)}>
                         Confirm
                       </Button>
@@ -145,16 +145,16 @@ export default function HomePage() {
 
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <h1 className="text-2xl font-bold text-slate-100">Create Game Room</h1>
-          <p className="text-slate-400 text-sm mt-1">Select a course and quiz to begin</p>
+          <h1 className="nb-h1 text-ink">Create Game Room</h1>
+          <p className="text-ink-muted text-sm mt-1">Select a course and quiz to begin</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Course</label>
+            <label className="block text-sm font-medium text-ink-muted mb-1">Course</label>
             <select
               value={courseId}
               onChange={e => setCourseId(e.target.value ? Number(e.target.value) : '')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border-2 border-line bg-surface px-3 py-2 text-ink"
             >
               <option value="">Select a course…</option>
               {courses.map(c => (
@@ -163,12 +163,12 @@ export default function HomePage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Quiz</label>
+            <label className="block text-sm font-medium text-ink-muted mb-1">Quiz</label>
             <select
               value={gameId}
               onChange={e => setGameId(e.target.value ? Number(e.target.value) : '')}
               disabled={courseId === ''}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="w-full border-2 border-line bg-surface px-3 py-2 text-ink disabled:opacity-50"
             >
               <option value="">{courseId === '' ? 'Select a course first' : 'Select a quiz…'}</option>
               {games.map(g => (
@@ -176,11 +176,11 @@ export default function HomePage() {
               ))}
             </select>
             {gamesLoaded && games.length === 0 && (
-              <p className="text-slate-400 text-sm mt-1">No quizzes for this course yet — create one in Games.</p>
+              <p className="text-ink-muted text-sm mt-1">No quizzes for this course yet — create one in Games.</p>
             )}
-            {gamesError && <p className="text-red-400 text-sm mt-1">{gamesError}</p>}
+            {gamesError && <p className="text-danger-text text-sm mt-1">{gamesError}</p>}
           </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && <p className="text-danger-text text-sm">{error}</p>}
           <Button
             className="w-full"
             size="lg"

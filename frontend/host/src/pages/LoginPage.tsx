@@ -5,6 +5,7 @@ import { setToken } from '../lib/auth';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -72,28 +73,29 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
+      <ThemeToggle className="fixed top-4 right-4" />
       <Card className="w-full max-w-md">
         <CardHeader>
-          <h1 className="text-2xl font-bold text-slate-100">Buzzer</h1>
-          <p className="text-slate-400 text-sm mt-1">Host Sign In</p>
+          <h1 className="nb-h1 text-ink">Buzzer</h1>
+          <p className="text-ink-muted text-sm mt-1">Host Sign In</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Primary: UW NetID SSO */}
           <a
             href="/api/auth/oauth2-callback?redirect_to=/host/login"
-            className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg font-medium transition-colors
+            className={`nb-box nb-press flex items-center justify-center w-full py-2.5 px-4 font-display font-bold
               ${loading
-                ? 'bg-slate-700 text-slate-500 pointer-events-none'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                ? 'bg-surface-muted text-ink-muted pointer-events-none'
+                : 'bg-accent text-on-fill'
               }`}
           >
             Sign in with UW NetID
           </a>
 
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-slate-700" />
-            <span className="text-slate-500 text-xs">or local account</span>
-            <div className="flex-1 h-px bg-slate-700" />
+            <div className="flex-1 border-t-2 border-line" />
+            <span className="text-ink-muted text-xs">or local account</span>
+            <div className="flex-1 border-t-2 border-line" />
           </div>
 
           {/* Secondary: username/password for admin & local accounts */}
@@ -114,7 +116,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               required
             />
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && <p className="text-danger-text text-sm">{error}</p>}
             <Button type="submit" variant="outline" className="w-full" disabled={loading}>
               {loading ? 'Signing in…' : 'Sign In'}
             </Button>

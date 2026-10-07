@@ -42,8 +42,8 @@ export default function ResultsPage() {
 
   if (!questionResults) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-400">Loading results…</p>
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <p className="text-ink-muted">Loading results…</p>
       </div>
     );
   }
@@ -80,17 +80,17 @@ export default function ResultsPage() {
     isFitb && 'acceptedAnswers' in answerReveal ? answerReveal.acceptedAnswers : [];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-5 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center p-6 gap-5 text-center">
 
       {/* Correct / Wrong / Recorded */}
       {isCompleteness ? (
-        <p className="text-indigo-400 text-4xl font-black">Answer recorded!</p>
+        <p className="nb-h1 nb-box bg-info text-on-fill px-6 py-3">Answer recorded!</p>
       ) : isCorrect ? (
-        <p className="text-green-400 text-4xl font-black">Correct!</p>
+        <p className="nb-h1 nb-box bg-success text-on-fill px-6 py-3"><span aria-hidden="true">✓ </span><span>Correct!</span></p>
       ) : isPartial ? (
-        <p className="text-amber-400 text-4xl font-black">Partially correct</p>
+        <p className="nb-h1 nb-box bg-warning text-on-fill px-6 py-3"><span aria-hidden="true">◐ </span><span>Partially correct</span></p>
       ) : (
-        <p className="text-red-400 text-4xl font-black">Incorrect</p>
+        <p className="nb-h1 nb-box bg-danger text-on-fill px-6 py-3"><span aria-hidden="true">✗ </span><span>Incorrect</span></p>
       )}
 
       {/* pin_the_spot: the player's pin (from this phone's submission) against the reveal */}
@@ -109,41 +109,41 @@ export default function ResultsPage() {
 
       {/* What the player answered */}
       {answeredLabel && (
-        <p className="text-slate-400 text-base">
-          You answered: <span className="text-slate-200 font-semibold">{answeredLabel}</span>
+        <p className="text-ink-muted text-base">
+          You answered: <span className="text-ink font-semibold">{answeredLabel}</span>
         </p>
       )}
 
       {/* Correct answer for FITB ACCURACY */}
       {isFitb && fitbAccepted.length > 0 && (
-        <p className="text-slate-400 text-base">
-          Correct: <span className="text-green-400 font-semibold">{fitbAccepted.join(' / ')}</span>
+        <p className="text-ink-muted text-base">
+          Correct: <span className="text-success-text font-semibold">{fitbAccepted.join(' / ')}</span>
         </p>
       )}
 
       {/* Correct order for put_in_order (both grading types, whenever revealed) */}
       {correctOrderLabel && (
-        <p className="text-slate-400 text-base">
-          Correct order: <span className="text-green-400 font-semibold">{correctOrderLabel}</span>
+        <p className="text-ink-muted text-base">
+          Correct order: <span className="text-success-text font-semibold">{correctOrderLabel}</span>
         </p>
       )}
 
       {/* Points for this question */}
-      <p className="text-slate-100 text-3xl font-bold">
+      <p className="nb-h1 text-ink tabular-nums">
         +{yourPoints.toLocaleString()} pts
       </p>
 
       {/* Running total and rank */}
       <div className="mt-2 space-y-1">
-        <p className="text-slate-300 text-lg">
-          Total: <span className="font-bold text-white">{yourScore.toLocaleString()}</span> pts
+        <p className="text-ink-muted text-lg">
+          Total: <span className="font-bold text-ink tabular-nums">{yourScore.toLocaleString()}</span> pts
         </p>
-        <p className="text-slate-400 text-base">
-          Rank <span className="font-bold text-white">#{yourRank}</span> of {playerCount}
+        <p className="text-ink-muted text-base">
+          Rank <span className="font-bold text-ink">#{yourRank}</span> of {playerCount}
         </p>
       </div>
 
-      <p className="text-slate-500 text-sm mt-4">Waiting for next question…</p>
+      <p className="text-ink-muted text-sm mt-4">Waiting for next question…</p>
     </div>
   );
 }

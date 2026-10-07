@@ -16,7 +16,8 @@ client-side JWT expiry check.
 - `pinTheSpot.ts` — Pin the Spot geometry (`fitRect`, `toFraction`, `nudge`, `aspectOf`,
   `isTap`, `tapDistance`), `pinImageSrc(config)` (library `image_id` first, else `image_url`) and `pinVerdict` (D9: ✓ from the server's `isCorrect`, ◐ when the tap
   is strictly inside `rZero − EDGE_EPSILON`, never from points). Host has its own copy.
-- `utils.ts` — `cn(...classes)` (`clsx` + `tailwind-merge`), plus
+- `theme.ts` (T9) — `useTheme()` over the shared `frontend/theme/theme.ts`.
+- `utils.ts` — `cn(...classes)` (`clsx` + `tailwind-merge`, extended for `shadow-brutal*`), plus
   `isTokenExpired(token)`: base64url-decodes the JWT payload **without verifying it** and
   returns true if the token is missing, malformed, or past `exp`.
 

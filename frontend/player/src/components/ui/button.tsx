@@ -1,25 +1,27 @@
 import { cn } from '../../lib/utils';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'default' | 'outline' | 'ghost' | 'destructive';
+  variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive';
   size?: 'sm' | 'md' | 'lg';
 }
 
+// Neo-brutalist button (docs/design-better-ui.md §4.11): ink outline, hard shadow, lift on hover,
+// press on click. Text on a fill is always text-on-fill. Focus comes from the global :focus-visible rule.
 export function Button({ className, variant = 'default', size = 'md', ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center rounded-xl font-semibold transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900',
-        'disabled:opacity-50 disabled:pointer-events-none',
-        'active:scale-95',
-        variant === 'default' && 'bg-indigo-600 text-white hover:bg-indigo-500 focus:ring-indigo-500',
-        variant === 'outline' && 'border border-slate-600 text-slate-200 hover:bg-slate-700 focus:ring-slate-500',
-        variant === 'ghost' && 'text-slate-300 hover:bg-slate-700 hover:text-slate-100',
-        variant === 'destructive' && 'bg-red-600 text-white hover:bg-red-500 focus:ring-red-500',
-        size === 'sm' && 'px-3 py-2 text-sm',
-        size === 'md' && 'px-5 py-3 text-base',
-        size === 'lg' && 'px-6 py-4 text-lg',
+        'inline-flex items-center justify-center gap-2 font-display font-bold',
+        'disabled:bg-surface-muted disabled:text-ink-muted',
+        variant === 'default' && 'nb-box nb-press bg-accent text-on-fill',
+        variant === 'secondary' && 'nb-box nb-press bg-accent-2 text-on-fill',
+        variant === 'outline' && 'nb-box nb-press bg-surface text-ink hover:bg-surface-muted',
+        variant === 'ghost' && 'border-2 border-transparent text-ink hover:border-line hover:bg-surface-muted',
+        variant === 'destructive' && 'nb-box nb-press bg-danger text-on-fill',
+        // Touch targets: 44 / 48 / 56px minimum height.
+        size === 'sm' && 'min-h-11 px-3 text-sm',
+        size === 'md' && 'min-h-12 px-5 text-base',
+        size === 'lg' && 'min-h-14 px-6 text-lg',
         className
       )}
       {...props}
