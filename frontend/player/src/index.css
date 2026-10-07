@@ -4,27 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Pin the Spot board colours (T9 theme hooks). The canvases read these with the same values
-   as fallbacks, so a theme only has to override what it changes. */
-:root {
-  --pin-letterbox: #020617;
-  --pin-placeholder: #1e293b;
-  --pin-full: #4ade80;
-  --pin-full-fill: rgba(74, 222, 128, 0.3);
-  --pin-zero: #fbbf24;
-  --pin-target: #ef4444;
-  --pin-head: #6366f1;
-  --pin-stem: #f8fafc;
-}
-
-* {
-  box-sizing: border-box;
-}
-
+/* Prevent the tap-highlight flash on mobile. */
 body {
-  margin: 0;
-  background: #0f172a;
-  color: #f8fafc;
-  /* Prevent tap highlight flash on mobile */
   -webkit-tap-highlight-color: transparent;
 }

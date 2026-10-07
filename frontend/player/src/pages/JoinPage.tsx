@@ -40,11 +40,11 @@ export default function JoinPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex flex-1 flex-col items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <h1 className="text-2xl font-bold text-slate-100 text-center">Buzzer</h1>
-          <p className="text-slate-400 text-sm text-center mt-1">Enter your room code to join</p>
+          <h1 className="nb-h1 text-ink text-center">Buzzer</h1>
+          <p className="text-ink-muted text-sm text-center mt-1">Enter your room code to join</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleJoin} className="space-y-4">
@@ -54,12 +54,12 @@ export default function JoinPage() {
               onChange={e => setRoomCode(e.target.value.toUpperCase())}
               placeholder="XXXXXX"
               maxLength={6}
-              className="text-center text-3xl font-mono tracking-widest uppercase"
+              className="text-center text-3xl font-display font-bold tracking-widest uppercase"
               autoCapitalize="characters"
               autoComplete="off"
               autoFocus
             />
-            {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+            {error && <p className="text-danger-text text-sm text-center">{error}</p>}
             <Button type="submit" className="w-full" size="lg" disabled={loading || roomCode.length < 6}>
               {loading ? 'Checking…' : 'Join Game'}
             </Button>

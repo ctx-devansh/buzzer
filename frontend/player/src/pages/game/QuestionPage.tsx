@@ -6,16 +6,22 @@ import { aspectOf, pinImageSrc } from '../../lib/pinTheSpot';
 import { imageUrl } from '../../lib/images';
 import type { PinPoint } from '../../lib/pinTheSpot';
 
-const OPTION_COLORS = [
-  'bg-red-600 hover:bg-red-500 border-red-500',
-  'bg-blue-600 hover:bg-blue-500 border-blue-500',
-  'bg-yellow-500 hover:bg-yellow-400 border-yellow-400',
-  'bg-green-600 hover:bg-green-500 border-green-500',
-  'bg-purple-600 hover:bg-purple-500 border-purple-500',
-  'bg-orange-500 hover:bg-orange-400 border-orange-400',
-  'bg-pink-600 hover:bg-pink-500 border-pink-500',
-  'bg-teal-600 hover:bg-teal-500 border-teal-500',
+// Literal strings, so Tailwind's content scan sees all eight; never build `bg-option-${n}`.
+// Past eight options the colours repeat; the letter badge tells them apart (docs/design-better-ui.md).
+const OPTION_FILLS = [
+  'bg-option-1', 'bg-option-2', 'bg-option-3', 'bg-option-4',
+  'bg-option-5', 'bg-option-6', 'bg-option-7', 'bg-option-8',
 ];
+
+// Tiles (§4.11): constant outline and hard shadow, lift on hover, press on tap. Text on a fill
+// is text-on-fill. Disabled tiles go grey, except selected ones, which keep their fill and ring.
+const TILE = 'nb-box nb-press touch-manipulation disabled:cursor-not-allowed';
+const TILE_DISABLED = 'disabled:bg-surface-muted disabled:text-ink-muted';
+const ROW = `${TILE} w-full flex items-center gap-4 px-5 py-4 text-left font-semibold text-lg`;
+const BADGE = 'flex h-9 w-9 shrink-0 items-center justify-center border-2 border-line bg-surface text-ink font-display font-bold text-xl';
+const SUBMIT =
+  'nb-box nb-press w-full min-h-14 font-display font-bold text-2xl bg-accent text-on-fill disabled:bg-surface-muted disabled:text-ink-muted';
+const WAITING = <p className="text-center text-ink-muted text-sm mt-4">Answer submitted — waiting for results…</p>;
 
 /**
  * The picture area of an image-option tile (T8, design §5.4): a fixed 22vh box, so every
@@ -26,17 +32,18 @@ function OptionPicture({ imageId, letter }: { imageId: string | null | undefined
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [imageId]);
   return (
-    <span className="flex h-[22vh] w-full items-center justify-center">
+    // image-bg: a light backing, so transparent images stay visible in dark mode (§4.9).
+    <span className="flex h-[22vh] w-full items-center justify-center border-2 border-line bg-image-bg">
       {imageId && !failed ? (
         <img
           src={imageUrl(imageId)}
           alt=""
           onError={() => setFailed(true)}
-          className="max-h-full max-w-full rounded-lg object-contain"
+          className="max-h-full max-w-full object-contain"
           data-testid="option-image"
         />
       ) : (
-        <span className="text-5xl font-black opacity-60">{letter}</span>
+        <span className="nb-hero text-on-fill">{letter}</span>
       )}
     </span>
   );
@@ -84,8 +91,8 @@ export default function QuestionPage() {
 
   if (!currentQuestion) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-400">Loading question…</p>
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <p className="text-ink-muted">Loading question…</p>
       </div>
     );
   }
@@ -97,13 +104,13 @@ export default function QuestionPage() {
   }
 
   const questionLabel = (
-    <p className="text-slate-400 text-sm text-center tracking-wide uppercase mb-1">
+    <p className="nb-caption text-center mb-1">
       Question {currentQuestion.questionNumber} of {currentQuestion.totalQuestions}
     </p>
   );
 
   const lockedMsg = (
-    <p className="text-center text-amber-400 text-sm mt-4 font-semibold">
+    <p className="text-center text-warning-text text-sm mt-4 font-semibold">
       Answers locked — waiting for results…
     </p>
   );
@@ -127,18 +134,16 @@ export default function QuestionPage() {
               key={i}
               disabled={submitted || questionLocked}
               onClick={() => submit({ selectedIndex: i })}
-              className={`flex flex-col items-stretch gap-2 rounded-2xl p-2 text-white font-semibold border-2 transition-all
-                ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-                ${OPTION_COLORS[i % OPTION_COLORS.length]}`}
+              className={`${TILE} ${TILE_DISABLED} ${OPTION_FILLS[i % OPTION_FILLS.length]} flex flex-col items-stretch gap-2 p-2 text-on-fill font-semibold`}
             >
               <OptionPicture imageId={optionImageIds?.[i]} letter={optionLabel(i)} />
               <span className="text-left text-base leading-snug">
-                <span className="font-black mr-2">{optionLabel(i)}</span>{opt}
+                <span className="font-display font-bold mr-2">{optionLabel(i)}</span>{opt}
               </span>
             </button>
           ))}
         </div>
-        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {submitted && WAITING}
         {!submitted && questionLocked && lockedMsg}
       </div>
     );
@@ -157,15 +162,13 @@ export default function QuestionPage() {
             key={i}
             disabled={submitted || questionLocked}
             onClick={() => submit({ selectedIndex: i })}
-            className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 text-left text-white font-semibold text-lg border-2 transition-all
-              ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-              ${OPTION_COLORS[i % OPTION_COLORS.length]}`}
+            className={`${ROW} ${TILE_DISABLED} ${OPTION_FILLS[i % OPTION_FILLS.length]} text-on-fill`}
           >
-            <span className="text-2xl font-black w-8 shrink-0">{optionLabel(i)}</span>
+            <span className={BADGE}>{optionLabel(i)}</span>
             <span>{opt}</span>
           </button>
         ))}
-        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {submitted && WAITING}
         {!submitted && questionLocked && lockedMsg}
       </div>
     );
@@ -173,26 +176,24 @@ export default function QuestionPage() {
 
   if (currentQuestion.type === 'true_false') {
     return (
-      <div className="min-h-screen flex flex-col justify-center p-4 gap-4">
+      <div className="flex flex-1 flex-col justify-center p-4 gap-4">
         {questionLabel}
         <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
         <button
           disabled={submitted || questionLocked}
           onClick={() => submit({ selectedValue: true })}
-          className={`w-full rounded-2xl py-8 text-white font-black text-3xl border-2 border-green-500 transition-all
-            ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed bg-green-700' : 'bg-green-600 hover:bg-green-500 active:scale-95'}`}
+          className={`${TILE} ${TILE_DISABLED} w-full py-8 bg-success text-on-fill font-display font-bold text-3xl`}
         >
           True
         </button>
         <button
           disabled={submitted || questionLocked}
           onClick={() => submit({ selectedValue: false })}
-          className={`w-full rounded-2xl py-8 text-white font-black text-3xl border-2 border-red-500 transition-all
-            ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed bg-red-700' : 'bg-red-600 hover:bg-red-500 active:scale-95'}`}
+          className={`${TILE} ${TILE_DISABLED} w-full py-8 bg-danger text-on-fill font-display font-bold text-3xl`}
         >
           False
         </button>
-        {submitted && <p className="text-center text-slate-400 text-sm mt-2">Answer submitted — waiting for results…</p>}
+        {submitted && <p className="text-center text-ink-muted text-sm mt-2">Answer submitted — waiting for results…</p>}
         {!submitted && questionLocked && lockedMsg}
       </div>
     );
@@ -201,16 +202,16 @@ export default function QuestionPage() {
   if (currentQuestion.type === 'fill_in_the_blank') {
     const maxLength = currentQuestion.config.maxLength ?? 100;
     return (
-      <div className="min-h-screen flex flex-col justify-center p-4 gap-5">
+      <div className="flex flex-1 flex-col justify-center p-4 gap-5">
         {questionLabel}
         <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
 
         {submitted ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="text-5xl">🔒</div>
-            <p className="text-slate-100 text-xl font-bold">Answer locked in!</p>
-            <p className="text-slate-400 text-base italic">"{inputValue.trim()}"</p>
-            <p className="text-slate-500 text-sm mt-2">Waiting for results…</p>
+            <div className="nb-hero" aria-hidden="true">🔒</div>
+            <p className="nb-h2 text-ink">Answer locked in!</p>
+            <p className="text-ink-muted text-base italic">"{inputValue.trim()}"</p>
+            <p className="text-ink-muted text-sm mt-2">Waiting for results…</p>
           </div>
         ) : questionLocked ? (
           <div className="flex flex-col items-center gap-3 mt-4">
@@ -232,12 +233,12 @@ export default function QuestionPage() {
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Type your answer…"
               autoFocus
-              className="w-full rounded-xl px-4 py-4 text-slate-900 text-xl bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border-2 border-line bg-surface px-4 py-4 text-ink text-xl"
             />
             <button
               type="submit"
               disabled={!inputValue.trim()}
-              className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className={SUBMIT}
             >
               Submit
             </button>
@@ -255,7 +256,7 @@ export default function QuestionPage() {
           {questionLabel}
           <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
         </div>
-        <p className="text-center text-slate-400 text-sm">Select all that apply</p>
+        <p className="text-center text-ink-muted text-sm">Select all that apply</p>
         <div className={hasOptionImages ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-3'} data-testid={hasOptionImages ? 'option-grid' : undefined}>
         {options.map((opt, i) => {
           const isSelected = selectedIndices.has(i);
@@ -265,16 +266,14 @@ export default function QuestionPage() {
                 key={i}
                 disabled={submitted || questionLocked}
                 onClick={() => toggleIndex(i)}
-                className={`flex flex-col items-stretch gap-2 rounded-2xl p-2 font-semibold border-2 transition-all
-                  ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-                  ${isSelected
-                    ? 'bg-indigo-600 border-indigo-400 text-white'
-                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
-                  }`}
+                aria-pressed={isSelected}
+                className={`${TILE} flex flex-col items-stretch gap-2 p-2 font-semibold ${
+                  isSelected ? 'nb-selected bg-accent text-on-fill' : `bg-surface text-ink ${TILE_DISABLED}`
+                }`}
               >
                 <OptionPicture imageId={optionImageIds?.[i]} letter={optionLabel(i)} />
                 <span className="text-left text-base leading-snug">
-                  <span className="font-black mr-2">{isSelected ? '✓' : optionLabel(i)}</span>{opt}
+                  <span className="font-display font-bold mr-2">{isSelected ? '✓' : optionLabel(i)}</span>{opt}
                 </span>
               </button>
             );
@@ -284,17 +283,10 @@ export default function QuestionPage() {
               key={i}
               disabled={submitted || questionLocked}
               onClick={() => toggleIndex(i)}
-              className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 text-left font-semibold text-lg border-2 transition-all
-                ${submitted || questionLocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-                ${isSelected
-                  ? 'bg-indigo-600 border-indigo-400 text-white'
-                  : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
-                }`}
+              aria-pressed={isSelected}
+              className={`${ROW} ${isSelected ? 'nb-selected bg-accent text-on-fill' : `bg-surface text-ink ${TILE_DISABLED}`}`}
             >
-              <span className={`text-xl font-black w-8 shrink-0 flex items-center justify-center rounded-md border-2 transition-colors
-                ${isSelected ? 'border-white bg-white text-indigo-700' : 'border-slate-500 text-slate-400'}`}>
-                {isSelected ? '✓' : optionLabel(i)}
-              </span>
+              <span className={BADGE}>{isSelected ? '✓' : optionLabel(i)}</span>
               <span>{opt}</span>
             </button>
           );
@@ -304,12 +296,12 @@ export default function QuestionPage() {
           <button
             disabled={selectedIndices.size === 0}
             onClick={() => submit({ selectedIndices: Array.from(selectedIndices) })}
-            className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+            className={`${SUBMIT} mt-2`}
           >
             Submit ({selectedIndices.size} selected)
           </button>
         )}
-        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {submitted && WAITING}
         {!submitted && questionLocked && lockedMsg}
       </div>
     );
@@ -345,7 +337,7 @@ export default function QuestionPage() {
           {questionLabel}
           <TimerBar key={currentQuestion.questionId} totalSeconds={currentQuestion.timeLimitSeconds} paused={questionLocked} />
         </div>
-        <p className="text-center text-slate-400 text-sm">
+        <p className="text-center text-ink-muted text-sm">
           {picked === null ? 'Tap an item to move it' : 'Tap where it goes'}
         </p>
         {order.map((itemIdx, pos) => {
@@ -358,16 +350,15 @@ export default function QuestionPage() {
               aria-pressed={isPicked}
               disabled={inactive}
               onClick={() => tapRow(pos)}
-              className={`w-full flex items-center gap-4 rounded-2xl px-5 py-4 text-left font-semibold text-lg border-2 transition-all
-                ${inactive ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-                ${isPicked
-                  ? 'bg-indigo-600 border-indigo-300 text-white ring-2 ring-indigo-300'
+              className={`${ROW} ${
+                isPicked
+                  ? 'nb-selected bg-accent text-on-fill'
                   : isMoved
-                    ? 'bg-emerald-700 border-emerald-400 text-white'
-                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
-                }`}
+                    ? `bg-success text-on-fill ${TILE_DISABLED}`
+                    : `bg-surface text-ink ${TILE_DISABLED}`
+              }`}
             >
-              <span className="text-xl font-black w-8 shrink-0 text-center">{pos + 1}</span>
+              <span className={BADGE}>{isPicked ? '✓' : pos + 1}</span>
               <span>{items[itemIdx]}</span>
             </button>
           );
@@ -377,12 +368,12 @@ export default function QuestionPage() {
             data-testid="pio-lock-in"
             disabled={inactive}
             onClick={() => submit({ orderedIndices: order })}
-            className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+            className={`${SUBMIT} mt-2`}
           >
             Lock in
           </button>
         )}
-        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {submitted && WAITING}
         {!submitted && questionLocked && lockedMsg}
       </div>
     );
@@ -400,11 +391,11 @@ export default function QuestionPage() {
         </div>
         {/* The one type whose prompt the phone shows: the player is looking down at the image.
             Plain React text (escaped), as on the host. */}
-        <p data-testid="pin-prompt" className="text-center text-slate-100 text-lg font-semibold leading-snug">
+        <p data-testid="pin-prompt" className="nb-prompt text-center text-ink">
           {currentQuestion.prompt}
         </p>
         {aspect === null ? (
-          <p className="text-center text-slate-400">Image failed to load</p>
+          <p className="text-center text-ink-muted">Image failed to load</p>
         ) : (
           <PinCanvas
             imageUrl={pinImageSrc(currentQuestion.config)}
@@ -422,28 +413,28 @@ export default function QuestionPage() {
         )}
         {!inactive && !imageFailed && aspect !== null && (
           <>
-            <p className="text-center text-slate-400 text-sm">
+            <p className="text-center text-ink-muted text-sm">
               {pin ? 'Drag to adjust, then lock in' : 'Tap the image to drop your pin'}
             </p>
             <button
               data-testid="pin-lock-in"
               disabled={!canLock}
               onClick={() => canLock && submit({ x: pin!.x, y: pin!.y })}
-              className="w-full rounded-2xl py-5 text-white font-black text-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-1"
+              className={`${SUBMIT} mt-1`}
             >
               Lock in
             </button>
           </>
         )}
-        {submitted && <p className="text-center text-slate-400 text-sm mt-4">Answer submitted — waiting for results…</p>}
+        {submitted && WAITING}
         {!submitted && questionLocked && lockedMsg}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <p className="text-slate-400">Unsupported question type.</p>
+    <div className="flex flex-1 flex-col items-center justify-center p-6">
+      <p className="text-ink-muted">Unsupported question type.</p>
     </div>
   );
 }
