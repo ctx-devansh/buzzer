@@ -235,6 +235,10 @@ The report must stay one self-contained file, so it **embeds** images as `data:`
     Atomicity: every failure raises `BundleError`, and the flush in step 3 doesn't commit. Nothing may survive a failed import: no image rows, no game, no questions. Confirmed in step 5: the router turns the `BundleError` into an `HTTPException`, which FastAPI re-raises inside `get_db`, whose `except` rolls back, so no explicit rollback is needed. The "broken base64 leaves no rows behind" test (section 8) guards this, with the broken entry placed **after** a valid one so that a row has already been flushed.
 - **Body size.** The nginx limit stays at 10 MB, and base64 adds a third. A game whose images total more than about 7 MB of stored bytes can't be imported in one file and gets a 413. This is accepted, as for Pin the Spot.
 - Unmodified version 1 files keep importing, as T6 requires, and the existing `sample_games/` files don't change. A game with no library references still exports exactly as today (no `prompt_image_id` key, `version: 1`), so `tests/integration/test_sample_games.py`'s field-by-field round trip of every `sample_games/*.json` file keeps passing unchanged.
+  - *Later note (2026-10-06):* `sample_games/cell_biology_cells_and_division.json` becomes the
+    first version 2 sample game, with a library-image Pin the Spot question. Its image id is
+    rewritten on import, so `test_sample_games.py` gets a by-content image comparison. See
+    `docs/plans/cell-biology-pin-the-spot.md`.
 
 ## 5. Frontend
 
