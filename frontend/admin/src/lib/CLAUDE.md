@@ -20,7 +20,8 @@ clients (it includes file upload and download) and the Tailwind class-merging he
 - `links.ts` — `HOST_APP_URL` and `PLAYER_APP_URL` (the `VITE_*` override, else
   `http://localhost:5173`/`5174` in dev and `/host`/`/player` in a build) for the sidebar's Host tools links, the Courses Roster
   link and `ExternalRedirect`.
-- `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`.
+- `utils.ts` — `cn(...classes)`: `clsx` + `tailwind-merge`, extended for `shadow-brutal*` (T9).
+- `theme.ts` (T9) — `useTheme()` over the shared `frontend/theme/theme.ts`.
 
 **How it fits in.** Every page in `../pages/` calls `api`, almost entirely against
 `/api/admin/*` (all `require_admin` on the backend). The exceptions are `LoginPage`

@@ -1,6 +1,6 @@
 # Design: UI look-and-feel and theming (T9), neo-brutalist light and dark
 
-Status: **revision 9, revised after seven Goldfish passes and a test-planning review** (see §9, "Revision log"). Assesses T9 in `instructions.md`,
+Status: **implemented** (revision 9 plus the implementation findings at the end of §9). Revised after seven Goldfish passes and a test-planning review (see §9, "Revision log"). Assesses T9 in `instructions.md`,
 graded by R9 in `rubric.md`. Owner: one member does all of T9 (no team split for this task).
 
 ## 1. Problem
@@ -1069,3 +1069,23 @@ and the player component tree.
 | C1 | Default border, ring and outline colours under `theme` would wipe every `border-<token>` class | Yes: `borderColor`, `ringColor`, `outlineColor` and `ringOffsetColor` are functions spreading `theme('colors')` (config.full.js :82, :743, :761, :765) | Always `theme.extend.*.DEFAULT`; `divideColor` inherits; a compiled-CSS check in step 2 (§4.3) |
 | C2 | Hand-written plugin type can't hold nested `@media`; `theme()` resolution unstated | Yes | Recursive `CSSRule` type; no `theme()` in the plugin; shared `DISPLAY_STACK`/`SANS_STACK` constants (§4.3, §4.3.1) |
 | C3 | `min-h-full` inside `GameLayout`'s root resolves to nothing | **Partly:** `GameLayout` has no wrapper element (Provider → banner → Outlet), so pages are already `<main>`'s children. But `min-h-full` relied on fragile percentage resolution. | Full flex chain table from viewport to page; `flex-1` replaces `min-h-full`; scan forbids both; a browser check in step 4 (§4.11) |
+
+**Implementation findings.** Following T3 step 6, each flaw found while building was written into this doc before the code
+changed. Where a finding changed a section, the section was edited in place; this table collects them.
+
+| Step | Finding | Resolution |
+|---|---|---|
+| 1 | `"noEmit": true` on the composite `tsconfig.node.json` is rejected: TS6310, a referenced project may not disable emit | The documented `outDir` fallback (`node_modules/.tmp/tsconfig.node`) |
+| 1 | `../theme/preset.ts` is outside the composite `rootDir` (TS6059); declaration emit rejects the plugin's private parameter type (TS4082); a failed build had emitted `preset.js`, which Tailwind would prefer | `"rootDir": ".."`; export `CSSRule`/`NbPluginApi`; delete the stray files and confirm `frontend/theme/` holds only sources |
+| 1 | Preflight copies `ringOffsetColor.DEFAULT` verbatim, so `<alpha-value>` stayed literal and made `--tw-ring-offset-color` invalid | `rgb(var(--canvas))` without the placeholder (§4.3) |
+| 4 | The codemod's whole-file whitespace tidy would have rewritten JSX `{' '}` spacers and comments | Caught by the codemod's own test cases before it ran; tidying limited to each dropped class |
+| 4 | "✓ Correct!" as one text node broke an existing e2e exact-text match | The symbol is an `aria-hidden` span next to the word; the test is unchanged |
+| 4 | Option labels on the host result bars overflowed under the bars (already clipped before T9; worse at projector size); zero-count bars drew an outlined stub | A wide, truncating label column; empty bars draw nothing |
+| 6 | `time_limit_seconds = 600` is rejected (backend max 300) | 300 (§4.6) |
+| 6 | The capture run exposed a **backend race**: `host_advance` emits a phase's events before saving the new phase to Redis, so an action within milliseconds is read against the old phase (the game stalls or an answer is dropped) | Outside T9. The capture module waits briefly after each transition (`SERVER_SETTLE_MS`), and the race is reported for its own fix branch |
+| 6 | Visual review of the captures: game-over breakdown prompts were oversized; Pin the Spot canvases had no frame | Card-title size; an ink `outline` (not a border, which would change the measured canvas size) |
+
+Final verification: `pytest -c pytest.ini tests/unit` 315 passed; `tests/integration` 206 passed, 3 skipped; `tests/e2e` 35 passed
+(25 existing plus 10 theme tests, two of them checked by deliberately breaking the focus outline and the placeholder colour); the
+capture module passed with no axe violations across 60 screens; `npm run build` and `tsc --noEmit` clean in all three apps.
+Still manual: the Safari check of the derived `--pin-*` colours (§4.3.3), and the §7 checks on a real phone and projector.

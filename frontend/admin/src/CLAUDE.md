@@ -18,7 +18,10 @@ which the "Host tools" sidebar group links to.
   outbound links: Games ↗, Rosters & images ↗ (the host Courses page), Host a game ↗, Join as player ↗) and Logout. The old
   `/games`, `/games/:gameId/questions`, `/courses/:courseId/roster` routes are
   `ExternalRedirect`s to the same resource in the host app. Unknown routes → `/users`.
-- `main.tsx`, `index.css` — React root and Tailwind entry.
+- `main.tsx`, `index.css` — React root (also imports the self-hosted fonts) and Tailwind entry;
+  `index.css` `@import`s `../../theme/tokens.css` (T9). `AdminLayout` and `LoginPage` set
+  `data-density="compact"` (2 px outlines, smaller type); `ThemeToggle` sits in the sidebar footer
+  and on the login page.
 
 **How it fits in.** Sibling of the host and player apps under `frontend/`. It talks almost
 exclusively to `/api/admin/*`, which the backend gates with `require_admin`. That gate, not the
