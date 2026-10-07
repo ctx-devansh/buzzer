@@ -68,10 +68,14 @@ def _built_apps_are_current(api: Api) -> None:
     stale = []
     # Every input of a build: the app's src/, its index.html (first-paint theme script) and
     # Tailwind config, and the shared frontend/theme/ (tokens and preset) used by all three.
-    shared = [p for p in (REPO_ROOT / "frontend" / "theme").rglob("*") if p.is_file()]
+    # Docs (the CLAUDE.md context files live inside src/) are not build inputs.
+    def sources(folder):
+        return [p for p in folder.rglob("*") if p.is_file() and p.suffix != ".md"]
+
+    shared = sources(REPO_ROOT / "frontend" / "theme")
     for app in ("host", "player", "admin"):
         root = REPO_ROOT / "frontend" / app
-        inputs = [p for p in (root / "src").rglob("*") if p.is_file()]
+        inputs = sources(root / "src")
         inputs += [root / "index.html", root / "tailwind.config.ts", *shared]
         index = root / "dist" / "index.html"
         newest_src = max(p.stat().st_mtime for p in inputs if p.exists())
