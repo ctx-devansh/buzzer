@@ -174,7 +174,9 @@ because `frontend/theme/` has no `node_modules`. Each app's `tailwind.config.ts`
   - **Defaults that Tailwind derives from the palette, set explicitly** (otherwise replacing the palette makes a bare
     `border` fall back to `currentColor`, which is off-white in dark mode and causes the halation this design rejects):
     `theme.extend.borderColor.DEFAULT = line`, `theme.extend.ringColor.DEFAULT = focus`, `theme.extend.outlineColor.DEFAULT = focus`,
-    `theme.extend.ringOffsetColor.DEFAULT = canvas`. (51 bare `border`/`border-x` uses exist today.)
+    `theme.extend.ringOffsetColor.DEFAULT = canvas`. (51 bare `border`/`border-x` uses exist today.) **Implementation finding:**
+    preflight copies `ringOffsetColor.DEFAULT` verbatim into `--tw-ring-offset-color`, so its value must be `rgb(var(--canvas))` with
+    no `<alpha-value>` placeholder, or the declaration is invalid. `borderColor.DEFAULT` is substituted correctly (`/ 1`).
     - **Always under `theme.extend`, never `theme`, both during staging and after the palette is replaced.** Tailwind's own
       `borderColor`, `ringColor`, `outlineColor` and `ringOffsetColor` are functions that spread `theme('colors')`. That's what
       generates `border-line`, `ring-focus` and so on. Setting `theme.borderColor = { DEFAULT }` would replace that function and
@@ -771,6 +773,10 @@ Each step is one or more atomic commits on `feature/better-ui`. **This doc and `
 - **Shared folder.** Create `frontend/theme/{tokens.css,preset.ts,theme.ts}` with a token or two. In each app:
   - `tailwind.config.ts`: `presets: [preset]` from `'../theme/preset'`; keep `content`.
   - `tsconfig.node.json` `include`: add `"../theme/preset.ts"` (composite projects must list every file, or `tsc -b` fails with TS6307).
+    **Implementation findings (step 1):** also set `"rootDir": ".."`, because `composite` pins `rootDir` to the app folder and rejects
+    `../theme/preset.ts` with TS6059. Also export the plugin's `CSSRule`/`NbPluginApi` types from `preset.ts`, because declaration emit
+    rejects a default export that uses a private type (TS4082). A failed `tsc -b` had emitted `preset.js` next to `preset.ts`, which
+    Tailwind's loader would prefer, so always confirm `frontend/theme/` holds only `preset.ts` and `tokens.css`.
   - `tsconfig.json` `include`: add `"../theme/theme.ts"`. CI runs `npx tsc --noEmit` with this config.
   - `vite.config.ts`: `server: { …existing, fs: { allow: ['..'] } }`, because Vite's dev server refuses files outside the app's package root.
   - `src/index.css`: `@import '../../theme/tokens.css';` as the **first line** (CSS requires `@import` before other rules).
