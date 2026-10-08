@@ -350,6 +350,35 @@ The Admin app (`http://localhost:8080/admin/`) provides a full management UI:
 
 Log in with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
 
+#### Where question authoring lives (all types, including `put_in_order` and `pin_the_spot`)
+
+There is deliberately **no question editor under `frontend/admin/src`**. T4 moved game and
+question authoring from the admin app into the host app
+([docs/design-host-admin-restructure.md](docs/design-host-admin-restructure.md)), so hosts and
+admins share one editor:
+[`frontend/host/src/pages/manage/QuestionEditorPage.tsx`](frontend/host/src/pages/manage/QuestionEditorPage.tsx),
+at `/host/games/:gameId/questions`. An admin gets there from the admin app's sidebar
+(**Host tools → Games ↗**, then **Questions** on a game), and the old admin URLs
+(`/admin/games`, `/admin/games/:id/questions`) redirect there. Admins pass the host API's
+access checks, so they need no course or game grant. Under `npm run dev` the apps run on
+different ports and the admin token doesn't carry over, so use the nginx build on :8080 to
+follow that link already signed in.
+
+End-to-end evidence for the two T7 types:
+
+| Step | `put_in_order` | `pin_the_spot` |
+|---|---|---|
+| Editor (type config, correct answer, validation) | `QuestionEditorPage.tsx`: items typed in the correct order, scrambled on save; `pioItemsError` mirrors the server's 422s | `QuestionEditorPage.tsx`: library image, file upload or URL; click to place the target; full/zero-credit radius sliders; `pinError` blocks Save until valid |
+| Create + edit in the browser **as a host** | `tests/e2e/test_put_in_order_ui.py::test_put_in_order_authoring` | `tests/e2e/test_pin_the_spot_ui.py::test_pin_the_spot_authoring` |
+| Admin reaches the same editor | `tests/e2e/test_host_admin_ui.py`: `test_admin_app_is_admin_first` (sidebar **Games** → `/host/games`), `test_admin_bookmarks_for_moved_pages_redirect_to_host_app` (old admin question URL opens the host editor, signed in) | same, plus `tests/integration/test_pin_the_spot.py::test_other_courses_host_gets_403_and_admin_routes_work` |
+| Server validation on create *and* update | `tests/integration/test_put_in_order.py` (`test_create_rejects_invalid`, `test_update_making_unplayed_question_invalid_is_422`) | `tests/integration/test_pin_the_spot.py` (`test_create_rejects_invalid`, `test_update_rejects_the_same_payloads`) |
+| Export / import | `tests/integration/test_sample_games.py::test_sample_game_imports_and_round_trips`; `test_import_with_identity_correct_order_is_422` | `tests/integration/test_pin_the_spot.py::test_export_import_round_trip`; `test_sample_games.py` |
+| Played and scored | `tests/e2e/test_put_in_order_ui.py::test_put_in_order_play_through`; `tests/unit/test_put_in_order.py`; `tests/integration/test_put_in_order.py` | `tests/e2e/test_pin_the_spot_ui.py::test_pin_the_spot_play_through`; `tests/unit/test_pin_the_spot.py`; `tests/integration/test_pin_the_spot.py` |
+| Sample games (T6) | `absurd_but_true`, `cs_first_day`, `cell_biology_cells_and_division`, `git_version_control_classroom`, `game_night_mixed_bag_party` | `cell_biology_cells_and_division`, `git_version_control_classroom`, `game_night_mixed_bag_party` |
+
+Design docs: [docs/design-put-in-order.md](docs/design-put-in-order.md),
+[docs/design-pin-the-spot.md](docs/design-pin-the-spot.md).
+
 ### Quiz import and export
 
 Games (metadata + all questions including answer data) can be exported and re-imported as JSON files.
