@@ -28,6 +28,11 @@ exclusively to `/api/admin/*`, which the backend gates with `require_admin`. Tha
 client, is what keeps non-admins out.
 
 **Gotchas.**
+- **No question editor here, on purpose.** Authoring for every question type, including the T7
+  types `put_in_order` and `pin_the_spot`, is in the host app's
+  `frontend/host/src/pages/manage/QuestionEditorPage.tsx`. Admins reach it via **Games ↗** and
+  can use it without any grant. The evidence table is in the README under "Where question
+  authoring lives".
 - No `types/` directory: response shapes are declared inline per page and can drift from
   `backend/app/schemas/admin.py`.
 - A non-admin token (shared origin) passes `RequireAdmin` and then hits 403s everywhere.
