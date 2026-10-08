@@ -90,12 +90,18 @@ def _built_apps_are_current(api: Api) -> None:
 
 
 @pytest.fixture(scope="session")
-def admin_token(api: Api) -> str:
+def admin_credentials() -> tuple[str, str]:
+    """The admin's (username, password), for tests that sign in through a login form."""
     env = read_env()
-    return api.login(
+    return (
         env.get("ADMIN_USERNAME") or os.environ.get("ADMIN_USERNAME", "admin"),
         env.get("ADMIN_PASSWORD") or os.environ.get("ADMIN_PASSWORD", "changeme123"),
     )
+
+
+@pytest.fixture(scope="session")
+def admin_token(api: Api, admin_credentials: tuple[str, str]) -> str:
+    return api.login(*admin_credentials)
 
 
 # ---------------------------------------------------------------------------

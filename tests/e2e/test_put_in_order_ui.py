@@ -1,10 +1,10 @@
 """
 Browser checks for the put_in_order question type (docs/design-put-in-order.md → Tests →
 E2E): authoring in the host editor (scramble on save, no reshuffle on a prompt-only
-edit), and a play-through with pick-and-place on the player page, the host bar chart,
-partial credit, and the game-over recap.
+edit) as a HOST and as an ADMIN arriving from the admin app, and a play-through with
+pick-and-place on the player page, the host bar chart, partial credit, and the game-over recap.
 
-Two independent tests, so one failing can't cascade into the other.
+Independent tests, so one failing can't cascade into the other.
 """
 
 from __future__ import annotations
@@ -48,6 +48,16 @@ def _host_user(env: Env, cleanup: Cleanup, name: str, title: str) -> tuple:
     return host, game
 
 
+def _game_row(page: Page, title: str):
+    """The innermost card holding a game's title and its Questions button."""
+    return (
+        page.locator("div")
+        .filter(has=page.get_by_text(title, exact=True))
+        .filter(has=page.get_by_role("button", name="Questions"))
+        .last
+    )
+
+
 def _questions(env: Env, token: str, game_id: int) -> list[dict]:
     r = env.api.get(f"/host/games/{game_id}/questions", token)
     assert r.status_code == 200, r.text
@@ -59,11 +69,8 @@ def _questions(env: Env, token: str, game_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_put_in_order_authoring(env: Env, page_as, cleanup: Cleanup):
-    host, game = _host_user(env, cleanup, "pio_author", f"E2E PIO author {uuid.uuid4().hex[:6]}")
-    page: Page = page_as(host.token)
-    page.goto(f"/host/games/{game['id']}/questions")
-
+def _author_put_in_order(env: Env, page: Page, token: str, game_id: int) -> None:
+    """Create, reopen and edit a put_in_order question on an open question editor page."""
     page.get_by_role("button", name="Add Question").click()
     page.locator("select").first.select_option("put_in_order")
     page.get_by_placeholder("Question text…").fill("Order the letters")
@@ -74,7 +81,7 @@ def test_put_in_order_authoring(env: Env, page_as, cleanup: Cleanup):
     expect(page.get_by_placeholder("Question text…")).to_have_count(0)  # form closed = saved
     expect(page.get_by_role("button", name="Edit")).to_have_count(1)
 
-    (q,) = _questions(env, host.token, game["id"])
+    (q,) = _questions(env, token, game_id)
     items, correct_order = q["config"]["items"], q["answer_data"]["correct_order"]
     assert sorted(items) == AUTHORED
     assert items != AUTHORED, "display order must be scrambled"
@@ -91,10 +98,47 @@ def test_put_in_order_authoring(env: Env, page_as, cleanup: Cleanup):
     expect(page.get_by_placeholder("Question text…")).to_have_count(0)  # form closed = saved
     expect(page.get_by_text("Order the letters (edited)")).to_be_visible()
 
-    (q2,) = _questions(env, host.token, game["id"])
+    (q2,) = _questions(env, token, game_id)
     assert q2["prompt"] == "Order the letters (edited)"
     assert q2["config"]["items"] == items
     assert q2["answer_data"]["correct_order"] == correct_order
+
+
+def test_put_in_order_authoring(env: Env, page_as, cleanup: Cleanup):
+    host, game = _host_user(env, cleanup, "pio_author", f"E2E PIO author {uuid.uuid4().hex[:6]}")
+    page: Page = page_as(host.token)
+    page.goto(f"/host/games/{game['id']}/questions")
+    _author_put_in_order(env, page, host.token, game["id"])
+
+
+def test_put_in_order_authoring_as_admin(
+    env: Env, page_as, cleanup: Cleanup, admin_credentials: tuple[str, str]
+):
+    """
+    An ADMIN signs in through the admin app and authors put_in_order from there: its "Games"
+    link opens the host app's games list, where authoring for every type lives, and the admin
+    needs no grant. The page starts signed out (no seeded token), so reaching /host/ signed in
+    proves the shared-origin token carry-over.
+    """
+    title = f"E2E PIO admin {uuid.uuid4().hex[:6]}"
+    game = cleanup.game(title, env.course_a["id"], questions=0)  # no course or game grant
+    username, password = admin_credentials
+    page: Page = page_as(None)
+    page.goto("/admin/login")
+    page.get_by_placeholder("Username").fill(username)
+    page.get_by_placeholder("Password").fill(password)
+    page.get_by_role("button", name="Sign In").click()
+    expect(page).to_have_url(re.compile(r"/admin/users$"))
+
+    page.get_by_role("link", name="Games").click()
+    expect(page).to_have_url(re.compile(r"/host/games$"))
+    # The URL alone can match for a moment before the host app's RequireAuth redirects to
+    # /host/login. The shell's "Sign out" only renders past RequireAuth, so this proves the
+    # host app found the token the admin app's login form stored.
+    expect(page.get_by_role("navigation").get_by_text("Sign out", exact=True)).to_be_visible()
+    _game_row(page, title).get_by_role("button", name="Questions").click()  # all games listed
+    expect(page).to_have_url(re.compile(rf"/host/games/{game['id']}/questions$"))
+    _author_put_in_order(env, page, env.admin, game["id"])
 
 
 # ---------------------------------------------------------------------------

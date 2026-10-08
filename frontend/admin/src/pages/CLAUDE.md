@@ -3,7 +3,8 @@
 **Purpose.** Every screen of the Admin app, a desktop dashboard for administrators: users,
 courses, access grants, guests, and the all-hosts session view. The game, question-editor and
 roster screens moved to the host app in T4 (`docs/design-host-admin-restructure.md`,
-`frontend/host/src/pages/manage/`).
+`frontend/host/src/pages/manage/`). Admins author all question types there, `put_in_order` and
+`pin_the_spot` included (see README, "Where question authoring lives").
 
 **Contents.**
 - `LoginPage.tsx` — username/password only (`POST /auth/login`). Stores the token in

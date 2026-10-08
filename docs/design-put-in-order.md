@@ -875,9 +875,12 @@ teardown.
 `npm run build`, reusing the `env`, `page_as` and `cleanup` fixtures from `tests/e2e/support.py`
 and `conftest.py`.
 
-**Structure: two independent test functions**, so a failure in one can't cascade and nothing
+**Structure: three independent test functions**, so a failure in one can't cascade and nothing
 depends on pytest's run order:
 - `test_put_in_order_authoring`: step 1 below
+- `test_put_in_order_authoring_as_admin`: step 1 again, as the ADMIN with no grants, signed in
+  through `/admin/login` and entering the editor through **Games ↗** and the game's
+  **Questions** button, because `frontend/admin` has no editor since T4
 - `test_put_in_order_play_through`: steps 2–4 in one function, sharing one game, room and session
 
 All items use the **literal texts** `"A"`, `"B"`, `"C"`, `"D"` (correct order A, B, C, D), so the
