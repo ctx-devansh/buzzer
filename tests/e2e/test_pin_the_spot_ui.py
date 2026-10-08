@@ -1,10 +1,11 @@
 """
 Browser checks for the pin_the_spot question type (docs/design-pin-the-spot.md §12 → Browser):
-authoring in the host editor (file upload → downscaled, into the course library (T8), click to place the
-target, pushing sliders, prompt-only edit keeps the image byte for byte), and a play-through
-(prompt on the phone, tap, drag, Lock in, partial credit, host boards, game-over recap).
+authoring in the host editor, as a HOST and as an ADMIN arriving from the admin app (file
+upload → downscaled, into the course library (T8), click to place the target, pushing sliders,
+prompt-only edit keeps the image byte for byte), and a play-through (prompt on the phone, tap,
+drag, Lock in, partial credit, host boards, game-over recap).
 
-Two independent tests, so one failing can't cascade into the other.
+Independent tests, so one failing can't cascade into the other.
 """
 
 from __future__ import annotations
@@ -65,6 +66,16 @@ def _host_user(env: Env, cleanup: Cleanup, name: str, title: str) -> tuple:
     return host, game
 
 
+def _game_row(page: Page, title: str):
+    """The innermost card holding a game's title and its Questions button."""
+    return (
+        page.locator("div")
+        .filter(has=page.get_by_text(title, exact=True))
+        .filter(has=page.get_by_role("button", name="Questions"))
+        .last
+    )
+
+
 def _questions(env: Env, token: str, game_id: int) -> list[dict]:
     r = env.api.get(f"/host/games/{game_id}/questions", token)
     assert r.status_code == 200, r.text
@@ -76,11 +87,8 @@ def _questions(env: Env, token: str, game_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_pin_the_spot_authoring(env: Env, page_as, cleanup: Cleanup):
-    host, game = _host_user(env, cleanup, "pts_author", f"E2E PTS author {uuid.uuid4().hex[:6]}")
-    page: Page = page_as(host.token)
-    page.goto(f"/host/games/{game['id']}/questions")
-
+def _author_pin_the_spot(env: Env, page: Page, token: str, game_id: int) -> None:
+    """Create, reopen and edit a pin_the_spot question on an open question editor page."""
     page.get_by_role("button", name="Add Question").click()
     page.locator("select").first.select_option("pin_the_spot")
     page.get_by_placeholder("Question text…").fill("Tap the right half")
@@ -106,7 +114,7 @@ def test_pin_the_spot_authoring(env: Env, page_as, cleanup: Cleanup):
     save.click()
     expect(page.get_by_placeholder("Question text…")).to_have_count(0)  # form closed = saved
 
-    (q,) = _questions(env, host.token, game["id"])
+    (q,) = _questions(env, token, game_id)
     assert q["type"] == "pin_the_spot"
     # T8: in a game attached to a course, the file is uploaded to the course library
     # (downscaled to 1280 px as a PNG) and the question refers to it by image_id.
@@ -123,10 +131,47 @@ def test_pin_the_spot_authoring(env: Env, page_as, cleanup: Cleanup):
     page.get_by_placeholder("Question text…").fill("Tap the right half (edited)")
     page.get_by_role("button", name="Save Question").click()
     expect(page.get_by_placeholder("Question text…")).to_have_count(0)
-    (q2,) = _questions(env, host.token, game["id"])
+    (q2,) = _questions(env, token, game_id)
     assert q2["prompt"] == "Tap the right half (edited)"
     assert q2["config"] == q["config"]
     assert q2["answer_data"] == q["answer_data"]
+
+
+def test_pin_the_spot_authoring(env: Env, page_as, cleanup: Cleanup):
+    host, game = _host_user(env, cleanup, "pts_author", f"E2E PTS author {uuid.uuid4().hex[:6]}")
+    page: Page = page_as(host.token)
+    page.goto(f"/host/games/{game['id']}/questions")
+    _author_pin_the_spot(env, page, host.token, game["id"])
+
+
+def test_pin_the_spot_authoring_as_admin(
+    env: Env, page_as, cleanup: Cleanup, admin_credentials: tuple[str, str]
+):
+    """
+    An ADMIN signs in through the admin app and authors pin_the_spot from there: its "Games"
+    link opens the host app's games list, where authoring for every type lives, and the admin
+    needs no grant. The page starts signed out (no seeded token), so reaching /host/ signed in
+    proves the shared-origin token carry-over.
+    """
+    title = f"E2E PTS admin {uuid.uuid4().hex[:6]}"
+    game = cleanup.game(title, env.course_a["id"], questions=0)  # no course or game grant
+    username, password = admin_credentials
+    page: Page = page_as(None)
+    page.goto("/admin/login")
+    page.get_by_placeholder("Username").fill(username)
+    page.get_by_placeholder("Password").fill(password)
+    page.get_by_role("button", name="Sign In").click()
+    expect(page).to_have_url(re.compile(r"/admin/users$"))
+
+    page.get_by_role("link", name="Games").click()
+    expect(page).to_have_url(re.compile(r"/host/games$"))
+    # The URL alone can match for a moment before the host app's RequireAuth redirects to
+    # /host/login. The shell's "Sign out" only renders past RequireAuth, so this proves the
+    # host app found the token the admin app's login form stored.
+    expect(page.get_by_role("navigation").get_by_text("Sign out", exact=True)).to_be_visible()
+    _game_row(page, title).get_by_role("button", name="Questions").click()  # all games listed
+    expect(page).to_have_url(re.compile(rf"/host/games/{game['id']}/questions$"))
+    _author_pin_the_spot(env, page, env.admin, game["id"])
 
 
 # ---------------------------------------------------------------------------
