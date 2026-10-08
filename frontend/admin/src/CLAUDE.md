@@ -32,7 +32,7 @@ client, is what keeps non-admins out.
   types `put_in_order` and `pin_the_spot`, is in the host app's
   `frontend/host/src/pages/manage/QuestionEditorPage.tsx`. Admins reach it via **Games ↗** and
   can use it without any grant. The evidence table is in the README under "Where question
-  authoring lives".
+  authoring lives". `tests/e2e/test_*_ui.py::test_*_authoring_as_admin` covers it.
 - No `types/` directory: response shapes are declared inline per page and can drift from
   `backend/app/schemas/admin.py`.
 - A non-admin token (shared origin) passes `RequireAdmin` and then hits 403s everywhere.

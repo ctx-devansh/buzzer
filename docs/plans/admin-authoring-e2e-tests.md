@@ -4,7 +4,9 @@ Status: agreed in design discussion (2026-10-07). A draft implementation was wri
 reverted. Revised after the first Goldfish test (findings 1–6, each checked against the code).
 The second Goldfish test (2026-10-07) confirmed every code anchor and the step 9 → 10 ordering.
 It found one real error: the token check fails at step 11 (`RequireAuth` redirects at once), not
-step 12. Fixed in steps 11–12 and Verification 6. Ready to implement; not implemented. Branch: `fix/frontend-authoring-clarification`.
+step 12. Fixed in steps 11–12 and Verification 6. Implemented 2026-10-07. Running Verification 6
+then showed that a URL check alone can't catch the missing token, so step 11 now also checks for a
+signed-in-only element (see step 11). Branch: `fix/frontend-authoring-clarification`.
 
 **Baseline.** This spec assumes the branch already contains the doc clarification:
 - `README.md` has the section "Where question authoring lives (all types, including
@@ -151,10 +153,13 @@ Split the `admin_token` fixture in two. Behaviour doesn't change for any existin
    9. `expect(page).to_have_url(re.compile(r"/admin/users$"))` (`LoginPage` navigates to
       `/users` on success)
    10. `page.get_by_role("link", name="Games").click()`
-   11. `expect(page).to_have_url(re.compile(r"/host/games$"))`. This step is where the token
-       carry-over is proven. If `/host/` didn't see the token, the host app's `RequireAuth`
-       (`frontend/host/src/App.tsx`) would immediately redirect to `/host/login`, and this
-       assertion would fail.
+   11. `expect(page).to_have_url(re.compile(r"/host/games$"))`, then
+       `expect(page.get_by_role("navigation").get_by_text("Sign out", exact=True)).to_be_visible()`.
+       This step is where the token carry-over is proven. The URL check alone doesn't prove it.
+       The admin→host link is a full document load, so the URL reads `/host/games` until the host
+       bundle runs and `RequireAuth` (`frontend/host/src/App.tsx`) redirects to `/host/login`.
+       `to_have_url` can match in that window. The host shell's "Sign out" only renders past
+       `RequireAuth`, so the second check fails when `/host/` sees no token.
    12. `_game_row(page, title).get_by_role("button", name="Questions").click()`. An admin's games
        list shows every game, so the row is found by the random title.
    13. `expect(page).to_have_url(re.compile(rf"/host/games/{game['id']}/questions$"))`
@@ -258,6 +263,8 @@ No production code changes. The only fixture change is the `admin_credentials` s
    - this spec, under `docs/plans/`
 6. **Proof that the test depends on the shared token.** Temporarily add, right after step 4,
    `page.context.add_init_script("if (location.pathname.startsWith('/host/'))
-   localStorage.removeItem('token');")`. The test must then fail at step 11 with the URL
-   `/host/login`, because the host app's `RequireAuth` redirects there when it finds no token. Revert the line afterwards; this is a one-off check, not a committed
+   localStorage.removeItem('token');")`. The test must then fail at step 11's "Sign out" check,
+   because the host app's `RequireAuth` redirects to `/host/login` when it finds no token. (Without
+   that check, the URL assertion passed during the redirect window, and the run failed only at step
+   12, after a 30 s timeout.) Revert the line afterwards; this is a one-off check, not a committed
    test.

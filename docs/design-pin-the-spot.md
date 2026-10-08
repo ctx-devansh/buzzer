@@ -317,8 +317,10 @@ builders.
 - HTML report contains the board.
 
 **Browser (Playwright, :8080):** authoring (file upload, click target, sliders, prompt-only edit
-keeps the image byte for byte); play-through (tap, drag, Lock in, partial credit, host boards,
-game-over recap).
+keeps the image byte for byte), run once as a HOST and once as the ADMIN. The admin run
+(`test_pin_the_spot_authoring_as_admin`) signs in at `/admin/login` and follows **Games ↗** into
+the host editor, because `frontend/admin` has no editor since T4; play-through (tap, drag, Lock
+in, partial credit, host boards, game-over recap).
 
 ## 13. Implementation steps
 
